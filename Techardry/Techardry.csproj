@@ -4,6 +4,7 @@
         <TargetFramework>net6.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
@@ -14,7 +15,7 @@
     <ItemGroup>
       <None Remove="GenerateRegistryData.json" />
       <AdditionalFiles Include="GenerateRegistryData.json" />
-        <Content Include="Resources\**" Pack="true" >
+        <Content Include="Resources\**" Pack="true">
             <PackageCopyToOutput>true</PackageCopyToOutput>
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
