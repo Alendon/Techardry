@@ -1,0 +1,16 @@
+[{
+  "FullRegistryClassName": "MintyCore.Registries.TextureRegistry",
+  "RegisterMethodName": "RegisterTexture",
+  "RegistryId": "texture",
+  "RegistryPhase": 2,
+  "ToRegister": [
+    {
+      "Id": "dirt",
+      "File": "dirt.png"
+    },
+    {
+      "Id": "stone",
+      "File": "stone.png"
+    }
+  ]
+}]

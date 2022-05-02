@@ -11,4 +11,13 @@
       <PackageReference Include="MintyCoreGenerator" Version="0.0.2" />
     </ItemGroup>
 
+    <ItemGroup>
+      <None Remove="GenerateRegistryData.json" />
+      <AdditionalFiles Include="GenerateRegistryData.json" />
+        <Content Include="Resources\**" Pack="true" >
+            <PackageCopyToOutput>true</PackageCopyToOutput>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </Content>
+    </ItemGroup>
+
 </Project>
