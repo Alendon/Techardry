@@ -56,4 +56,6 @@ buildFolder = buildFolder.EnumerateDirectories(debug ? "Debug" : "Release", Sear
     .FirstOrDefault();
 var modFolder = buildFolder.EnumerateDirectories("net6.0", SearchOption.TopDirectoryOnly).FirstOrDefault();
 
+Console.Clear();
+
 Engine.Main(new[] {$"-addModDir={modFolder.FullName}"});
