@@ -7,6 +7,14 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <WarningsAsErrors>;NU1605;Nullable</WarningsAsErrors>
+    </PropertyGroup>
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+      <WarningsAsErrors>;NU1605;Nullable</WarningsAsErrors>
+    </PropertyGroup>
+
     <ItemGroup>
       <PackageReference Include="MintyCore" Version="0.0.2" />
       <PackageReference Include="MintyCoreGenerator" Version="0.0.2" />
