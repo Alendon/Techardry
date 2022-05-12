@@ -155,6 +155,18 @@ public unsafe class VoxelOctree : IDisposable
     {
         throw new NotImplementedException();
     }
+    
+    public VoxelResult GetVoxel(Vector3 position)
+    {
+        ref var searchNode = ref GetRootNode();
+
+        while (!searchNode.IsLeaf)
+        {
+            searchNode = ref GetChildNode(ref searchNode, position);
+        }
+
+        return new VoxelResult(GetVoxel(ref searchNode), searchNode.Depth);
+    }
 
     public void Remove(Vector3 position, [ValueRange(0, MaximumTotalDivision)] int depth)
     {
@@ -181,11 +193,11 @@ public unsafe class VoxelOctree : IDisposable
 
     private void MergeDataUpwards(ref Node node)
     {
-        if(node.Depth == RootNodeDepth)
+        if (node.Depth == RootNodeDepth)
         {
             return;
         }
-        
+
         ref var parent = ref GetParentNode(ref node);
 
         ref readonly var nodeVoxel = ref GetVoxel(ref node);
@@ -607,6 +619,20 @@ public unsafe class VoxelOctree : IDisposable
 
     private void DisposeCore()
     {
+    }
+
+    public readonly struct VoxelResult
+    {
+        public readonly Voxel Voxel;
+        public readonly int Depth;
+        
+        public VoxelResult(Voxel voxel, int depth)
+        {
+            Voxel = voxel;
+            Depth = depth;
+        }
+        
+        public float VoxelSize => Dimensions / MathF.Pow(2, Depth);
     }
 
     private struct Node
