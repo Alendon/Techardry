@@ -133,7 +133,6 @@ public unsafe class VoxelOctree : IDisposable
             SharesDataWithParent = false,
             IsLeaf = true,
             ParentIndex = InvalidIndex,
-            LeftAlignedState = LeftAligned.Current
         };
     }
 
@@ -182,6 +181,11 @@ public unsafe class VoxelOctree : IDisposable
 
     private void MergeDataUpwards(ref Node node)
     {
+        if(node.Depth == RootNodeDepth)
+        {
+            return;
+        }
+        
         ref var parent = ref GetParentNode(ref node);
 
         ref readonly var nodeVoxel = ref GetVoxel(ref node);
@@ -203,41 +207,41 @@ public unsafe class VoxelOctree : IDisposable
         var data = nodeVoxel;
 
         parent = ref DeleteChildrenAndData(ref parent);
+        parent.DataIndex = CreateData(GetDataAlignment(ref parent), parent.Index);
         WriteVoxel(ref parent, data);
         MergeDataUpwards(ref parent);
     }
 
-    private void MergeLodUpwards(ref Node node)
+    private void MergeLodUpwards(ref Node child)
     {
-        if (node.Depth == RootNodeDepth)
+        if (child.Depth == RootNodeDepth)
             return;
 
-        ref var parent = ref GetParentNode(ref node);
-        var oldVoxelIndex = node.DataIndex;
-        var oldVoxelAlignment = GetDataAlignment(ref node);
-        ref readonly var oldLodVoxel = ref GetVoxel(oldVoxelIndex, oldVoxelAlignment);
+        ref var parent = ref GetParentNode(ref child);
+
+        int oldLodDataIndex = parent.DataIndex;
+        int oldLodNodeIndex = -1;
+        bool oldLodLeftAligned = false;
 
         //Find the data with the most occurrences.
         int maxCount = 0;
-        int maxIndex = oldVoxelIndex;
+        int maxIndex = 0;
 
         for (int i = 0; i < ChildCount; i++)
         {
-            if (GetVoxel(ref GetChildNode(ref parent, i)).Equals(oldLodVoxel))
-            {
-                maxCount++;
-            }
-        }
-
-        for (int i = 0; i < ChildCount; i++)
-        {
-            ref var child = ref GetChildNode(ref node, i);
+            child = ref GetChildNode(ref parent, i);
             ref readonly var firstVoxel = ref GetVoxel(ref child);
+
+            if (child.DataIndex == oldLodDataIndex)
+            {
+                oldLodNodeIndex = child.Index;
+                oldLodLeftAligned = IsLeftAligned(ref child);
+            }
 
             var count = 0;
             for (int j = 0; j < ChildCount; j++)
             {
-                ref var compareChild = ref GetChildNode(ref node, j);
+                ref var compareChild = ref GetChildNode(ref parent, j);
                 ref readonly var compareVoxel = ref GetVoxel(ref compareChild);
 
                 if (firstVoxel.Equals(compareVoxel))
@@ -251,14 +255,16 @@ public unsafe class VoxelOctree : IDisposable
             maxIndex = i;
         }
 
-        if (oldVoxelIndex == maxIndex)
+        if (oldLodNodeIndex != -1)
         {
-            MoveVoxelByLod(ref node, true);
-            return;
+            ref var oldLodNode = ref GetNode(oldLodNodeIndex, oldLodLeftAligned);
+            MoveVoxelByLod(ref oldLodNode, false);
         }
 
-        MoveVoxelByLod(ref node, false);
         MoveVoxelByLod(ref GetChildNode(ref parent, maxIndex), true);
+
+        parent.DataIndex = GetChildNode(ref parent, maxIndex).DataIndex;
+
         MergeLodUpwards(ref parent);
     }
 
@@ -289,7 +295,7 @@ public unsafe class VoxelOctree : IDisposable
 
     private ref Node GetChildNode(ref Node parent, int childIndex)
     {
-        return ref GetNode(parent.ChildIndices[childIndex], (parent.LeftAlignedState & LeftAligned.Child) != 0);
+        return ref GetNode(parent.ChildIndices[childIndex], IsLeftAligned(parent.Depth + 1));
     }
 
     /// <summary>
@@ -306,18 +312,19 @@ public unsafe class VoxelOctree : IDisposable
             return ref node;
         }
 
-        bool nodeLeftAligned = (node.LeftAlignedState & LeftAligned.Current) != 0;
+        bool nodeLeftAligned = IsLeftAligned(ref node);
         int nodeIndex = node.Index;
 
         for (int i = 0; i < ChildCount; i++)
         {
             var childIndex = node.ChildIndices[i];
 
-            ref var childNode = ref GetNode(node.ChildIndices[i], (node.LeftAlignedState & LeftAligned.Child) != 0);
+            ref var childNode = ref GetNode(node.ChildIndices[i], IsLeftAligned(node.Depth + 1));
             childNode = ref DeleteChildrenAndData(ref childNode, false);
+            childNode.DataIndex = CreateData(GetDataAlignment(ref childNode), childNode.Index);
             node = ref GetParentNode(ref childNode);
 
-            DeleteNode(childIndex, (node.LeftAlignedState & LeftAligned.Child) != 0, out (int from, int to) movedNode);
+            DeleteNode(childIndex, IsLeftAligned(ref node), out (int from, int to) movedNode);
 
             if (movedNode.from != nodeIndex) continue;
             nodeIndex = movedNode.to;
@@ -328,10 +335,16 @@ public unsafe class VoxelOctree : IDisposable
 
         if (firstCall && node.SharesDataWithParent)
         {
-            node.DataIndex = CreateData((node.LeftAlignedState & LeftAligned.Current) != 0, node.Index);
-            node.SharesDataWithParent = false;
-            SetData(ref node,GetDefaultVoxel());
-            MergeLodUpwards(ref node);
+            DeleteData(ref node);
+            node.DataIndex = InvalidIndex;
+
+            ref var lodReset = ref node;
+            while (lodReset.SharesDataWithParent)
+            {
+                lodReset.SharesDataWithParent = false;
+                lodReset.DataIndex = InvalidIndex;
+                lodReset = ref GetParentNode(ref lodReset);
+            }
         }
 
         return ref node;
@@ -393,6 +406,26 @@ public unsafe class VoxelOctree : IDisposable
         movedNode = (indexToMove, index);
     }
 
+    private bool IsLeftAligned(ref Node node)
+    {
+        return IsLeftAligned(node.Depth, inverseLod);
+    }
+
+    private bool IsLeftAligned(ref Node node, int lodLevel)
+    {
+        return IsLeftAligned(node.Depth, lodLevel);
+    }
+
+    private bool IsLeftAligned(int depth)
+    {
+        return IsLeftAligned(depth, inverseLod);
+    }
+
+    private bool IsLeftAligned(int depth, int lodLevel)
+    {
+        return lodLevel >= depth;
+    }
+
     private bool HasChild(ref Node parent)
     {
         return !parent.IsLeaf;
@@ -401,14 +434,14 @@ public unsafe class VoxelOctree : IDisposable
     private ref Node GetChildNode(ref Node parent, Vector3 position)
     {
         var childIndex = GetChildIndex(position, parent.Depth);
-        var leftAligned = (parent.LeftAlignedState & LeftAligned.Child) != 0;
+        var leftAligned = IsLeftAligned(parent.Depth + 1);
         return ref GetNode(parent.ChildIndices[childIndex], leftAligned);
     }
 
     private ref Node GetParentNode(ref Node child)
     {
         var parentIndex = child.ParentIndex;
-        var leftAligned = (child.LeftAlignedState & LeftAligned.Parent) != 0;
+        var leftAligned = IsLeftAligned(child.Depth - 1);
         return ref GetNode(parentIndex, leftAligned);
     }
 
@@ -422,9 +455,6 @@ public unsafe class VoxelOctree : IDisposable
         byte childrenDepth = (byte) (parent.Depth + 1);
         var childrenLeftAligned = IsIncludedInLod(childrenDepth);
 
-        parent.LeftAlignedState = childrenLeftAligned
-            ? parent.LeftAlignedState | LeftAligned.Child
-            : parent.LeftAlignedState & ~LeftAligned.Child;
         parent.IsLeaf = false;
 
         for (byte i = 0; i < ChildCount; i++)
@@ -439,18 +469,8 @@ public unsafe class VoxelOctree : IDisposable
                 Index = childIndex,
                 IsLeaf = true,
                 ParentIndex = parent.Index,
-                ParentChildIndex = i,
-                LeftAlignedState = 0
+                ParentChildIndex = i
             };
-            if ((parent.LeftAlignedState & LeftAligned.Current) != 0)
-            {
-                child.LeftAlignedState |= LeftAligned.Parent;
-            }
-
-            if (childrenLeftAligned)
-            {
-                child.LeftAlignedState |= LeftAligned.Current;
-            }
 
             //The first children "inherit" the parents data.
             if (i == 0)
@@ -505,7 +525,7 @@ public unsafe class VoxelOctree : IDisposable
     {
         if (!node.SharesDataWithParent)
         {
-            return (node.LeftAlignedState & LeftAligned.Current) != 0;
+            return IsLeftAligned(ref node);
         }
 
         return GetDataAlignment(ref GetParentNode(ref node));
@@ -535,7 +555,7 @@ public unsafe class VoxelOctree : IDisposable
     {
         return ref leftAligned ? ref _data.voxels[index] : ref _data.voxels[DataCapacity - index - 1];
     }
-    
+
     private ref Node GetOrCreateChild(ref Node parent, Vector3 position)
     {
         if (!HasChild(ref parent))
@@ -600,16 +620,6 @@ public unsafe class VoxelOctree : IDisposable
         public bool IsLeaf;
         public bool SharesDataWithParent;
         public byte Depth;
-
-        public LeftAligned LeftAlignedState;
-    }
-
-    [Flags]
-    private enum LeftAligned : byte
-    {
-        Parent = 1 << 0,
-        Current = 1 << 1,
-        Child = 1 << 2
     }
 
     private class OctreeDebugView
@@ -630,7 +640,7 @@ public unsafe class VoxelOctree : IDisposable
         {
             target.Depth = node.Depth;
             target.Voxel = _octree.GetVoxel(ref node);
-            target.LeftAlignedState = node.LeftAlignedState;
+            target.LeftAlignedState = _octree.IsLeftAligned(ref node);
             target.SharesDataWithParent = node.SharesDataWithParent;
 
             if (node.IsLeaf)
@@ -642,8 +652,7 @@ public unsafe class VoxelOctree : IDisposable
             for (byte i = 0; i < ChildCount; i++)
             {
                 target.Children[i] = new NodeDebugView();
-                ref var child = ref _octree.GetNode(node.ChildIndices[i],
-                    (node.LeftAlignedState & LeftAligned.Child) != 0);
+                ref var child = ref _octree.GetNode(node.ChildIndices[i], _octree.IsLeftAligned(node.Depth + 1));
                 FillNodeInfo(target.Children[i], ref child);
             }
         }
@@ -653,7 +662,7 @@ public unsafe class VoxelOctree : IDisposable
             public NodeDebugView[]? Children;
             public int Depth;
             public bool SharesDataWithParent;
-            public LeftAligned LeftAlignedState;
+            public bool LeftAlignedState;
 
             public Voxel Voxel;
         }

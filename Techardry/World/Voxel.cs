@@ -1,5 +1,8 @@
-﻿namespace Techardry.World;
+﻿using System.Diagnostics;
 
+namespace Techardry.World;
+
+[DebuggerDisplay("{Id}")]
 public readonly struct Voxel : IEquatable<Voxel>
 {
     public readonly int Id;
