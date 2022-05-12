@@ -1,9 +1,14 @@
 ﻿namespace Techardry.World;
 
-public struct Voxel : IEquatable<Voxel>
+public readonly struct Voxel : IEquatable<Voxel>
 {
-    public int Id;
-    
+    public readonly int Id;
+
+    public Voxel(int id)
+    {
+        Id = id;
+    }
+
     public bool Equals(Voxel other)
     {
         return Id == other.Id;

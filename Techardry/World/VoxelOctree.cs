@@ -1,10 +1,11 @@
-﻿using System.Numerics;
-using System.Runtime.InteropServices;
-using BepuUtilities.Memory;
+﻿using System.Diagnostics;
+using System.Numerics;
 using JetBrains.Annotations;
+using MintyCore.Utils.Maths;
 
 namespace Techardry.World;
 
+[DebuggerTypeProxy(typeof(OctreeDebugView))]
 public unsafe class VoxelOctree : IDisposable
 {
     /// <summary>
@@ -25,12 +26,11 @@ public unsafe class VoxelOctree : IDisposable
 
     public const int Dimensions = 16;
 
-    /// <summary>
-    /// The level of the root node.
-    /// Starts at -1 as the root node has no data attached to it.
-    /// The first level with data is 0.
-    /// </summary>
-    public const int RootNodeLevel = -1;
+    public const int ChildCount = 8;
+
+    public const int InvalidIndex = -1;
+
+    public const byte RootNodeDepth = 0;
 
     /// <summary>
     /// Depth where the size of one voxel is 1.
@@ -56,20 +56,6 @@ public unsafe class VoxelOctree : IDisposable
     /// </summary>
     public static readonly float MinimumVoxelSize = 1f / MathF.Pow(2, MaxSplitCount);
 
-    public Node[] TreeLayout;
-
-
-    public Voxel[] Voxels;
-
-    private Stack<int> _layoutHoles = new();
-    private Stack<int> _dataHoles = new();
-
-    private SortedSet<int> _layoutHolesSorted = new();
-    private SortedSet<int> _dataHolesSorted = new();
-
-    private (int left, int right) _lastFreeLayoutIndex;
-    private (int left, int right) _lastFreeDataIndex;
-
 
     /// <summary>
     /// The lod of the octree.
@@ -82,8 +68,43 @@ public unsafe class VoxelOctree : IDisposable
     public int Lod
     {
         get => MaximumLevelCount - inverseLod;
-        set => inverseLod = MaximumLevelCount - value;
+        set
+        {
+            var oldLod = inverseLod;
+            inverseLod = MaximumLevelCount - value;
+            UpdateLod(oldLod, inverseLod);
+        }
     }
+
+    private Node[] _nodes;
+
+    private int NodeCapacity
+    {
+        get => _nodes.Length;
+        set
+        {
+            var alignedSize = MathHelper.CeilPower2(value);
+            ResizeNodes(alignedSize);
+        }
+    }
+
+    private (int left, int right) NodeCount;
+
+
+    private (int[] ownerNodes, Voxel[] voxels) _data;
+
+    private int DataCapacity
+    {
+        get => _nodes.Length;
+        set
+        {
+            var alignedSize = MathHelper.CeilPower2(value);
+            ResizeData(alignedSize);
+        }
+    }
+
+    private (int left, int right) DataCount;
+
 
     /// <summary>
     /// The inverse lod of the octree.
@@ -92,304 +113,458 @@ public unsafe class VoxelOctree : IDisposable
     /// </summary>
     private int inverseLod;
 
-    public VoxelOctree()
+
+    public VoxelOctree([ValueRange(0, MaximumLevelCount)] int inverseLod)
     {
-        TreeLayout = new Node[16];
-        Voxels = new Voxel[32];
+        this.inverseLod = inverseLod;
+        _nodes = new Node[128];
+        _data = new(new int[256], new Voxel[256]);
 
-        Span<int> indices = stackalloc int[8] {-1, -1, -1, -1, -1, -1, -1, -1};
-        //Create the root node.
-        TreeLayout[0] = new Node(indices, -1, byte.MaxValue, RootNodeLevel);
+        DataCount = (1, 0);
+        _data.voxels[0] = GetDefaultVoxel();
+        _data.ownerNodes[0] = 0;
 
-        _lastFreeLayoutIndex = (1, TreeLayout.Length - 1);
-        _lastFreeDataIndex = (1, Voxels.Length - 1);
+        NodeCount = (1, 0);
+        _nodes[0] = new Node
+        {
+            Depth = RootNodeDepth,
+            Index = 0,
+            DataIndex = 0,
+            SharesDataWithParent = false,
+            IsLeaf = true,
+            ParentIndex = InvalidIndex,
+            LeftAlignedState = LeftAligned.Current
+        };
     }
 
-    /// <summary>
-    /// Sort the tree by the current lod level.
-    /// 
-    /// </summary>
-    public void SortByLod()
+    private static Voxel GetDefaultVoxel()
     {
-        //Generate lod data
-        //Apply the lod to their respective parents
-
-        AssignLod();
-
-        //compact the layout
+        return new Voxel(1);
     }
 
-    public void Compact()
+    private void ResizeNodes(int newCapacity)
     {
         throw new NotImplementedException();
     }
 
-    private void AssignLod()
+    private void ResizeData(int newCapacity)
     {
-        Span<(Node node, int currentCheckedIndex)> nodeStack =
-            stackalloc (Node, int)[MaximumLevelCount];
-        nodeStack[0] = (TreeLayout[0], -1);
+        throw new NotImplementedException();
+    }
 
-        var currentDepth = 0;
+    private void UpdateLod(int oldLod, int newLod)
+    {
+        throw new NotImplementedException();
+    }
 
-        //The count of the same occurrences of the same value node.
-        //Used inside the loop. Only has 7 elements as the last element is never checked against another.
-        Span<int> sameOccurrences = stackalloc int[7];
+    public void Remove(Vector3 position, [ValueRange(0, MaximumTotalDivision)] int depth)
+    {
+        Insert(GetDefaultVoxel(), position, depth);
+    }
 
-        while (true)
+    public void Insert(in Voxel voxel, Vector3 position, [ValueRange(0, MaximumTotalDivision)] int depth)
+    {
+        //Traverse the tree to the correct depth.
+
+        ref var node = ref GetRootNode();
+
+        while (node.Depth != depth)
         {
-            ref var currentNode = ref nodeStack[currentDepth].node;
-            ref var currentCheckedIndex = ref nodeStack[currentDepth].currentCheckedIndex;
-            currentCheckedIndex++;
+            node = ref GetOrCreateChild(ref node, position);
+        }
 
-            //The end of the root node is reached. The lod is determined for each node.
-            if (currentCheckedIndex == 8 && currentDepth == 0)
+        node = ref DeleteChildrenAndData(ref node);
+        node.DataIndex = CreateData(GetDataAlignment(ref node), node.Index);
+        WriteVoxel(ref node, voxel);
+
+        MergeDataUpwards(ref node);
+    }
+
+    private void MergeDataUpwards(ref Node node)
+    {
+        ref var parent = ref GetParentNode(ref node);
+
+        ref readonly var nodeVoxel = ref GetVoxel(ref node);
+        bool allEqual = true;
+
+        for (int i = 0; i < ChildCount && allEqual; i++)
+        {
+            ref var compareChild = ref GetChildNode(ref node, i);
+            ref readonly var compareVoxel = ref GetVoxel(ref compareChild);
+            allEqual &= nodeVoxel.Equals(compareVoxel);
+        }
+
+        if (!allEqual)
+        {
+            MergeLodUpwards(ref node);
+            return;
+        }
+
+        var data = nodeVoxel;
+
+        parent = ref DeleteChildrenAndData(ref parent);
+        WriteVoxel(ref parent, data);
+        MergeDataUpwards(ref parent);
+    }
+
+    private void MergeLodUpwards(ref Node node)
+    {
+        if (node.Depth == RootNodeDepth)
+            return;
+
+        ref var parent = ref GetParentNode(ref node);
+        var oldVoxelIndex = node.DataIndex;
+        var oldVoxelAlignment = GetDataAlignment(ref node);
+        ref readonly var oldLodVoxel = ref GetVoxel(oldVoxelIndex, oldVoxelAlignment);
+
+        //Find the data with the most occurrences.
+        int maxCount = 0;
+        int maxIndex = oldVoxelIndex;
+
+        for (int i = 0; i < ChildCount; i++)
+        {
+            if (GetVoxel(ref GetChildNode(ref parent, i)).Equals(oldLodVoxel))
             {
-                break;
+                maxCount++;
+            }
+        }
+
+        for (int i = 0; i < ChildCount; i++)
+        {
+            ref var child = ref GetChildNode(ref node, i);
+            ref readonly var firstVoxel = ref GetVoxel(ref child);
+
+            var count = 0;
+            for (int j = 0; j < ChildCount; j++)
+            {
+                ref var compareChild = ref GetChildNode(ref node, j);
+                ref readonly var compareVoxel = ref GetVoxel(ref compareChild);
+
+                if (firstVoxel.Equals(compareVoxel))
+                {
+                    count++;
+                }
             }
 
-            //All children are checked
-            if (currentCheckedIndex == 8)
+            if (count <= maxCount) continue;
+            maxCount = count;
+            maxIndex = i;
+        }
+
+        if (oldVoxelIndex == maxIndex)
+        {
+            MoveVoxelByLod(ref node, true);
+            return;
+        }
+
+        MoveVoxelByLod(ref node, false);
+        MoveVoxelByLod(ref GetChildNode(ref parent, maxIndex), true);
+        MergeLodUpwards(ref parent);
+    }
+
+    private void MoveVoxelByLod(ref Node node, bool shareWithParent)
+    {
+        var oldLeftAlignedState = GetDataAlignment(ref node);
+        var data = GetVoxel(ref node);
+
+        node.SharesDataWithParent = shareWithParent;
+        var newLeftAlignedState = GetDataAlignment(ref node);
+
+        if (oldLeftAlignedState == newLeftAlignedState)
+            return;
+
+        DeleteData(ref node);
+
+        node.DataIndex = CreateData(newLeftAlignedState, node.Index);
+        SetData(ref node, data);
+
+        ref var upwardsNode = ref node;
+        while (upwardsNode.SharesDataWithParent)
+        {
+            upwardsNode = ref GetParentNode(ref upwardsNode);
+            upwardsNode.DataIndex = node.DataIndex;
+        }
+    }
+
+
+    private ref Node GetChildNode(ref Node parent, int childIndex)
+    {
+        return ref GetNode(parent.ChildIndices[childIndex], (parent.LeftAlignedState & LeftAligned.Child) != 0);
+    }
+
+    /// <summary>
+    /// Delete all children of a node.
+    /// </summary>
+    /// <param name="node"></param>
+    /// <returns>Reference to the original node, as it may be moved in data</returns>
+    private ref Node DeleteChildrenAndData(ref Node node, bool firstCall = true)
+    {
+        if (node.IsLeaf)
+        {
+            DeleteData(ref node);
+            node.DataIndex = InvalidIndex;
+            return ref node;
+        }
+
+        bool nodeLeftAligned = (node.LeftAlignedState & LeftAligned.Current) != 0;
+        int nodeIndex = node.Index;
+
+        for (int i = 0; i < ChildCount; i++)
+        {
+            var childIndex = node.ChildIndices[i];
+
+            ref var childNode = ref GetNode(node.ChildIndices[i], (node.LeftAlignedState & LeftAligned.Child) != 0);
+            childNode = ref DeleteChildrenAndData(ref childNode, false);
+            node = ref GetParentNode(ref childNode);
+
+            DeleteNode(childIndex, (node.LeftAlignedState & LeftAligned.Child) != 0, out (int from, int to) movedNode);
+
+            if (movedNode.from != nodeIndex) continue;
+            nodeIndex = movedNode.to;
+            node = ref GetNode(nodeIndex, nodeLeftAligned);
+        }
+
+        node.IsLeaf = true;
+
+        if (firstCall && node.SharesDataWithParent)
+        {
+            node.DataIndex = CreateData((node.LeftAlignedState & LeftAligned.Current) != 0, node.Index);
+            node.SharesDataWithParent = false;
+            SetData(ref node,GetDefaultVoxel());
+            MergeLodUpwards(ref node);
+        }
+
+        return ref node;
+    }
+
+    private void DeleteData(ref Node node)
+    {
+        var dataLeftAligned = GetDataAlignment(ref node);
+        var dataIndex = node.DataIndex;
+
+        var actualDataIndex = dataLeftAligned ? dataIndex : DataCapacity - dataIndex - 1;
+        var actualOwnerIndex = dataLeftAligned ? node.Index : NodeCapacity - node.Index - 1;
+
+        var dataOwner = _data.ownerNodes[actualDataIndex];
+
+        if (dataOwner != actualOwnerIndex) return;
+
+        int replaceIndex;
+        if (dataLeftAligned)
+        {
+            replaceIndex = --DataCount.left;
+        }
+        else
+        {
+            replaceIndex = --DataCount.right;
+            replaceIndex = DataCapacity - replaceIndex - 1;
+        }
+
+        _data.voxels[actualDataIndex] = _data.voxels[replaceIndex];
+        _data.ownerNodes[actualDataIndex] = _data.ownerNodes[replaceIndex];
+
+        var ownerToInformIndex = _data.ownerNodes[actualDataIndex];
+        ref var ownerToInform = ref GetNode(ownerToInformIndex, dataLeftAligned);
+        do
+        {
+            ownerToInform.DataIndex = actualDataIndex;
+            ownerToInform = ref GetParentNode(ref ownerToInform);
+        } while (ownerToInform.SharesDataWithParent);
+    }
+
+    private void DeleteNode(int index, bool leftAligned, out (int from, int to) movedNode)
+    {
+        int newNodeCount;
+        if (leftAligned)
+            newNodeCount = --NodeCount.left;
+        else
+            newNodeCount = --NodeCount.right;
+
+        //If the deleted node is the last one, we don't need to move anything.
+        if (newNodeCount == index)
+        {
+            movedNode = (-1, -1);
+            return;
+        }
+
+        //Move the last node to the deleted node's position.
+        var indexToMove = newNodeCount;
+        GetNode(index, leftAligned) = GetNode(indexToMove, leftAligned);
+        movedNode = (indexToMove, index);
+    }
+
+    private bool HasChild(ref Node parent)
+    {
+        return !parent.IsLeaf;
+    }
+
+    private ref Node GetChildNode(ref Node parent, Vector3 position)
+    {
+        var childIndex = GetChildIndex(position, parent.Depth);
+        var leftAligned = (parent.LeftAlignedState & LeftAligned.Child) != 0;
+        return ref GetNode(parent.ChildIndices[childIndex], leftAligned);
+    }
+
+    private ref Node GetParentNode(ref Node child)
+    {
+        var parentIndex = child.ParentIndex;
+        var leftAligned = (child.LeftAlignedState & LeftAligned.Parent) != 0;
+        return ref GetNode(parentIndex, leftAligned);
+    }
+
+    private ref Node GetNode(int index, bool leftAligned)
+    {
+        return ref leftAligned ? ref _nodes[index] : ref _nodes[NodeCapacity - index - 1];
+    }
+
+    private void CreateChildren(ref Node parent)
+    {
+        byte childrenDepth = (byte) (parent.Depth + 1);
+        var childrenLeftAligned = IsIncludedInLod(childrenDepth);
+
+        parent.LeftAlignedState = childrenLeftAligned
+            ? parent.LeftAlignedState | LeftAligned.Child
+            : parent.LeftAlignedState & ~LeftAligned.Child;
+        parent.IsLeaf = false;
+
+        for (byte i = 0; i < ChildCount; i++)
+        {
+            var childIndex = childrenLeftAligned ? NodeCount.left++ : NodeCount.right++;
+            parent.ChildIndices[i] = childIndex;
+
+            ref var child = ref GetNode(childIndex, childrenLeftAligned);
+            child = new()
             {
-                ref var parent = ref nodeStack[currentDepth - 1].node;
-                ref var parentCheckedIndex = ref nodeStack[currentDepth - 1].currentCheckedIndex;
+                Depth = childrenDepth,
+                Index = childIndex,
+                IsLeaf = true,
+                ParentIndex = parent.Index,
+                ParentChildIndex = i,
+                LeftAlignedState = 0
+            };
+            if ((parent.LeftAlignedState & LeftAligned.Current) != 0)
+            {
+                child.LeftAlignedState |= LeftAligned.Parent;
+            }
 
-                sameOccurrences.Clear();
+            if (childrenLeftAligned)
+            {
+                child.LeftAlignedState |= LeftAligned.Current;
+            }
 
-                //Count the occurrences of each node
-                //Only iterate over seven nodes as the last one would only compare to itself.
-                for (int i = 0; i < 7; i++)
-                {
-                    //First check if the node is empty.
-                    var isEmpty = parent.LodIndices[i] == -1;
-                    if (isEmpty)
-                    {
-                        //if its empty compare if the other nodes are empty.
-                        for (int j = i + 1; j < 8; j++)
-                        {
-                            if (parent.LodIndices[j] == -1)
-                            {
-                                sameOccurrences[i]++;
-                            }
-                        }
-
-                        continue;
-                    }
-
-                    //Get the lod index of the parents child i (the sibling of the current node)
-                    ref var compareBaseVoxel = ref Voxels[parent.LodIndices[i]];
-
-                    //We start at i + 1 because its useless to compare the current node with itself.
-                    for (int j = i + 1; j < 8; j++)
-                    {
-                        //Compare the lod index with the rest of the parent lod child indices
-                        ref var compareVoxel = ref Voxels[parent.LodIndices[j]];
-
-                        if (compareBaseVoxel.Equals(compareVoxel))
-                        {
-                            sameOccurrences[i]++;
-                        }
-                    }
-                }
-
-                //Get the node with the most same occurrences
-                //Or just the first one if they are all the same
-                //TODO: Include a "no lod check" option for voxels which should not be used for lod.
-
-                int maxIndex = 0;
-                int maxOccurrences = sameOccurrences[0];
-                for (int i = 0; i < 7; i++)
-                {
-                    if (sameOccurrences[i] > maxOccurrences)
-                    {
-                        maxIndex = i;
-                        maxOccurrences = sameOccurrences[i];
-                    }
-                }
-
-                //maxIndex is the index of the node with the most same occurrences
-                parent.LodIndices[parentCheckedIndex] = currentNode.LodIndices[maxIndex];
-
-                //Traverse up
-                currentDepth--;
+            //The first children "inherit" the parents data.
+            if (i == 0)
+            {
+                child.DataIndex = parent.DataIndex;
+                child.SharesDataWithParent = true;
+                SetDataOwner(ref child);
                 continue;
             }
 
-
-            //if the current node is a leaf, just set the lod index to the current data index.
-            if (currentNode.IsLeaf(currentCheckedIndex))
-            {
-                currentNode.LodIndices[currentCheckedIndex] = currentNode.Indices[currentCheckedIndex];
-            }
-            //If the current node is therefor a branch, traverse into it.
-            else
-            {
-                currentDepth++;
-                nodeStack[currentDepth] = (TreeLayout[currentNode.Indices[currentCheckedIndex]], -1);
-            }
+            child.SharesDataWithParent = false;
+            child.DataIndex = CreateData(childrenLeftAligned, childIndex);
+            SetData(ref child, GetVoxel(ref parent));
         }
     }
 
-    /// <summary>
-    /// Just insert a voxel
-    /// No checks are done.
-    /// </summary>
-    /// <param name="voxel"></param>
-    /// <param name="position"></param>
-    /// <param name="level"></param>
-    public void Insert(Voxel voxel, Vector3 position, [ValueRange(MaximumTotalDivision)] int level)
+    private void SetData(ref Node node, in Voxel voxel)
     {
-        //Ensure that enough space is available to add the voxel at the specified layer
-        //There must be at least 1 + layer elements available in the tree layout array.
-        //And at least 1 + (layer * 8) elements available in the voxels array.
-        //EnsureCapacity(layer);
+        var leftAligned = GetDataAlignment(ref node);
+        SetData(node.DataIndex, leftAligned, voxel);
+    }
 
-        //start with the root node
-        ref var currentNode = ref TreeLayout[0];
-        int currentNodeIndex = 0;
-        var currentLevel = 0;
-        while (currentLevel != level)
+    private void SetData(int dataIndex, bool leftAligned, in Voxel voxel)
+    {
+        var actualIndex = leftAligned ? dataIndex : DataCapacity - dataIndex - 1;
+        WriteVoxel(dataIndex, leftAligned, voxel);
+    }
+
+    private int CreateData(bool leftAligned, int ownerIndex)
+    {
+        var dataIndex = leftAligned ? DataCount.left++ : DataCount.right++;
+        SetDataOwner(dataIndex, leftAligned, ownerIndex);
+        return dataIndex;
+    }
+
+    private void SetDataOwner(ref Node node)
+    {
+        var dataAlignment = GetDataAlignment(ref node);
+        SetDataOwner(node.DataIndex, dataAlignment, node.Index);
+    }
+
+    private void SetDataOwner(int dataIndex, bool leftAligned, int ownerIndex)
+    {
+        var actualDataIndex = leftAligned ? dataIndex : DataCapacity - dataIndex - 1;
+        ref var ownerRef = ref _data.ownerNodes[actualDataIndex];
+
+        var actualOwnerIndex = leftAligned ? ownerIndex : NodeCapacity - ownerIndex - 1;
+        ownerRef = actualOwnerIndex;
+    }
+
+    private bool GetDataAlignment(ref Node node)
+    {
+        if (!node.SharesDataWithParent)
         {
-            //calculate the index of the child node
-
-            var childIndex = PositionToIndex(position, currentLevel);
-
-            //if the children at the index is a leaf, change it to a branch
-            if (currentNode.IsLeaf(childIndex))
-            {
-                ConvertChildToBranch(ref currentNode, currentNodeIndex, childIndex, currentLevel);
-            }
-
-            //traverse into the child node
-
-            currentLevel++;
+            return (node.LeftAlignedState & LeftAligned.Current) != 0;
         }
 
-        //Traverse back towards the root node and check if the data or the lod can be merged.
+        return GetDataAlignment(ref GetParentNode(ref node));
     }
 
-    /// <summary>
-    /// Changes the node to a branch node.
-    /// </summary>
-    /// <param name="node"></param>
-    private void ConvertChildToBranch(ref Node node, int nodeIndex, int childIndex, int level)
+    private ref readonly Voxel GetVoxel(ref Node node)
     {
-        var dataIndex = node.Indices[childIndex];
+        return ref GetVoxel(node.DataIndex, GetDataAlignment(ref node));
+    }
 
-        ref var childNode = ref CreateEmptyNode(level, out var childNodeIndex);
-        
-        childNode.ParentIndex = nodeIndex;
-        childNode.IsLeafFlag = byte.MaxValue;
+    private ref readonly Voxel GetVoxel(int index, bool leftAligned)
+    {
+        return ref GetVoxelRef(index, leftAligned);
+    }
 
-        node.Indices[childIndex] = childNodeIndex;
-        node.SetLeaf(childIndex, false);
-        
-        //Apply the data to the child node
-        childNode.Indices[0] = dataIndex;
-        childNode.LodIndices[0] = node.LodIndices[childIndex];
-        
-        for (var i = 1; i < 8; i++)
+    private void WriteVoxel(ref Node node, in Voxel voxel)
+    {
+        WriteVoxel(node.DataIndex, GetDataAlignment(ref node), voxel);
+    }
+
+    private void WriteVoxel(int index, bool leftAligned, in Voxel voxel)
+    {
+        GetVoxelRef(index, leftAligned) = voxel;
+    }
+
+    private ref Voxel GetVoxelRef(int index, bool leftAligned)
+    {
+        return ref leftAligned ? ref _data.voxels[index] : ref _data.voxels[DataCapacity - index - 1];
+    }
+    
+    private ref Node GetOrCreateChild(ref Node parent, Vector3 position)
+    {
+        if (!HasChild(ref parent))
         {
-            var newDataIndex = ReserveDataIndex(IsIncludedInLod(level + 1));
-            childNode.Indices[i] = newDataIndex;
-            childNode.LodIndices[i] = newDataIndex;
-            
-            Voxels[newDataIndex] = Voxels[dataIndex];
+            CreateChildren(ref parent);
         }
+
+        return ref GetChildNode(ref parent, position);
     }
 
-    private ref Node CreateEmptyNode(int level, out int nodeIndex)
+    private ref Node GetRootNode()
     {
-        //if the node is contained in the lod, it will be aligned to the left side of the internal array.
-        var leftAligned = IsIncludedInLod(level);
-        nodeIndex = ReserveNodeIndex(leftAligned);
-        
-        ref var result = ref TreeLayout[nodeIndex];
-        result = default;
-        return ref result;
+        return ref _nodes[0];
     }
 
     /// <summary>
-    /// Check if the given level is rendered with the current set lod.
+    /// Check if the given depth is rendered with the current set lod.
     /// </summary>
-    /// <param name="level"></param>
+    /// <param name="depth"></param>
     /// <returns>True if included</returns>
-    private bool IsIncludedInLod(int level)
+    private bool IsIncludedInLod(int depth)
     {
-        return level <= inverseLod;
+        return depth <= inverseLod;
     }
 
-    private int ReserveNodeIndex(bool leftAligned)
+
+    private static byte GetChildIndex(Vector3 position, int depth)
     {
-        if (leftAligned)
-        {
-            var potentialHole = _layoutHolesSorted.Min;
-            
-            //if the potential hole is 0, the holes collection is empty.
-            //if the potential hole is greater than the last free index, the hole is a right aligned hole.
-            if (potentialHole == 0 || potentialHole > _lastFreeLayoutIndex.left)
-            {
-                _lastFreeLayoutIndex.left += 1;
-                return _lastFreeLayoutIndex.left;
-            }
-
-            _layoutHolesSorted.Remove(potentialHole);
-            return potentialHole;
-        }
-        else
-        {
-            var potentialHole = _layoutHolesSorted.Max;
-            
-            //if the potential hole is 0, the holes collection is empty.
-            //if the potential hole is smaller than the last free index, the hole is a left aligned hole.
-            if (potentialHole == 0 || potentialHole < _lastFreeLayoutIndex.right)
-            {
-                _lastFreeLayoutIndex.right -= 1;
-                return _lastFreeLayoutIndex.right;
-            }
-
-            _layoutHolesSorted.Remove(potentialHole);
-            return potentialHole;
-        }
-    }
-
-    private int ReserveDataIndex(bool leftAligned)
-    {
-        if (leftAligned)
-        {
-            var potentialHole = _dataHolesSorted.Min;
-            
-            //if the potential hole is 0, the holes collection is empty.
-            //if the potential hole is greater than the last free index, the hole is a right aligned hole.
-            if (potentialHole == 0 || potentialHole > _lastFreeDataIndex.left)
-            {
-                _lastFreeDataIndex.left += 1;
-                return _lastFreeDataIndex.left;
-            }
-            
-            _dataHolesSorted.Remove(potentialHole);
-            return potentialHole;
-        }
-        else
-        {
-            var potentialHole = _dataHolesSorted.Max;
-            
-            //if the potential hole is 0, the holes collection is empty.
-            //if the potential hole is smaller than the last free index, the hole is a left aligned hole.
-            if (potentialHole == 0 || potentialHole < _lastFreeDataIndex.right)
-            {
-                _lastFreeDataIndex.right -= 1;
-                return _lastFreeDataIndex.right;
-            }
-            
-            _dataHolesSorted.Remove(potentialHole);
-            return potentialHole;
-        }
-    }
-
-    private static int PositionToIndex(Vector3 position, int currentLayer)
-    {
-        float sizeCurrentLayer = Dimensions / MathF.Pow(2, currentLayer);
+        float sizeCurrentLayer = Dimensions / MathF.Pow(2, depth);
         float halfSizeCurrentLayer = sizeCurrentLayer / 2;
 
         var adjustedX = position.X % sizeCurrentLayer;
@@ -401,59 +576,86 @@ public unsafe class VoxelOctree : IDisposable
         var adjustedZ = position.Z % sizeCurrentLayer;
         var lowerZ = adjustedZ < halfSizeCurrentLayer;
 
-        return (lowerX ? 0 : 1) + (lowerY ? 0 : 2) + (lowerZ ? 0 : 4);
+        return (byte) ((lowerX ? 0 : 1) + (lowerY ? 0 : 2) + (lowerZ ? 0 : 4));
     }
 
     public void Dispose()
     {
         GC.SuppressFinalize(this);
+        DisposeCore();
     }
 
-    private struct DataNode
+    private void DisposeCore()
     {
-        public int NodeIndex;
-
-        /// <summary>
-        /// The child index at the parent (0-7).
-        /// </summary>
-        public byte ParentIndex;
     }
 
-    public struct Node
+    private struct Node
     {
-        public Node(Span<int> indices, int parentIndex, byte isLeafFlag, int level)
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                Indices[i] = indices[i];
-                LodIndices[i] = -1;
-            }
-
-            ParentIndex = parentIndex;
-            IsLeafFlag = isLeafFlag;
-        }
-
-        public fixed int Indices[8];
-        public fixed int LodIndices[8];
+        public fixed int ChildIndices[8];
+        public int DataIndex;
+        public int Index;
 
         public int ParentIndex;
-        public byte IsLeafFlag;
+        public byte ParentChildIndex;
+        public bool IsLeaf;
+        public bool SharesDataWithParent;
+        public byte Depth;
 
-        public bool IsLeaf(int index)
+        public LeftAligned LeftAlignedState;
+    }
+
+    [Flags]
+    private enum LeftAligned : byte
+    {
+        Parent = 1 << 0,
+        Current = 1 << 1,
+        Child = 1 << 2
+    }
+
+    private class OctreeDebugView
+    {
+        public NodeDebugView? RootNode { get; }
+        private VoxelOctree _octree;
+
+        public OctreeDebugView(VoxelOctree octree)
         {
-            return (IsLeafFlag & (1 << index)) != 0;
+            _octree = octree;
+            ref var root = ref octree.GetRootNode();
+
+            RootNode = new NodeDebugView();
+            FillNodeInfo(RootNode, ref root);
         }
 
-        public void SetLeaf(int index, bool isLeaf)
+        private void FillNodeInfo(NodeDebugView target, ref Node node)
         {
-            if (isLeaf)
+            target.Depth = node.Depth;
+            target.Voxel = _octree.GetVoxel(ref node);
+            target.LeftAlignedState = node.LeftAlignedState;
+            target.SharesDataWithParent = node.SharesDataWithParent;
+
+            if (node.IsLeaf)
             {
-                IsLeafFlag |= (byte) (1 << index);
+                return;
             }
-            else
+
+            target.Children = new NodeDebugView[ChildCount];
+            for (byte i = 0; i < ChildCount; i++)
             {
-                IsLeafFlag &= (byte) ~(1 << index);
+                target.Children[i] = new NodeDebugView();
+                ref var child = ref _octree.GetNode(node.ChildIndices[i],
+                    (node.LeftAlignedState & LeftAligned.Child) != 0);
+                FillNodeInfo(target.Children[i], ref child);
             }
+        }
+
+        public class NodeDebugView
+        {
+            public NodeDebugView[]? Children;
+            public int Depth;
+            public bool SharesDataWithParent;
+            public LeftAligned LeftAlignedState;
+
+            public Voxel Voxel;
         }
     }
 }
