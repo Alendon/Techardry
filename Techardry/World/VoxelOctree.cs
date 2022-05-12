@@ -193,7 +193,7 @@ public unsafe class VoxelOctree : IDisposable
 
         for (int i = 0; i < ChildCount && allEqual; i++)
         {
-            ref var compareChild = ref GetChildNode(ref node, i);
+            ref var compareChild = ref GetChildNode(ref parent, i);
             ref readonly var compareVoxel = ref GetVoxel(ref compareChild);
             allEqual &= nodeVoxel.Equals(compareVoxel);
         }
