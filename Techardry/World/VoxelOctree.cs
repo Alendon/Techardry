@@ -72,7 +72,7 @@ public unsafe class VoxelOctree : IDisposable
         {
             var oldLod = inverseLod;
             inverseLod = MaximumLevelCount - value;
-            UpdateLod(oldLod, inverseLod);
+            UpdateLod(oldLod);
         }
     }
 
@@ -95,7 +95,7 @@ public unsafe class VoxelOctree : IDisposable
 
     private int DataCapacity
     {
-        get => _nodes.Length;
+        get => _data.ownerNodes.Length;
         set
         {
             var alignedSize = MathHelper.CeilPower2(value);
@@ -151,9 +151,9 @@ public unsafe class VoxelOctree : IDisposable
         throw new NotImplementedException();
     }
 
-    private void UpdateLod(int oldLod, int newLod)
+    private void UpdateLod(int oldLod)
     {
-        throw new NotImplementedException();
+        UpdateLod(ref GetRootNode(), oldLod);
     }
 
     public void Remove(Vector3 position, [ValueRange(0, MaximumTotalDivision)] int depth)
@@ -258,17 +258,88 @@ public unsafe class VoxelOctree : IDisposable
         if (oldLodNodeIndex != -1)
         {
             ref var oldLodNode = ref GetNode(oldLodNodeIndex, oldLodLeftAligned);
-            MoveVoxelByLod(ref oldLodNode, false);
+            UpdateShareWithParent(ref oldLodNode, false);
         }
 
-        MoveVoxelByLod(ref GetChildNode(ref parent, maxIndex), true);
+        UpdateShareWithParent(ref GetChildNode(ref parent, maxIndex), true);
 
         parent.DataIndex = GetChildNode(ref parent, maxIndex).DataIndex;
 
         MergeLodUpwards(ref parent);
     }
 
-    private void MoveVoxelByLod(ref Node node, bool shareWithParent)
+    private ref Node UpdateLod(ref Node node, int oldLod)
+    {
+        //In this method we cannot use the existing GetChildNode method because it will return the child node computed with the new lod.
+        //But the nodes gets updated from the parent to the children
+        
+        var oldNodeLeftAligned = IsLeftAligned(ref node, oldLod);
+        var newNodeLeftAligned = IsLeftAligned(ref node);
+        
+        var moveNode = oldNodeLeftAligned != newNodeLeftAligned;
+
+        if (node.IsLeaf)
+        {
+            var oldDataLeftAligned = GetDataAlignment(ref node, oldLod);
+            var newDataLeftAligned = GetDataAlignment(ref node);
+            var moveData = oldDataLeftAligned != newDataLeftAligned;
+
+            if (moveData)
+            {
+                var data = GetVoxel(node.DataIndex, oldDataLeftAligned);
+                DeleteData(oldDataLeftAligned, node.DataIndex, node.Index);
+                node.DataIndex = CreateData(newDataLeftAligned, node.Index);
+
+                WriteVoxel(ref node, data);
+
+                ref var upwardsNode = ref node;
+                while (upwardsNode.SharesDataWithParent)
+                {
+                    upwardsNode = ref GetParentNode(ref upwardsNode);
+                    upwardsNode.DataIndex = node.DataIndex;
+                }
+            }
+        }
+        
+        if (moveNode)
+        {
+            var oldNode = node;
+
+            DeleteNode(node.Index, oldNodeLeftAligned, out _);
+            
+            var newIndex = newNodeLeftAligned ? NodeCount.left++ : NodeCount.right++;
+            node = ref GetNode(newIndex, newNodeLeftAligned);
+            node = oldNode;
+            node.Index = newIndex;
+
+            ref var parent = ref GetNode(oldNode.ParentIndex, IsLeftAligned(oldNode.Depth - 1));
+            parent.ChildIndices[node.ParentChildIndex] = node.Index;
+            
+            if(!node.IsLeaf)
+            {
+                for (int i = 0; i < ChildCount; i++)
+                {
+                    ref var childNode = ref GetNode(node.ChildIndices[i], IsLeftAligned(node.Depth + 1, oldLod));
+                    childNode.ParentIndex = node.Index;
+                }
+            }
+        }
+        
+        
+        if (!node.IsLeaf)
+        {
+            for (int i = 0; i < ChildCount; i++)
+            {
+                ref var childNode = ref GetNode(node.ChildIndices[i], IsLeftAligned(node.Depth + 1, oldLod));
+                childNode = ref UpdateLod(ref childNode, oldLod);
+                node = ref GetParentNode(ref childNode);
+            }
+        }
+
+        return ref node;
+    }
+    
+    private void UpdateShareWithParent(ref Node node, bool shareWithParent)
     {
         var oldLeftAlignedState = GetDataAlignment(ref node);
         var data = GetVoxel(ref node);
@@ -352,11 +423,13 @@ public unsafe class VoxelOctree : IDisposable
 
     private void DeleteData(ref Node node)
     {
-        var dataLeftAligned = GetDataAlignment(ref node);
-        var dataIndex = node.DataIndex;
-
+        DeleteData(GetDataAlignment(ref node), node.DataIndex, node.Index);
+    }
+    
+    private void DeleteData(bool dataLeftAligned, int dataIndex, int ownerIndex)
+    {
         var actualDataIndex = dataLeftAligned ? dataIndex : DataCapacity - dataIndex - 1;
-        var actualOwnerIndex = dataLeftAligned ? node.Index : NodeCapacity - node.Index - 1;
+        var actualOwnerIndex = dataLeftAligned ? ownerIndex : NodeCapacity - ownerIndex - 1;
 
         var dataOwner = _data.ownerNodes[actualDataIndex];
 
@@ -521,6 +594,16 @@ public unsafe class VoxelOctree : IDisposable
         ownerRef = actualOwnerIndex;
     }
 
+    private bool GetDataAlignment(ref Node node, int lod)
+    {
+        if (!node.SharesDataWithParent)
+        {
+            return IsLeftAligned(ref node, lod);
+        }
+
+        return GetDataAlignment(ref GetParentNode(ref node), lod);
+    }
+    
     private bool GetDataAlignment(ref Node node)
     {
         if (!node.SharesDataWithParent)
@@ -622,7 +705,7 @@ public unsafe class VoxelOctree : IDisposable
         public byte Depth;
     }
 
-    private class OctreeDebugView
+    public class OctreeDebugView
     {
         public NodeDebugView? RootNode { get; }
         private VoxelOctree _octree;
