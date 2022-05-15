@@ -233,9 +233,10 @@ public unsafe class VoxelOctree : IDisposable
         }
     }
 
-    public bool Raycast(Vector3 origin, Vector3 direction, out Voxel voxel, int maxDepth = MaximumTotalDivision)
+    public bool Raycast(Vector3 origin, Vector3 direction, out Voxel voxel, out Vector3 normal, int maxDepth = MaximumTotalDivision)
     {
         voxel = GetDefaultVoxel();
+        normal = Vector3.Zero;
 
         var halfScale = new Vector3(Dimensions) / 2;
         var center = halfScale;
@@ -279,7 +280,13 @@ public unsafe class VoxelOctree : IDisposable
                 voxel = GetVoxel(ref currentNode);
 
                 //if the node is not empty its a hit.
-                if (!voxel.Equals(GetDefaultVoxel())) return true;
+                if (!voxel.Equals(GetDefaultVoxel()))
+                {
+                    //Todo this could be optimized
+                    TechardryMath.BoxIntersect((center - halfScale, center + halfScale), (origin, direction), out var result);
+                    normal = result.normal;
+                    return true;
+                }
 
                 //Remove the current node from the stack.
                 stackPos--;
