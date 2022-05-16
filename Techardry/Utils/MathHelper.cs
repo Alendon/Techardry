@@ -1,4 +1,6 @@
 ﻿using System.Numerics;
+using BepuPhysics;
+using BepuUtilities;
 using MintyCore.Physics;
 
 namespace Techardry.Utils;
@@ -6,59 +8,71 @@ namespace Techardry.Utils;
 public static class MathHelper
 {
     public static bool BoxIntersect((Vector3 Min, Vector3 Max) box, (Vector3 Origin, Vector3 Direction) ray,
-        out (float TMin, float TMax, Vector3 normal) hitResult)
+        out (float T, Vector3 Normal) result)
     {
-        var inverseDirection = Vector3.One / ray.Direction;
+        result = (0, Vector3.Zero);
+        
+        var halfWidth = (box.Max.X - box.Min.X) / 2f;
+        var halfHeight = (box.Max.Y - box.Min.Y) / 2f;
+        var halfLength = (box.Max.Z - box.Min.Z) / 2f;
+        
+        var half = new Vector3(halfWidth, halfHeight, halfLength);
 
-        float t1 = (box.Min.X - ray.Origin.X) * inverseDirection.X;
-        float t2 = (box.Max.X - ray.Origin.X) * inverseDirection.X;
-        float t3 = (box.Min.Y - ray.Origin.Y) * inverseDirection.Y;
-        float t4 = (box.Max.Y - ray.Origin.Y) * inverseDirection.Y;
-        float t5 = (box.Min.Z - ray.Origin.Z) * inverseDirection.Z;
-        float t6 = (box.Max.Z - ray.Origin.Z) * inverseDirection.Z;
+        var position =  box.Max - half;
 
-        float tmin = Math.Max(Math.Max(Math.Min(t1, t2), Math.Min(t3, t4)), Math.Min(t5, t6));
-        float tmax = Math.Min(Math.Min(Math.Max(t1, t2), Math.Max(t3, t4)), Math.Max(t5, t6));
 
-        if (tmax < 0)
+        Vector3 v = ray.Origin - position;
+        Vector3 result1 = v;
+        Vector3 result2 = ray.Direction;
+        Vector3 vector3_1 =
+            new Vector3( result2.X < 0.0f ? 1f : -1f,  result2.Y < 0.0f ? 1f : -1f,
+                 result2.Z < 0.0f ? 1f : -1f) / Vector3.Max(new Vector3(1E-15f), Vector3.Abs(result2));
+        Vector3 vector3_2 = half;
+        Vector3 vector3_3 = (result1 - vector3_2) * vector3_1;
+        Vector3 vector3_4 = (result1 + vector3_2) * vector3_1;
+        Vector3 vector3_5 = Vector3.Min(vector3_3, vector3_4);
+        Vector3 vector3_6 = Vector3.Max(vector3_3, vector3_4);
+        float num1 =  vector3_6.X <  vector3_6.Y ? vector3_6.X : vector3_6.Y;
+        if ( vector3_6.Z <  num1)
+            num1 = vector3_6.Z;
+        if ( num1 < 0.0f)
         {
-            hitResult = (0, 0, Vector3.Zero);
             return false;
         }
 
-        if (tmin > tmax)
+        float num2;
+        if ( vector3_5.X >  vector3_5.Y)
         {
-            hitResult = (0, 0, Vector3.Zero);
+            if ( vector3_5.X >  vector3_5.Z)
+            {
+                num2 = vector3_5.X;
+                result.Normal = Vector3.UnitX;
+            }
+            else
+            {
+                num2 = vector3_5.Z;
+                result.Normal = Vector3.UnitZ;
+            }
+        }
+        else if ( vector3_5.Y >  vector3_5.Z)
+        {
+            num2 = vector3_5.Y;
+            result.Normal = Vector3.UnitY;
+        }
+        else
+        {
+            num2 = vector3_5.Z;
+            result.Normal = Vector3.UnitZ;
+        }
+
+        if ( num1 <  num2)
+        {
             return false;
         }
 
-        hitResult = (tmin, tmax, Vector3.One);
-
-        if (tmin.Equals(t1))
-        {
-            hitResult.normal = Vector3.UnitX;
-        }
-        else if (tmin.Equals(t2))
-        {
-            hitResult.normal = -Vector3.UnitX;
-        }
-        else if (tmin.Equals(t3))
-        {
-            hitResult.normal = Vector3.UnitY;
-        }
-        else if (tmin.Equals(t4))
-        {
-            hitResult.normal = -Vector3.UnitY;
-        }
-        else if (tmin.Equals(t5))
-        {
-            hitResult.normal = Vector3.UnitZ;
-        }
-        else if (tmin.Equals(t6))
-        {
-            hitResult.normal = -Vector3.UnitZ;
-        }
-
+        result.T =  num2 < 0.0f ? 0.0f : num2;
+        if ( Vector3.Dot(result.Normal, v) < 0.0f)
+            result.Normal = -result.Normal;
         return true;
     }
 }

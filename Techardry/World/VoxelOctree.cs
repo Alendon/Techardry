@@ -296,7 +296,7 @@ public unsafe class VoxelOctree : IDisposable
                 {
                     //Todo this could be optimized
                     TechardryMath.BoxIntersect((center - halfScale, center + halfScale), (origin, direction), out var result);
-                    normal = result.normal;
+                    normal = result.Normal;
                     return true;
                 }
 
@@ -349,7 +349,7 @@ public unsafe class VoxelOctree : IDisposable
                         continue;
                     }
 
-                    childTMin[remainingChildrenToCheck] = (childIndex, childRayResult.TMin);
+                    childTMin[remainingChildrenToCheck] = (childIndex, childRayResult.T);
                     remainingChildrenToCheck++;
                 }
 
