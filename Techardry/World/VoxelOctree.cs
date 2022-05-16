@@ -962,26 +962,21 @@ public unsafe class VoxelOctree : IDisposable
         return (byte) ((lowerX ? 0 : 1) + (lowerY ? 0 : 2) + (lowerZ ? 0 : 4));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private static Vector3 GetChildOffset(int childIndex)
     {
-        var result = new Vector3(-1, -1, -1);
-
-        if ((childIndex & 1) != 0)
+        return childIndex switch
         {
-            result.X = 1;
-        }
-
-        if ((childIndex & 2) != 0)
-        {
-            result.Y = 1;
-        }
-
-        if ((childIndex & 4) != 0)
-        {
-            result.Z = 1;
-        }
-
-        return result;
+            0b0000 => new Vector3(-1, -1, -1),
+            0b0001 => new Vector3(1, -1, -1),
+            0b0010 => new Vector3(-1, 1, -1),
+            0b0100 => new Vector3(-1, -1, 1),
+            0b0011 => new Vector3(1, 1, -1),
+            0b0110 => new Vector3(-1, 1, 1),
+            0b0101 => new Vector3(1, -1, 1),
+            0b0111 => new Vector3(1, 1, 1),
+            _ => throw new ArgumentOutOfRangeException(nameof(childIndex), childIndex, null)
+        };
     }
 
     public void Dispose()
