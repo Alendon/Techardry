@@ -349,7 +349,7 @@ public unsafe class VoxelOctree : IDisposable
                         continue;
                     }
 
-                    childTMin[childIndex] = (childIndex, childRayResult.TMin);
+                    childTMin[remainingChildrenToCheck] = (childIndex, childRayResult.TMin);
                     remainingChildrenToCheck++;
                 }
 
@@ -357,8 +357,8 @@ public unsafe class VoxelOctree : IDisposable
                 var childTMinSorted = childTMin;
 
                 //Sort the children by tMin in descending order.
-                childTMinSorted.Sort((a, b) => -a.tMin.CompareTo(b.tMin));
                 childTMinSorted = childTMinSorted.Slice(0, remainingChildrenToCheck);
+                childTMinSorted.Sort((a, b) => -a.tMin.CompareTo(b.tMin));
 
 
                 //Write the sorted child indices to the stack.
