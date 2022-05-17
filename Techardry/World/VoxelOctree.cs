@@ -96,7 +96,8 @@ public unsafe class VoxelOctree : IDisposable
     private (int left, int right) NodeCount;
 
 
-    private (int[] ownerNodes, VoxelData[] voxels, VoxelPhysicsData[] physicsData, VoxelRenderData[] renderData) _data;
+    private ((int index, bool leftAligned)[] ownerNodes, VoxelData[] voxels, VoxelPhysicsData[] physicsData,
+        VoxelRenderData[] renderData) _data;
 
     private int DataCapacity
     {
@@ -124,14 +125,15 @@ public unsafe class VoxelOctree : IDisposable
         this.inverseLod = inverseLod;
 
         _nodes = Array.Empty<Node>();
-        _data = (Array.Empty<int>(), Array.Empty<VoxelData>(), Array.Empty<VoxelPhysicsData>(), Array.Empty<VoxelRenderData>());
+        _data = (Array.Empty<(int, bool)>(), Array.Empty<VoxelData>(), Array.Empty<VoxelPhysicsData>(),
+            Array.Empty<VoxelRenderData>());
 
         NodeCapacity = InitialNodeCapacity;
         DataCapacity = InitialDataCapacity;
 
         DataCount = (1, 0);
         SetData(0, true, GetDefaultVoxel());
-        _data.ownerNodes[0] = 0;
+        _data.ownerNodes[0] = (0, true);
 
         NodeCount = (1, 0);
         _nodes[0] = new Node
@@ -186,7 +188,9 @@ public unsafe class VoxelOctree : IDisposable
         var oldLeftRenderData = oldRenderData.AsSpan(0, DataCount.left);
         var oldRightRenderData = oldRenderData.AsSpan(oldRenderData.Length - DataCount.right, DataCount.right);
 
-        _data = new(new int[newCapacity], new VoxelData[newCapacity], new VoxelPhysicsData[newCapacity], new VoxelRenderData[newCapacity]);
+        _data = new ValueTuple<ValueTuple<int, bool>[], VoxelData[], VoxelPhysicsData[], VoxelRenderData[]>(
+            new (int, bool)[newCapacity], new VoxelData[newCapacity], new VoxelPhysicsData[newCapacity],
+            new VoxelRenderData[newCapacity]);
 
         var newLeftOwners = _data.ownerNodes.AsSpan(0, DataCount.left);
         var newRightOwners = _data.ownerNodes.AsSpan(_data.ownerNodes.Length - DataCount.right, DataCount.right);
@@ -249,8 +253,7 @@ public unsafe class VoxelOctree : IDisposable
             node = ref GetOrCreateChild(ref node, position);
         }
 
-        node = ref DeleteChildrenAndData(ref node);
-        node.DataIndex = CreateData(GetDataAlignment(ref node), node.Index);
+        node = ref DeleteChildren(ref node);
         SetData(ref node, voxelData);
 
         MergeDataUpwards(ref node);
@@ -265,9 +268,194 @@ public unsafe class VoxelOctree : IDisposable
             DataCapacity = DataCount.left + DataCount.right;
         }
     }
-    
+
+    public bool ConeTrace(Vector3 origin, Vector3 direction, float coneAngle, out Node node, out Vector3 normal)
+    {
+        node = GetRootNode();
+        normal = Vector3.Zero;
+
+        var halfScale = new Vector3(Dimensions) / 2;
+        var center = halfScale;
+        var minBox = center - halfScale;
+        var maxBox = center + halfScale;
+
+        Span<StackEntry> stack = stackalloc StackEntry[MaximumLevelCount];
+        int stackPos = 0;
+
+        if (!TechardryMath.BoxIntersect((minBox, maxBox), (origin, direction), out var rootResult))
+        {
+            return false;
+        }
+
+        stack[stackPos] = new StackEntry()
+        {
+            NodeIndex = GetAbsoluteNodeIndex(ref GetRootNode()),
+            Center = center,
+            HalfScale = halfScale,
+            RemainingChildrenToCheck = -1,
+            T = rootResult.T
+        };
+
+        Span<(int childIndex, float T)> childTMin = stackalloc (int, float)[ChildCount];
+
+        while (stackPos >= 0)
+        {
+            //Pop the current node off the stack.
+            var nodeIndex = stack[stackPos].NodeIndex;
+            center = stack[stackPos].Center;
+            halfScale = stack[stackPos].HalfScale;
+            var T = stack[stackPos].T;
+            var remainingChildrenToCheck = stack[stackPos].RemainingChildrenToCheck;
+            int childrenToCheck = -1;
+            float childT = float.MaxValue;
+
+            var childHalfScale = halfScale / 2;
+
+            ref var currentNode = ref _nodes[nodeIndex];
+
+            //Check if the current node is a leaf or the maximum depth has been reached.
+            if (currentNode.IsLeaf || currentNode.Depth > GetMaxDepthForCone(T))
+            {
+                var voxelData = GetVoxel(ref currentNode);
+
+                //if the node is not empty its a hit.
+                if (!voxelData.Equals(GetDefaultVoxel()))
+                {
+                    //Todo this could be optimized
+                    TechardryMath.BoxIntersect((center - halfScale, center + halfScale), (origin, direction),
+                        out var result);
+                    normal = result.Normal;
+                    node = currentNode;
+                    return true;
+                }
+
+                //Remove the current node from the stack.
+                stackPos--;
+                continue;
+            }
+
+            //Traverse to the next child.
+
+            //Check if all children have been checked.
+            if (remainingChildrenToCheck == 0)
+            {
+                //Remove the current node from the stack.
+                stackPos--;
+                continue;
+            }
+
+            //Get the next child to check.
+            if (remainingChildrenToCheck > 0)
+            {
+                childrenToCheck = stack[stackPos].ChildSortOrder[--remainingChildrenToCheck];
+            }
+
+            if (remainingChildrenToCheck == -1)
+            {
+                remainingChildrenToCheck = 0;
+                childTMin.Clear();
+
+                var childDepth = currentNode.Depth + 1;
+
+                //Calculate the tMin for each child.
+                for (int childIndex = 0; childIndex < ChildCount; childIndex++)
+                {
+                    ref var childNode = ref GetChildNode(ref currentNode, childIndex);
+
+                    var childVoxel = GetVoxel(ref childNode);
+
+                    if (childNode.IsLeaf && childVoxel.Equals(GetDefaultVoxel()))
+                    {
+                        continue;
+                    }
+
+
+                    var childCenter = center + childHalfScale * GetChildOffset(childIndex);
+
+                    //make the box slightly bigger to avoid floating point errors.
+                    var childBox = (childCenter - childHalfScale, childCenter + childHalfScale);
+
+                    if (!TechardryMath.BoxIntersect(childBox, (origin, direction), out var childRayResult))
+                    {
+                        continue;
+                    }
+
+                    var maxDepth = GetMaxDepthForCone(childRayResult.T);
+                    if (maxDepth < childDepth)
+                    {
+                        continue;
+                    }
+
+                    childTMin[remainingChildrenToCheck] = (childIndex, childRayResult.T);
+                    remainingChildrenToCheck++;
+                }
+
+                //Sort the children by tMin.
+                var childTMinSorted = childTMin;
+
+                //Sort the children by tMin in descending order.
+                childTMinSorted = childTMinSorted.Slice(0, remainingChildrenToCheck);
+                childTMinSorted.Sort((a, b) => -a.T.CompareTo(b.T));
+
+
+                //Write the sorted child indices to the stack.
+                for (int i = 0; i < childTMinSorted.Length; i++)
+                {
+                    stack[stackPos].ChildSortOrder[i] = childTMinSorted[i].childIndex;
+                    stack[stackPos].ChildT[i] = childTMinSorted[i].T;
+                }
+
+                childrenToCheck = stack[stackPos].ChildSortOrder[--remainingChildrenToCheck];
+                childT = stack[stackPos].ChildT[remainingChildrenToCheck];
+            }
+
+            if (childrenToCheck < 0 || childrenToCheck >= ChildCount)
+            {
+                //Remove the current node from the stack.
+                stackPos--;
+                continue;
+            }
+
+            //Update the remaining children to check.
+            stack[stackPos].RemainingChildrenToCheck = remainingChildrenToCheck;
+
+
+            //Push the children to check onto the stack.
+            stackPos++;
+            stack[stackPos] = new()
+            {
+                NodeIndex = GetAbsoluteNodeIndex(ref GetChildNode(ref currentNode, childrenToCheck)),
+                RemainingChildrenToCheck = -1,
+                Center = center + childHalfScale * GetChildOffset(childrenToCheck),
+                HalfScale = childHalfScale,
+                T = childT
+            };
+        }
+
+        return false;
+
+        int GetMaxDepthForCone(float T)
+        {
+            float coneRadius = MathF.Tan(coneAngle / 2) * T;
+            var powerOfTwo = (int) MathF.Ceiling(MathF.Log2(coneRadius));
+
+            return coneRadius > 0.5f ? SizeOneDepth - 1 : SizeOneDepth;
+
+            //if power of two is 0 we know that the voxel size is 1
+            //Therefore we can just add the depth where 1 is the voxel size.
+            //powerOfTwo = Math.Clamp(powerOfTwo, SizeOneDepth - MaximumTotalDivision, SizeOneDepth + MaximumTotalDivision);
+            //return -(powerOfTwo - SizeOneDepth);
+        }
+
+        float CeilPowerOfTwo(float x)
+        {
+            return MathF.Pow(2, MathF.Ceiling(MathF.Log(x, 2)));
+        }
+    }
+
     //TODO Make Raycast internal
-    public bool Raycast(Vector3 origin, Vector3 direction, out Node node, out Vector3 normal, int maxDepth = MaximumTotalDivision)
+    public bool Raycast(Vector3 origin, Vector3 direction, out Node node, out Vector3 normal,
+        int maxDepth = MaximumTotalDivision)
     {
         node = GetRootNode();
         normal = Vector3.Zero;
@@ -317,7 +505,8 @@ public unsafe class VoxelOctree : IDisposable
                 if (!voxelData.Equals(GetDefaultVoxel()))
                 {
                     //Todo this could be optimized
-                    TechardryMath.BoxIntersect((center - halfScale, center + halfScale), (origin, direction), out var result);
+                    TechardryMath.BoxIntersect((center - halfScale, center + halfScale), (origin, direction),
+                        out var result);
                     normal = result.Normal;
                     node = currentNode;
                     return true;
@@ -425,6 +614,8 @@ public unsafe class VoxelOctree : IDisposable
         public int NodeIndex;
         public int RemainingChildrenToCheck;
         public fixed int ChildSortOrder[ChildCount];
+        public fixed float ChildT[ChildCount];
+        public float T;
     }
 
     private void MergeDataUpwards(ref Node node)
@@ -454,8 +645,7 @@ public unsafe class VoxelOctree : IDisposable
 
         var data = nodeVoxel;
 
-        parent = ref DeleteChildrenAndData(ref parent);
-        parent.DataIndex = CreateData(GetDataAlignment(ref parent), parent.Index);
+        parent = ref DeleteChildren(ref parent);
         SetData(ref parent, data);
         MergeDataUpwards(ref parent);
     }
@@ -508,7 +698,8 @@ public unsafe class VoxelOctree : IDisposable
             ref var oldLodNode = ref GetNode(oldLodNodeIndex, oldLodLeftAligned);
             UpdateShareWithParent(ref oldLodNode, false);
         }
-
+        
+        child = ref GetChildNode(ref parent, maxIndex);
         UpdateShareWithParent(ref child, true);
 
         parent.DataIndex = GetChildNode(ref parent, maxIndex).DataIndex;
@@ -561,13 +752,13 @@ public unsafe class VoxelOctree : IDisposable
             node.Index = newIndex;
 
             ref var parent = ref GetNode(oldNode.ParentIndex, IsLeftAligned(oldNode.Depth - 1));
-            parent.ChildIndices[node.ParentChildIndex] = node.Index;
+            parent.SetChildIndex(node.ParentChildIndex, node.Index);
 
             if (!node.IsLeaf)
             {
                 for (int i = 0; i < ChildCount; i++)
                 {
-                    ref var childNode = ref GetNode(node.ChildIndices[i], IsLeftAligned(node.Depth + 1, oldLod));
+                    ref var childNode = ref GetNode(node.GetChildIndex(i), IsLeftAligned(node.Depth + 1, oldLod));
                     childNode.ParentIndex = node.Index;
                 }
             }
@@ -578,7 +769,7 @@ public unsafe class VoxelOctree : IDisposable
         {
             for (int i = 0; i < ChildCount; i++)
             {
-                ref var childNode = ref GetNode(node.ChildIndices[i], IsLeftAligned(node.Depth + 1, oldLod));
+                ref var childNode = ref GetNode(node.GetChildIndex(i), IsLeftAligned(node.Depth + 1, oldLod));
                 childNode = ref UpdateLod(ref childNode, oldLod);
                 node = ref GetParentNode(ref childNode);
             }
@@ -614,7 +805,7 @@ public unsafe class VoxelOctree : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private ref Node GetChildNode(ref Node parent, int childIndex)
     {
-        return ref GetNode(parent.ChildIndices[childIndex], IsLeftAligned(parent.Depth + 1));
+        return ref GetNode(parent.GetChildIndex(childIndex), IsLeftAligned(parent.Depth + 1));
     }
 
     /// <summary>
@@ -622,48 +813,75 @@ public unsafe class VoxelOctree : IDisposable
     /// </summary>
     /// <param name="node"></param>
     /// <returns>Reference to the original node, as it may be moved in data</returns>
-    private ref Node DeleteChildrenAndData(ref Node node, bool firstCall = true)
+    private ref Node DeleteChildren(ref Node node)
     {
         if (node.IsLeaf)
         {
-            DeleteData(ref node);
-            node.DataIndex = InvalidIndex;
             return ref node;
         }
+        var oldData = GetVoxel(ref node);
 
-        bool nodeLeftAligned = IsLeftAligned(ref node);
-        int nodeIndex = node.Index;
-
-        for (int i = 0; i < ChildCount; i++)
+        bool notDone;
+        do
         {
-            var childIndex = node.ChildIndices[i];
+            ref var nodePtr = ref DeleteFirstChild(ref node, out notDone);
+            node = ref Unsafe.AsRef<Node>(Unsafe.AsPointer(ref nodePtr));
+        } while (notDone);
 
-            ref var childNode = ref GetNode(node.ChildIndices[i], IsLeftAligned(node.Depth + 1));
-            childNode = ref DeleteChildrenAndData(ref childNode, false);
-            node = ref GetParentNode(ref childNode);
+        ref Node DeleteFirstChild(ref Node parent, out bool success)
+        {
+            int originalIndex = parent.Index;
+            bool originalLeftAligned = IsLeftAligned(ref parent);
 
-            DeleteNode(childIndex, IsLeftAligned(ref node), out (int from, int to) movedNode);
+            ref var workingNode = ref parent;
+            while (!workingNode.IsLeaf)
+            {
+                bool foundChildNode = false;
+                for (int i = 0; i < ChildCount; i++)
+                {
+                    var childNodeIndex = workingNode.GetChildIndex(i);
+                    if (childNodeIndex >= 0)
+                    {
+                        workingNode = ref GetChildNode(ref workingNode, i);
+                        foundChildNode = true;
+                        break;
+                    }
+                }
 
-            if (movedNode.from != nodeIndex) continue;
-            nodeIndex = movedNode.to;
-            node = ref GetNode(nodeIndex, nodeLeftAligned);
+                if (!foundChildNode)
+                {
+                    workingNode.IsLeaf = true;
+                }
+            }
+
+            DeleteData(ref workingNode);
+
+            if (!Unsafe.AreSame(ref workingNode, ref parent))
+            {
+                ref var workingParent = ref GetParentNode(ref workingNode);
+                workingParent.SetChildIndex(workingNode.ParentChildIndex, -1, true);
+                workingParent.Invalid = true;
+
+                DeleteNode(workingNode.Index, IsLeftAligned(ref workingNode), out var movedNode);
+                success = true;
+
+                if (movedNode.from == originalIndex)
+                {
+                    return ref GetNode(movedNode.to, originalLeftAligned);
+                }
+
+                return ref parent;
+            }
+
+            success = false;
+            return ref parent;
         }
+
+        node.DataIndex = CreateData(GetDataAlignment(ref node), node.Index);
+        SetData(ref node, oldData);
 
         node.IsLeaf = true;
-
-        if (firstCall && node.SharesDataWithParent)
-        {
-            DeleteData(ref node);
-            node.DataIndex = InvalidIndex;
-
-            ref var lodReset = ref node;
-            while (lodReset.SharesDataWithParent)
-            {
-                lodReset.SharesDataWithParent = false;
-                lodReset.DataIndex = InvalidIndex;
-                lodReset = ref GetParentNode(ref lodReset);
-            }
-        }
+        node.Invalid = false;
 
         return ref node;
     }
@@ -673,7 +891,7 @@ public unsafe class VoxelOctree : IDisposable
     {
         DeleteData(GetDataAlignment(ref node), node.DataIndex, node.Index);
     }
-
+    
     private void DeleteData(bool dataLeftAligned, int dataIndex, int ownerIndex)
     {
         var actualDataIndex = dataLeftAligned ? dataIndex : DataCapacity - dataIndex - 1;
@@ -681,7 +899,7 @@ public unsafe class VoxelOctree : IDisposable
 
         var dataOwner = _data.ownerNodes[actualDataIndex];
 
-        if (dataOwner != actualOwnerIndex) return;
+        if (dataOwner.index != ownerIndex || dataOwner.leftAligned != dataLeftAligned) return;
 
         int replaceIndex;
         if (dataLeftAligned)
@@ -697,16 +915,25 @@ public unsafe class VoxelOctree : IDisposable
         _data.voxels[actualDataIndex] = _data.voxels[replaceIndex];
         _data.physicsData[actualDataIndex] = _data.physicsData[replaceIndex];
         _data.renderData[actualDataIndex] = _data.renderData[replaceIndex];
-        
+
         _data.ownerNodes[actualDataIndex] = _data.ownerNodes[replaceIndex];
 
-        var ownerToInformIndex = _data.ownerNodes[actualDataIndex];
-        ref var ownerToInform = ref GetNode(ownerToInformIndex, dataLeftAligned);
+        ref var oldOwner = ref GetNode(ownerIndex, dataLeftAligned);
+        oldOwner.DataIndex = -1;
+
+
+        
+        ref var toInform = ref GetNode(_data.ownerNodes[actualDataIndex].index, _data.ownerNodes[actualDataIndex].leftAligned);
+        bool informParent;
         do
         {
-            ownerToInform.DataIndex = actualDataIndex;
-            ownerToInform = ref GetParentNode(ref ownerToInform);
-        } while (ownerToInform.SharesDataWithParent);
+            toInform.DataIndex = actualDataIndex;
+            informParent = toInform.SharesDataWithParent;
+            if (informParent)
+            {
+                toInform = ref GetParentNode(ref toInform);
+            }
+        } while (informParent);
     }
 
     private void DeleteNode(int index, bool leftAligned, out (int from, int to) movedNode)
@@ -718,7 +945,7 @@ public unsafe class VoxelOctree : IDisposable
             newNodeCount = --NodeCount.right;
 
         //If the deleted node is the last one, we don't need to move anything.
-        if (newNodeCount == index)
+        if (newNodeCount <= index)
         {
             movedNode = (-1, -1);
             return;
@@ -726,7 +953,48 @@ public unsafe class VoxelOctree : IDisposable
 
         //Move the last node to the deleted node's position.
         var indexToMove = newNodeCount;
-        GetNode(index, leftAligned) = GetNode(indexToMove, leftAligned);
+        ref var nodeMoveDestination = ref GetNode(index, leftAligned);
+        nodeMoveDestination = GetNode(indexToMove, leftAligned);
+        nodeMoveDestination.Index = index;
+
+        ref var clearNode = ref GetNode(indexToMove, leftAligned);
+        clearNode = new()
+        {
+            Depth = 255,
+            Invalid = true,
+            Index = -1,
+            ParentIndex = -1,
+            IsLeaf = false,
+            DataIndex = -1
+        };
+        for (int i = 0; i < ChildCount; i++)
+        {
+            clearNode.SetChildIndex(i, -1, true);
+        }
+
+        if (!nodeMoveDestination.IsLeaf)
+        {
+            //Notify children of the move
+            for (int i = 0; i < ChildCount; i++)
+            {
+                //The node child does not exist anymore
+                if (nodeMoveDestination.GetChildIndex(i) == -1) continue;
+
+                ref var child = ref GetChildNode(ref nodeMoveDestination, i);
+                child.ParentIndex = index;
+            }
+        }
+
+        if (nodeMoveDestination.IsLeaf)
+        {
+            SetDataOwner(ref nodeMoveDestination);
+        }
+
+
+        ref var parentNode = ref GetNode(nodeMoveDestination.ParentIndex, leftAligned);
+        parentNode.SetChildIndex(nodeMoveDestination.ParentChildIndex, index);
+
+
         movedNode = (indexToMove, index);
     }
 
@@ -765,7 +1033,7 @@ public unsafe class VoxelOctree : IDisposable
     {
         var childIndex = GetChildIndex(position, parent.Depth);
         var leftAligned = IsLeftAligned(parent.Depth + 1);
-        return ref GetNode(parent.ChildIndices[childIndex], leftAligned);
+        return ref GetNode(parent.GetChildIndex(childIndex), leftAligned);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
@@ -792,7 +1060,7 @@ public unsafe class VoxelOctree : IDisposable
         for (byte i = 0; i < ChildCount; i++)
         {
             var childIndex = childrenLeftAligned ? NodeCount.left++ : NodeCount.right++;
-            parent.ChildIndices[i] = childIndex;
+            parent.SetChildIndex(i, childIndex);
 
             ref var child = ref GetNode(childIndex, childrenLeftAligned);
             child = new()
@@ -845,7 +1113,7 @@ public unsafe class VoxelOctree : IDisposable
         ref var ownerRef = ref _data.ownerNodes[actualDataIndex];
 
         var actualOwnerIndex = leftAligned ? ownerIndex : NodeCapacity - ownerIndex - 1;
-        ownerRef = actualOwnerIndex;
+        ownerRef = (actualOwnerIndex, leftAligned);
     }
 
     private bool GetDataAlignment(ref Node node, int lod)
@@ -893,18 +1161,18 @@ public unsafe class VoxelOctree : IDisposable
         GetVoxelPhysicsDataRef(index, leftAligned) = voxelData.GetPhysicsData();
         GetVoxelRenderDataRef(index, leftAligned) = voxelData.GetRenderData();
     }
-    
+
     public ref VoxelData GetVoxelRef(ref Node node)
     {
         return ref GetVoxelRef(node.DataIndex, GetDataAlignment(ref node));
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private ref VoxelData GetVoxelRef(int index, bool leftAligned)
     {
         return ref leftAligned ? ref _data.voxels[index] : ref _data.voxels[DataCapacity - index - 1];
     }
-    
+
     public ref VoxelPhysicsData GetVoxelPhysicsDataRef(ref Node node)
     {
         return ref GetVoxelPhysicsDataRef(node.DataIndex, GetDataAlignment(ref node));
@@ -1007,14 +1275,14 @@ public unsafe class VoxelOctree : IDisposable
     {
         return childIndex switch
         {
-            0b0000 => new Vector3(-1, -1, -1),
-            0b0001 => new Vector3(1, -1, -1),
-            0b0010 => new Vector3(-1, 1, -1),
-            0b0100 => new Vector3(-1, -1, 1),
-            0b0011 => new Vector3(1, 1, -1),
-            0b0110 => new Vector3(-1, 1, 1),
-            0b0101 => new Vector3(1, -1, 1),
-            0b0111 => new Vector3(1, 1, 1),
+            0b0000 => new Vector3(-1, +1, -1),
+            0b0001 => new Vector3(-1, +1, +1),
+            0b0010 => new Vector3(-1, -1, -1),
+            0b0011 => new Vector3(-1, -1, +1),
+            0b0100 => new Vector3(+1, +1, -1),
+            0b0101 => new Vector3(+1, +1, +1),
+            0b0110 => new Vector3(+1, -1, -1),
+            0b0111 => new Vector3(+1, -1, +1),
             _ => throw new ArgumentOutOfRangeException(nameof(childIndex), childIndex, null)
         };
     }
@@ -1037,7 +1305,8 @@ public unsafe class VoxelOctree : IDisposable
         public readonly int Depth;
 
 
-        public VoxelResult(VoxelData voxelData, VoxelPhysicsData voxelPhysicsData, VoxelRenderData voxelRenderData, int depth)
+        public VoxelResult(VoxelData voxelData, VoxelPhysicsData voxelPhysicsData, VoxelRenderData voxelRenderData,
+            int depth)
         {
             VoxelData = voxelData;
             VoxelPhysicsData = voxelPhysicsData;
@@ -1050,7 +1319,27 @@ public unsafe class VoxelOctree : IDisposable
 
     public struct Node
     {
-        public fixed int ChildIndices[8];
+        private fixed int ChildIndices[8];
+
+        public bool Invalid;
+
+        public int GetChildIndex(int childIndex)
+        {
+            Debug.Assert(childIndex is >= 0 and < 8);
+            return ChildIndices[childIndex];
+        }
+
+        public void SetChildIndex(int childIndex, int value, bool allowMinusOne = false)
+        {
+            Debug.Assert(childIndex is >= 0 and < 8);
+            if (!allowMinusOne)
+            {
+                Debug.Assert(value >= 0);
+            }
+
+            ChildIndices[childIndex] = value;
+        }
+
         public int DataIndex;
         public int Index;
 
@@ -1091,7 +1380,7 @@ public unsafe class VoxelOctree : IDisposable
             for (byte i = 0; i < ChildCount; i++)
             {
                 target.Children[i] = new NodeDebugView();
-                ref var child = ref _octree.GetNode(node.ChildIndices[i], _octree.IsLeftAligned(node.Depth + 1));
+                ref var child = ref _octree.GetNode(node.GetChildIndex(i), _octree.IsLeftAligned(node.Depth + 1));
                 FillNodeInfo(target.Children[i], ref child);
             }
         }

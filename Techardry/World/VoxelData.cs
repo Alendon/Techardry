@@ -24,13 +24,14 @@ public readonly struct VoxelData : IEquatable<VoxelData>
         {
             Color = Id switch
             {
+                8 => Color.SaddleBrown,
                 7 => Color.Green,
                 6 => Color.Blue,
                 5 => Color.Red,
                 4 => Color.Yellow,
                 3 => Color.Purple,
                 2 => Color.Orange,
-                _ => Color.Transparent
+                _ => Color.White
             }
         };
     }
