@@ -287,7 +287,7 @@ public unsafe class VoxelOctree : IDisposable
             ref var currentNode = ref _nodes[nodeIndex];
 
             //Check if the current node is a leaf or the maximum depth has been reached.
-            if (currentNode.IsLeaf || currentNode.Depth + 1 >= maxDepth)
+            if (currentNode.IsLeaf || currentNode.Depth + 1 > maxDepth)
             {
                 voxel = GetVoxel(ref currentNode);
 
@@ -342,7 +342,7 @@ public unsafe class VoxelOctree : IDisposable
                     var childCenter = center + childHalfScale * GetChildOffset(childIndex);
 
                     //make the box slightly bigger to avoid floating point errors.
-                    var childBox = (childCenter - childHalfScale * 1.0001f, childCenter + childHalfScale * 1.0001f);
+                    var childBox = (childCenter - childHalfScale, childCenter + childHalfScale);
 
                     if (!TechardryMath.BoxIntersect(childBox, (origin, direction), out var childRayResult))
                     {
