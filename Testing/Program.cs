@@ -20,7 +20,7 @@ Random rnd = new Random(seed);
 
 for (int i = 0; i < VoxelOctree.Dimensions * VoxelOctree.Dimensions * 2; i++)
 {
-    tree.Insert(new Voxel(rnd.Next(2, 8)), new Vector3(rnd.Next(16), rnd.Next(16), rnd.Next(16)),
+    tree.Insert(new VoxelData(rnd.Next(2, 8)), new Vector3(rnd.Next(16), rnd.Next(16), rnd.Next(16)),
         VoxelOctree.SizeOneDepth);
 }
 
@@ -31,10 +31,6 @@ for (int i = 0; i < VoxelOctree.Dimensions * VoxelOctree.Dimensions * 2; i++)
 //        tree.Insert(new Voxel(rnd.Next(2, 8)), new Vector3(x, y, 8), VoxelOctree.SizeOneDepth);
 //    }
 //}
-
-
-tree.Insert(new Voxel(5), new Vector3(5, 6, 9), VoxelOctree.SizeOneDepth);
-
 
 Image<Rgba32> image = new Image<Rgba32>(1000, 1000);
 
@@ -64,17 +60,14 @@ for (int y = 0; y < image.Height; y++)
 
         rayPos += new Vector3(8, 8, 0);
 
-        tree.Raycast(rayPos, rayDir, out var voxel, out var normal, VoxelOctree.SizeOneDepth);
-        Rgba32 color = voxel.Id switch
+        Rgba32 color = Color.Transparent;
+
+        if (tree.Raycast(rayPos, rayDir, out var node, out var normal, VoxelOctree.SizeOneDepth))
         {
-            7 => Color.Green,
-            6 => Color.Blue,
-            5 => Color.Red,
-            4 => Color.Yellow,
-            3 => Color.Purple,
-            2 => Color.Orange,
-            _ => Color.White
-        };
+            var voxel = tree.GetVoxelRenderDataRef(ref node);
+            var voxelColor = voxel.Color;
+            color = voxelColor;
+        }
 
         if (normal.X < 0 || normal.Y < 0 || normal.Z < 0)
         {

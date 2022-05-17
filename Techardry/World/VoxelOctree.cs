@@ -96,7 +96,7 @@ public unsafe class VoxelOctree : IDisposable
     private (int left, int right) NodeCount;
 
 
-    private (int[] ownerNodes, Voxel[] voxels) _data;
+    private (int[] ownerNodes, VoxelData[] voxels, VoxelPhysicsData[] physicsData, VoxelRenderData[] renderData) _data;
 
     private int DataCapacity
     {
@@ -124,13 +124,13 @@ public unsafe class VoxelOctree : IDisposable
         this.inverseLod = inverseLod;
 
         _nodes = Array.Empty<Node>();
-        _data = (Array.Empty<int>(), Array.Empty<Voxel>());
+        _data = (Array.Empty<int>(), Array.Empty<VoxelData>(), Array.Empty<VoxelPhysicsData>(), Array.Empty<VoxelRenderData>());
 
         NodeCapacity = InitialNodeCapacity;
         DataCapacity = InitialDataCapacity;
 
         DataCount = (1, 0);
-        _data.voxels[0] = GetDefaultVoxel();
+        SetData(0, true, GetDefaultVoxel());
         _data.ownerNodes[0] = 0;
 
         NodeCount = (1, 0);
@@ -146,9 +146,9 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private static Voxel GetDefaultVoxel()
+    private static VoxelData GetDefaultVoxel()
     {
-        return new Voxel(1);
+        return new VoxelData(0);
     }
 
     private void ResizeNodes(int newCapacity)
@@ -171,26 +171,46 @@ public unsafe class VoxelOctree : IDisposable
     {
         var oldOwners = _data.ownerNodes;
         var oldVoxels = _data.voxels;
+        var oldPhysicsData = _data.physicsData;
+        var oldRenderData = _data.renderData;
 
         var oldLeftOwners = oldOwners.AsSpan(0, DataCount.left);
         var oldRightOwners = oldOwners.AsSpan(oldOwners.Length - DataCount.right, DataCount.right);
 
         var oldLeftVoxels = oldVoxels.AsSpan(0, DataCount.left);
         var oldRightVoxels = oldVoxels.AsSpan(oldVoxels.Length - DataCount.right, DataCount.right);
+        
+        var oldLeftPhysicsData = oldPhysicsData.AsSpan(0, DataCount.left);
+        var oldRightPhysicsData = oldPhysicsData.AsSpan(oldPhysicsData.Length - DataCount.right, DataCount.right);
+        
+        var oldLeftRenderData = oldRenderData.AsSpan(0, DataCount.left);
+        var oldRightRenderData = oldRenderData.AsSpan(oldRenderData.Length - DataCount.right, DataCount.right);
 
-        _data = new(new int[newCapacity], new Voxel[newCapacity]);
+        _data = new(new int[newCapacity], new VoxelData[newCapacity], new VoxelPhysicsData[newCapacity], new VoxelRenderData[newCapacity]);
 
         var newLeftOwners = _data.ownerNodes.AsSpan(0, DataCount.left);
         var newRightOwners = _data.ownerNodes.AsSpan(_data.ownerNodes.Length - DataCount.right, DataCount.right);
 
         var newLeftVoxels = _data.voxels.AsSpan(0, DataCount.left);
         var newRightVoxels = _data.voxels.AsSpan(_data.voxels.Length - DataCount.right, DataCount.right);
+        
+        var newLeftPhysics = _data.physicsData.AsSpan(0, DataCount.left);
+        var newRightPhysics = _data.physicsData.AsSpan(_data.physicsData.Length - DataCount.right, DataCount.right);
+        
+        var newLeftRender = _data.renderData.AsSpan(0, DataCount.left);
+        var newRightRender = _data.renderData.AsSpan(_data.renderData.Length - DataCount.right, DataCount.right);
 
         oldLeftOwners.CopyTo(newLeftOwners);
         oldRightOwners.CopyTo(newRightOwners);
 
         oldLeftVoxels.CopyTo(newLeftVoxels);
         oldRightVoxels.CopyTo(newRightVoxels);
+        
+        oldLeftPhysicsData.CopyTo(newLeftPhysics);
+        oldRightPhysicsData.CopyTo(newRightPhysics);
+        
+        oldLeftRenderData.CopyTo(newLeftRender);
+        oldRightRenderData.CopyTo(newRightRender);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
@@ -208,7 +228,8 @@ public unsafe class VoxelOctree : IDisposable
             searchNode = ref GetChildNode(ref searchNode, position);
         }
 
-        return new VoxelResult(GetVoxel(ref searchNode), searchNode.Depth);
+        return new VoxelResult(GetVoxel(ref searchNode), GetVoxelPhysicsDataRef(ref searchNode),
+            GetVoxelRenderDataRef(ref searchNode), searchNode.Depth);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
@@ -217,7 +238,7 @@ public unsafe class VoxelOctree : IDisposable
         Insert(GetDefaultVoxel(), position, depth);
     }
 
-    public void Insert(in Voxel voxel, Vector3 position, [ValueRange(0, MaximumTotalDivision)] int depth)
+    public void Insert(in VoxelData voxelData, Vector3 position, [ValueRange(0, MaximumTotalDivision)] int depth)
     {
         //Traverse the tree to the correct depth.
 
@@ -230,7 +251,7 @@ public unsafe class VoxelOctree : IDisposable
 
         node = ref DeleteChildrenAndData(ref node);
         node.DataIndex = CreateData(GetDataAlignment(ref node), node.Index);
-        WriteVoxel(ref node, voxel);
+        SetData(ref node, voxelData);
 
         MergeDataUpwards(ref node);
 
@@ -244,10 +265,11 @@ public unsafe class VoxelOctree : IDisposable
             DataCapacity = DataCount.left + DataCount.right;
         }
     }
-
-    public bool Raycast(Vector3 origin, Vector3 direction, out Voxel voxel, out Vector3 normal, int maxDepth = MaximumTotalDivision)
+    
+    //TODO Make Raycast internal
+    public bool Raycast(Vector3 origin, Vector3 direction, out Node node, out Vector3 normal, int maxDepth = MaximumTotalDivision)
     {
-        voxel = GetDefaultVoxel();
+        node = GetRootNode();
         normal = Vector3.Zero;
 
         var halfScale = new Vector3(Dimensions) / 2;
@@ -289,14 +311,15 @@ public unsafe class VoxelOctree : IDisposable
             //Check if the current node is a leaf or the maximum depth has been reached.
             if (currentNode.IsLeaf || currentNode.Depth + 1 > maxDepth)
             {
-                voxel = GetVoxel(ref currentNode);
+                var voxelData = GetVoxel(ref currentNode);
 
                 //if the node is not empty its a hit.
-                if (!voxel.Equals(GetDefaultVoxel()))
+                if (!voxelData.Equals(GetDefaultVoxel()))
                 {
                     //Todo this could be optimized
                     TechardryMath.BoxIntersect((center - halfScale, center + halfScale), (origin, direction), out var result);
                     normal = result.Normal;
+                    node = currentNode;
                     return true;
                 }
 
@@ -433,7 +456,7 @@ public unsafe class VoxelOctree : IDisposable
 
         parent = ref DeleteChildrenAndData(ref parent);
         parent.DataIndex = CreateData(GetDataAlignment(ref parent), parent.Index);
-        WriteVoxel(ref parent, data);
+        SetData(ref parent, data);
         MergeDataUpwards(ref parent);
     }
 
@@ -515,7 +538,7 @@ public unsafe class VoxelOctree : IDisposable
                 DeleteData(oldDataLeftAligned, node.DataIndex, node.Index);
                 node.DataIndex = CreateData(newDataLeftAligned, node.Index);
 
-                WriteVoxel(ref node, data);
+                SetData(ref node, data);
 
                 ref var upwardsNode = ref node;
                 while (upwardsNode.SharesDataWithParent)
@@ -672,6 +695,9 @@ public unsafe class VoxelOctree : IDisposable
         }
 
         _data.voxels[actualDataIndex] = _data.voxels[replaceIndex];
+        _data.physicsData[actualDataIndex] = _data.physicsData[replaceIndex];
+        _data.renderData[actualDataIndex] = _data.renderData[replaceIndex];
+        
         _data.ownerNodes[actualDataIndex] = _data.ownerNodes[replaceIndex];
 
         var ownerToInformIndex = _data.ownerNodes[actualDataIndex];
@@ -793,19 +819,6 @@ public unsafe class VoxelOctree : IDisposable
         }
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private void SetData(ref Node node, in Voxel voxel)
-    {
-        var leftAligned = GetDataAlignment(ref node);
-        SetData(node.DataIndex, leftAligned, voxel);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private void SetData(int dataIndex, bool leftAligned, in Voxel voxel)
-    {
-        WriteVoxel(dataIndex, leftAligned, voxel);
-    }
-
     private int CreateData(bool leftAligned, int ownerIndex)
     {
         if (DataCount.left + DataCount.right >= DataCapacity)
@@ -856,33 +869,60 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref readonly Voxel GetVoxel(ref Node node)
+    private ref readonly VoxelData GetVoxel(ref Node node)
     {
         return ref GetVoxel(node.DataIndex, GetDataAlignment(ref node));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref readonly Voxel GetVoxel(int index, bool leftAligned)
+    private ref readonly VoxelData GetVoxel(int index, bool leftAligned)
     {
         return ref GetVoxelRef(index, leftAligned);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private void WriteVoxel(ref Node node, in Voxel voxel)
+    private void SetData(ref Node node, in VoxelData voxelData)
     {
-        WriteVoxel(node.DataIndex, GetDataAlignment(ref node), voxel);
+        SetData(node.DataIndex, GetDataAlignment(ref node), voxelData);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private void WriteVoxel(int index, bool leftAligned, in Voxel voxel)
+    private void SetData(int index, bool leftAligned, in VoxelData voxelData)
     {
-        GetVoxelRef(index, leftAligned) = voxel;
+        GetVoxelRef(index, leftAligned) = voxelData;
+        GetVoxelPhysicsDataRef(index, leftAligned) = voxelData.GetPhysicsData();
+        GetVoxelRenderDataRef(index, leftAligned) = voxelData.GetRenderData();
     }
-
+    
+    public ref VoxelData GetVoxelRef(ref Node node)
+    {
+        return ref GetVoxelRef(node.DataIndex, GetDataAlignment(ref node));
+    }
+    
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref Voxel GetVoxelRef(int index, bool leftAligned)
+    private ref VoxelData GetVoxelRef(int index, bool leftAligned)
     {
         return ref leftAligned ? ref _data.voxels[index] : ref _data.voxels[DataCapacity - index - 1];
+    }
+    
+    public ref VoxelPhysicsData GetVoxelPhysicsDataRef(ref Node node)
+    {
+        return ref GetVoxelPhysicsDataRef(node.DataIndex, GetDataAlignment(ref node));
+    }
+
+    private ref VoxelPhysicsData GetVoxelPhysicsDataRef(int index, bool leftAligned)
+    {
+        return ref leftAligned ? ref _data.physicsData[index] : ref _data.physicsData[DataCapacity - index - 1];
+    }
+
+    public ref VoxelRenderData GetVoxelRenderDataRef(ref Node node)
+    {
+        return ref GetVoxelRenderDataRef(node.DataIndex, GetDataAlignment(ref node));
+    }
+
+    private ref VoxelRenderData GetVoxelRenderDataRef(int index, bool leftAligned)
+    {
+        return ref leftAligned ? ref _data.renderData[index] : ref _data.renderData[DataCapacity - index - 1];
     }
 
     private ref Node GetOrCreateChild(ref Node parent, Vector3 position)
@@ -991,19 +1031,24 @@ public unsafe class VoxelOctree : IDisposable
 
     public readonly struct VoxelResult
     {
-        public readonly Voxel Voxel;
+        public readonly VoxelData VoxelData;
+        public readonly VoxelPhysicsData VoxelPhysicsData;
+        public readonly VoxelRenderData VoxelRenderData;
         public readonly int Depth;
-        
-        public VoxelResult(Voxel voxel, int depth)
+
+
+        public VoxelResult(VoxelData voxelData, VoxelPhysicsData voxelPhysicsData, VoxelRenderData voxelRenderData, int depth)
         {
-            Voxel = voxel;
+            VoxelData = voxelData;
+            VoxelPhysicsData = voxelPhysicsData;
+            VoxelRenderData = voxelRenderData;
             Depth = depth;
         }
-        
+
         public float VoxelSize => Dimensions / MathF.Pow(2, Depth);
     }
 
-    private struct Node
+    public struct Node
     {
         public fixed int ChildIndices[8];
         public int DataIndex;
@@ -1033,7 +1078,7 @@ public unsafe class VoxelOctree : IDisposable
         private void FillNodeInfo(NodeDebugView target, ref Node node)
         {
             target.Depth = node.Depth;
-            target.Voxel = _octree.GetVoxel(ref node);
+            target.VoxelData = _octree.GetVoxel(ref node);
             target.LeftAlignedState = _octree.IsLeftAligned(ref node);
             target.SharesDataWithParent = node.SharesDataWithParent;
 
@@ -1058,7 +1103,7 @@ public unsafe class VoxelOctree : IDisposable
             public bool SharesDataWithParent;
             public bool LeftAlignedState;
 
-            public Voxel Voxel;
+            public VoxelData VoxelData;
         }
     }
 }
