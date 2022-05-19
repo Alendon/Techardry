@@ -5,6 +5,7 @@ using System.Numerics;
 using MintyCore.Utils;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
 using Techardry.World;
 using MathHelper = Techardry.Utils.MathHelper;
@@ -29,7 +30,7 @@ for (int x = 0; x < VoxelOctree.Dimensions; x++)
     {
         for (int y = 0; y < 6; y++)
         {
-            tree.Insert(new VoxelData(8), new Vector3(x,y,z), VoxelOctree.SizeOneDepth);
+            tree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(x,y,z), VoxelOctree.SizeOneDepth);
         }
         
         var noiseValue = noise.GetNoise(x, z);
@@ -39,7 +40,7 @@ for (int x = 0; x < VoxelOctree.Dimensions; x++)
         
         for (int y = 6; y < 7 + noiseValue; y++)
         {
-            tree.Insert(new VoxelData(7), new Vector3(x,y,z), VoxelOctree.SizeOneDepth);
+            tree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(x,y,z), VoxelOctree.SizeOneDepth);
         }
     }
 }

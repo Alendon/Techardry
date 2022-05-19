@@ -1,14 +1,16 @@
 ﻿using System.Diagnostics;
+using MintyCore.Utils;
 using SixLabors.ImageSharp;
+using Techardry.Blocks;
 
 namespace Techardry.World;
 
 [DebuggerDisplay("{Id}")]
 public readonly struct VoxelData : IEquatable<VoxelData>
 {
-    public readonly int Id;
+    public readonly Identification Id;
 
-    public VoxelData(int id)
+    public VoxelData(Identification id)
     {
         Id = id;
     }
@@ -22,17 +24,7 @@ public readonly struct VoxelData : IEquatable<VoxelData>
     {
         return new VoxelRenderData()
         {
-            Color = Id switch
-            {
-                8 => Color.SaddleBrown,
-                7 => Color.Green,
-                6 => Color.Blue,
-                5 => Color.Red,
-                4 => Color.Yellow,
-                3 => Color.Purple,
-                2 => Color.Orange,
-                _ => Color.White
-            }
+            Color = BlockHandler.GetBlockColor(Id)
         };
     }
 
@@ -48,7 +40,7 @@ public readonly struct VoxelData : IEquatable<VoxelData>
 
     public override int GetHashCode()
     {
-        return Id;
+        return Id.GetHashCode();
     }
 
     public static bool operator ==(VoxelData left, VoxelData right)

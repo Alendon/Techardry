@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using MintyCore.Utils.Maths;
+using Techardry.Identifications;
 using TechardryMath = Techardry.Utils.MathHelper;
 
 namespace Techardry.World;
@@ -150,7 +151,7 @@ public unsafe class VoxelOctree : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private static VoxelData GetDefaultVoxel()
     {
-        return new VoxelData(0);
+        return new VoxelData(BlockIDs.Air);
     }
 
     private void ResizeNodes(int newCapacity)
