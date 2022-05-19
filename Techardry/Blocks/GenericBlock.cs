@@ -19,5 +19,5 @@ public class GenericBlock : IBlock
 
     public Rgba32 Color => _color;
     public bool IsRotatable => false;
-    public bool AllowSubVoxels => true;
+    public bool IsSplittable => true;
 }

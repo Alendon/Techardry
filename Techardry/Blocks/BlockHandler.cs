@@ -26,4 +26,19 @@ public static class BlockHandler
     {
         return _blocks[id].Color;
     }
+
+    public static bool IsBlockSplittable(Identification blockId)
+    {
+        return _blocks[blockId].IsSplittable;
+    }
+
+    public static bool IsBlockRotatable(Identification blockId)
+    {
+        return _blocks[blockId].IsRotatable;
+    }
+
+    public static bool DoesBlockExist(Identification blockId)
+    {
+        return _blocks.ContainsKey(blockId);
+    }
 }
