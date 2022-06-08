@@ -12,6 +12,9 @@ var processFile = new FileInfo(Environment.ProcessPath!);
 var solutionFolder = processFile.Directory.Parent.Parent.Parent.Parent;
 var projectFolder = solutionFolder.EnumerateDirectories("Techardry", SearchOption.TopDirectoryOnly).FirstOrDefault();
 
+ShaderCompiler.Program.CompileShaders(new DirectoryInfo($"{projectFolder.FullName}/Voxels/shaders"),
+    new DirectoryInfo($"{projectFolder.FullName}/Resources/shaders/voxels"));
+
 //Compile the project
 var compileProcess = new Process
 {
