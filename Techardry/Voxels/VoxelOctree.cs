@@ -6,7 +6,7 @@ using MintyCore.Utils.Maths;
 using Techardry.Identifications;
 using TechardryMath = Techardry.Utils.MathHelper;
 
-namespace Techardry.World;
+namespace Techardry.Voxels;
 
 [DebuggerTypeProxy(typeof(OctreeDebugView))]
 public unsafe class VoxelOctree : IDisposable

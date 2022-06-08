@@ -7,6 +7,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
+using Techardry.Voxels;
 using Techardry.World;
 using MathHelper = Techardry.Utils.MathHelper;
 

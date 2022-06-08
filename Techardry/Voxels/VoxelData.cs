@@ -1,9 +1,8 @@
 ﻿using System.Diagnostics;
 using MintyCore.Utils;
-using SixLabors.ImageSharp;
 using Techardry.Blocks;
 
-namespace Techardry.World;
+namespace Techardry.Voxels;
 
 [DebuggerDisplay("{Id}")]
 public readonly struct VoxelData : IEquatable<VoxelData>

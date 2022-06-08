@@ -1,6 +1,6 @@
 ﻿using SixLabors.ImageSharp.PixelFormats;
 
-namespace Techardry.World;
+namespace Techardry.Voxels;
 
 public struct VoxelRenderData
 {

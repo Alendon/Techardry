@@ -1,4 +1,4 @@
-﻿namespace Techardry.World;
+﻿namespace Techardry.Voxels;
 
 public struct VoxelPhysicsData
 {
