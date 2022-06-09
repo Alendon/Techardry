@@ -1,9 +1,12 @@
 ﻿using JetBrains.Annotations;
 using MintyCore.Modding;
+using MintyCore.Modding.Attributes;
+using MintyCore.Render;
 using MintyCore.Utils;
 
 namespace Techardry;
 
+[RootMod]
 [UsedImplicitly]
 public partial class TechardryMod : IMod
 {
@@ -23,6 +26,7 @@ public partial class TechardryMod : IMod
     public void PreLoad()
     {
         Instance = this;
+        VulkanEngine.AddDeviceExtension(ModName, "VK_KHR_shader_non_semantic_info", true);
     }
 
     public void Load()

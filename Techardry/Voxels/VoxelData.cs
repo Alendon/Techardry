@@ -21,9 +21,10 @@ public readonly struct VoxelData : IEquatable<VoxelData>
     
     public VoxelRenderData GetRenderData()
     {
+        var color = BlockHandler.GetBlockColor(Id);
         return new VoxelRenderData()
         {
-            Color = BlockHandler.GetBlockColor(Id)
+            Color = color.ToVector4()
         };
     }
 

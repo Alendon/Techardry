@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 using MintyCore.Utils.Maths;
 using Techardry.Identifications;
@@ -79,7 +80,7 @@ public unsafe class VoxelOctree : IDisposable
         }
     }
 
-    private Node[] _nodes;
+    internal Node[] _nodes;
 
     private const int InitialNodeCapacity = 32;
     private const int InitialDataCapacity = 32;
@@ -94,10 +95,10 @@ public unsafe class VoxelOctree : IDisposable
         }
     }
 
-    private (int left, int right) NodeCount;
+    internal (int left, int right) NodeCount;
 
 
-    private ((int index, bool leftAligned)[] ownerNodes, VoxelData[] voxels, VoxelPhysicsData[] physicsData,
+    internal ((int index, bool leftAligned)[] ownerNodes, VoxelData[] voxels, VoxelPhysicsData[] physicsData,
         VoxelRenderData[] renderData) _data;
 
     private int DataCapacity
@@ -110,7 +111,7 @@ public unsafe class VoxelOctree : IDisposable
         }
     }
 
-    private (int left, int right) DataCount;
+    internal (int left, int right) DataCount;
 
 
     /// <summary>
@@ -455,9 +456,10 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     //TODO Make Raycast internal
-    public bool Raycast(Vector3 origin, Vector3 direction, out Node node, out Vector3 normal,
+    public bool Raycast(Vector3 origin, Vector3 direction, out Node node, out Vector3 normal, out int iterations,
         int maxDepth = MaximumTotalDivision)
     {
+        iterations = 0;
         node = GetRootNode();
         normal = Vector3.Zero;
 
@@ -486,6 +488,7 @@ public unsafe class VoxelOctree : IDisposable
 
         while (stackPos >= 0)
         {
+            iterations++;
             //Pop the current node off the stack.
             var nodeIndex = stack[stackPos].NodeIndex;
             center = stack[stackPos].Center;
@@ -861,7 +864,6 @@ public unsafe class VoxelOctree : IDisposable
             {
                 ref var workingParent = ref GetParentNode(ref workingNode);
                 workingParent.SetChildIndex(workingNode.ParentChildIndex, -1, true);
-                workingParent.Invalid = true;
 
                 DeleteNode(workingNode.Index, IsLeftAligned(ref workingNode), out var movedNode);
                 success = true;
@@ -882,7 +884,6 @@ public unsafe class VoxelOctree : IDisposable
         SetData(ref node, oldData);
 
         node.IsLeaf = true;
-        node.Invalid = false;
 
         return ref node;
     }
@@ -962,7 +963,6 @@ public unsafe class VoxelOctree : IDisposable
         clearNode = new()
         {
             Depth = 255,
-            Invalid = true,
             Index = -1,
             ParentIndex = -1,
             IsLeaf = false,
@@ -1318,11 +1318,84 @@ public unsafe class VoxelOctree : IDisposable
         public float VoxelSize => Dimensions / MathF.Pow(2, Depth);
     }
 
+    [StructLayout(LayoutKind.Sequential)]
     public struct Node
     {
+        /*
+         *  IMPORTANT!
+         *  Any changes to the layout of this struct needs to be resembled in the voxel render shader
+         *  Only use integer types to ensure alignment
+         */
+        
         private fixed int ChildIndices[8];
 
-        public bool Invalid;
+        public int DataIndex;
+        public int Index;
+        public int ParentIndex;
+
+        //Use a seperate data field to be able to control the alignment of the data
+        //This is needed as the internal array gets copied to the gpu and the alignment needs to be preserved
+        //The data layout is as follows (counting from the right):
+        //The first byte is the parent child index
+        //The second byte is the depth
+        //The third byte is the leaf indicator
+        //The fourth byte is the data share indicator
+        //There is still empty space which can be utilised for other purposes
+        private uint _data;
+
+        public byte ParentChildIndex
+        {
+            get
+            {
+                var result = _data & 0x000000FF;
+                return (byte) result;
+            }
+            set => _data = (_data & 0xFFFFFF00) | value;
+        }
+
+        public bool IsLeaf
+        {
+            get
+            {
+                const uint mask = 0x00FF0000;
+                var result = _data & mask;
+                return result != 0;
+            }
+            set
+            {
+                const uint mask = 0x00FF0000;
+
+                if (value)
+                    _data |= mask;
+                else
+                    _data &= ~mask;
+            }
+        }
+
+        public bool SharesDataWithParent
+        {
+            get
+            {
+                const uint mask = 0xFF000000;
+                var result = _data & mask;
+                return result != 0;
+            }
+            set
+            {
+                const uint mask = 0xFF000000;
+
+                if (value)
+                    _data |= mask;
+                else
+                    _data &= ~mask;
+            }
+        }
+
+        public byte Depth
+        {
+            get => (byte) ((_data & 0x0000FF00) >> 8);
+            set => _data = (_data & 0xFFFF00FF) |  ((uint)value << 8);
+        }
 
         public int GetChildIndex(int childIndex)
         {
@@ -1340,15 +1413,6 @@ public unsafe class VoxelOctree : IDisposable
 
             ChildIndices[childIndex] = value;
         }
-
-        public int DataIndex;
-        public int Index;
-
-        public int ParentIndex;
-        public byte ParentChildIndex;
-        public bool IsLeaf;
-        public bool SharesDataWithParent;
-        public byte Depth;
     }
 
     public class OctreeDebugView

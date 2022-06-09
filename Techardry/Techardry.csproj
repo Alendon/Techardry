@@ -16,8 +16,8 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="MintyCore" Version="0.0.4" />
-      <PackageReference Include="MintyCoreGenerator" Version="0.0.4" />
+      <PackageReference Include="MintyCore" Version="0.0.5" />
+      <PackageReference Include="MintyCoreGenerator" Version="0.0.5" />
     </ItemGroup>
 
     <ItemGroup>

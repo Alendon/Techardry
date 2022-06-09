@@ -1,8 +1,9 @@
-﻿using SixLabors.ImageSharp.PixelFormats;
+﻿using System.Numerics;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace Techardry.Voxels;
 
 public struct VoxelRenderData
 {
-    public Rgba32 Color;
+    public Vector4 Color;
 }

@@ -84,8 +84,8 @@ for (int y = 0; y < image.Height; y++)
         var rayPos = new Vector3(0, 0, 64);
 
         //rotate the ray dir and pos by the rotation matrix
-       rayDir = Vector3.Transform(rayDir, rotation);
-       rayPos = Vector3.Transform(rayPos, rotation);
+        rayDir = Vector3.Transform(rayDir, rotation);
+        rayPos = Vector3.Transform(rayPos, rotation);
 
         rayPos += new Vector3(8, 8, 0);
 
@@ -99,16 +99,16 @@ for (int y = 0; y < image.Height; y++)
             {
                 var voxel = tree.GetVoxelRenderDataRef(ref node);
                 var voxelColor = voxel.Color;
-                color = voxelColor;
+                color.FromVector4(voxelColor);
             }
         }
         else
         {
-            if (tree.Raycast(rayPos, rayDir, out var node, out normal))
+            if (tree.Raycast(rayPos, rayDir, out var node, out normal, out _))
             {
                 var voxel = tree.GetVoxelRenderDataRef(ref node);
                 var voxelColor = voxel.Color;
-                color = voxelColor;
+                color.FromVector4(voxelColor);
             }
         }
 
