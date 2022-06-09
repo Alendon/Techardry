@@ -14,7 +14,7 @@ public class Chunk
     public Chunk(Int3 chunkPos)
     {
         Position = chunkPos;
-        _octree = new VoxelOctree(VoxelOctree.MaxDepth);
+        _octree = new VoxelOctree();
     }
 
     public void SetBlock(Vector3 blockPos, Identification blockId, BlockRotation rotation = BlockRotation.None)

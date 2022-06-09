@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MintyCore.Components.Client;
@@ -32,7 +33,7 @@ public partial class VoxelRender : ASystem
 
     private CommandBuffer _commandBuffer;
 
-    private VoxelOctree _octree = new(VoxelOctree.MaximumLevelCount);
+    private VoxelOctree _octree = new();
 
     public override void Setup(SystemManager systemManager)
     {
@@ -104,8 +105,8 @@ public partial class VoxelRender : ASystem
         int nodeSize = Marshal.SizeOf<VoxelOctree.Node>();
         int dataSize = Marshal.SizeOf<VoxelRenderData>();
 
-        var nodeCount = _octree.NodeCount.left;
-        var dataCount = _octree.DataCount.left;
+        var nodeCount = _octree.NodeCount;
+        var dataCount = _octree.DataCount;
 
         totalNodeSize = nodeSize * nodeCount;
         totalDataSize = dataSize * dataCount;
@@ -129,11 +130,11 @@ public partial class VoxelRender : ASystem
         var stagingBufferPtr = MemoryManager.Map(stagingBuffer.Memory);
 
         var targetNodes = new Span<VoxelOctree.Node>((void*) stagingBufferPtr, nodeCount);
-        var sourceNodes = _octree._nodes.AsSpan(0, nodeCount);
+        var sourceNodes = _octree.Nodes.AsSpan(0, nodeCount);
         sourceNodes.CopyTo(targetNodes);
 
         var targetData = new Span<VoxelRenderData>((void*) (stagingBufferPtr + dataOffset), dataCount);
-        var sourceData = _octree._data.renderData.AsSpan(0, dataCount);
+        var sourceData = _octree.Data.renderData.AsSpan(0, dataCount);
         sourceData.CopyTo(targetData);
 
         MemoryManager.UnMap(stagingBuffer.Memory);

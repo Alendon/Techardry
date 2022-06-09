@@ -17,7 +17,7 @@ MathHelper.BoxIntersect((Vector3.Zero, Vector3.One), (new Vector3(0.5f, 5, 0.5f)
 
 
 
-var tree = new VoxelOctree(VoxelOctree.MaximumLevelCount);
+var tree = new VoxelOctree();
 int seed = 4;
 Random rnd = new Random(seed);
 
