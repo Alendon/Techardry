@@ -58,12 +58,12 @@ int DepthOfNode(Node node)
 }
 
 
-layout(std140, set = 0, binding = 0) readonly buffer OctreeNodes
+layout(std430, set = 0, binding = 0) readonly buffer OctreeNodes
 {
     Node nodes[];
 } nodes;
 
-layout(std140, set = 0, binding = 1) readonly buffer OctreeData
+layout(std430, set = 0, binding = 1) readonly buffer OctreeData
 {
     Voxel voxels[];
 } data;
@@ -100,8 +100,25 @@ void main()
         out_color = vec3(1,1,1);
     }*/
 
+    //print the complete content of nodes.nodes[0]
+    printf("Children: %d %d %d %d %d %d %d %d, DataIndex: %d, Index: %d, ParentIndex: %d, Data: %d, %b\n",
+        nodes.nodes[0].children[0],
+        nodes.nodes[0].children[1],
+        nodes.nodes[0].children[2],
+        nodes.nodes[0].children[3],
+        nodes.nodes[0].children[4],
+        nodes.nodes[0].children[5],
+        nodes.nodes[0].children[6],
+        nodes.nodes[0].children[7],
+        nodes.nodes[0].dataIndex,
+        nodes.nodes[0].Index,
+        nodes.nodes[0].ParentIndex,
+        nodes.nodes[0].Data,
+        IsLeaf(nodes.nodes[0]));
+
     raycast(octreePosition, rayPos, rayDir, voxel, normal);
-    out_color = vec3(voxel.color_r, voxel.color_g,voxel.color_b);
+    out_color = vec3(voxel.color_r, voxel.color_g, voxel.color_b);
+
     
 }
 

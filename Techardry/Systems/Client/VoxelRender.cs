@@ -158,28 +158,28 @@ public partial class VoxelRender : ASystem
         noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         noise.SetFrequency(0.02f);
 
-        _octree.Insert(new VoxelData(BlockIDs.Stone), Vector3.Zero, 0);
+        //_octree.Insert(new VoxelData(BlockIDs.Stone), Vector3.Zero, 0);
 
-        //for (int x = 0; x < VoxelOctree.Dimensions; x++)
-        //{
-        //    for (int z = 0; z < VoxelOctree.Dimensions; z++)
-        //    {
-        //        for (int y = 0; y < 6; y++)
-        //        {
-        //            _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
-        //        }
-//
-        //        var noiseValue = noise.GetNoise(x, z);
-        //        noiseValue += 0.5f;
-        //        noiseValue /= 0.5f;
-        //        noiseValue *= 6;
-//
-        //        for (int y = 6; y < 7 + noiseValue; y++)
-        //        {
-        //            _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
-        //        }
-        //    }
-        //}
+        for (int x = 0; x < VoxelOctree.Dimensions; x++)
+        {
+            for (int z = 0; z < VoxelOctree.Dimensions; z++)
+            {
+                for (int y = 0; y < 6; y++)
+                {
+                    _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
+                }
+
+                var noiseValue = noise.GetNoise(x, z);
+                noiseValue += 0.5f;
+                noiseValue /= 0.5f;
+                noiseValue *= 6;
+
+                for (int y = 6; y < 7 + noiseValue; y++)
+                {
+                    _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
+                }
+            }
+        }
 
         
     }
