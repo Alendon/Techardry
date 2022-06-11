@@ -29,4 +29,15 @@
         </Content>
     </ItemGroup>
 
+    <PropertyGroup>
+        <IncludePackageReferencesDuringMarkupCompilation>true</IncludePackageReferencesDuringMarkupCompilation>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+        <CompilerGeneratedFilesOutputPath>GeneratedFiles</CompilerGeneratedFilesOutputPath>
+    </PropertyGroup>
+    <Target Name="RemoveSourceGeneratedFiles" BeforeTargets="BeforeBuild">
+        <ItemGroup>
+            <Compile Remove="GeneratedFiles\**" />
+        </ItemGroup>
+    </Target>
+
 </Project>
