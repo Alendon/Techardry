@@ -104,7 +104,7 @@ for (int y = 0; y < image.Height; y++)
         }
         else
         {
-            if (tree.Raycast(rayPos, rayDir, out var node, out normal, out _))
+            if (tree.Raycast(rayPos, rayDir, out var node, out normal))
             {
                 var voxel = tree.GetVoxelRenderDataRef(ref node);
                 var voxelColor = voxel.Color;

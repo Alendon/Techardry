@@ -15,8 +15,8 @@ public static class RenderObjects
     [RegisterShader("voxel_vert","voxels/vox_render_vert.spv")]
     public static ShaderInfo VoxelVert => new (ShaderStageFlags.ShaderStageVertexBit);
     
-    [RegisterDescriptorSet("voxel_octree")]
-    public static DescriptorSetInfo VoxelOctreeDescriptor => new()
+    [RegisterDescriptorSet("voxel_octree_node")]
+    public static DescriptorSetInfo VoxelOctreeNodes => new()
     {
         Bindings = new[]
         {
@@ -26,10 +26,18 @@ public static class RenderObjects
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
-            },
-            new DescriptorSetLayoutBinding
+            }
+        }
+    };
+
+    [RegisterDescriptorSet("voxel_octree_data")]
+    public static DescriptorSetInfo VoxelOctreeData => new()
+    {
+        Bindings = new[]
+        {
+            new DescriptorSetLayoutBinding()
             {
-                Binding = 1,
+                Binding = 0,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
@@ -58,7 +66,7 @@ public static class RenderObjects
                     Height = VulkanEngine.SwapchainExtent.Height,
                     MaxDepth = 1.0f
                 }},
-                DescriptorSets = new []{Identifications.DescriptorSetIDs.VoxelOctree },
+                DescriptorSets = new []{Identifications.DescriptorSetIDs.VoxelOctreeNode, Identifications.DescriptorSetIDs.VoxelOctreeData },
                 DynamicStates = new [] {DynamicState.Scissor , DynamicState.Viewport},
                 RasterizationInfo =
                 {

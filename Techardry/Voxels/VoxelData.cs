@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using MintyCore.Utils;
 using Techardry.Blocks;
+using Techardry.Identifications;
 
 namespace Techardry.Voxels;
 
@@ -24,7 +25,8 @@ public readonly struct VoxelData : IEquatable<VoxelData>
         var color = BlockHandler.GetBlockColor(Id);
         return new VoxelRenderData()
         {
-            Color = color.ToVector4()
+            Color = color.ToVector4(),
+            NotEmpty = Id != BlockIDs.Air ? 1 : 0
         };
     }
 

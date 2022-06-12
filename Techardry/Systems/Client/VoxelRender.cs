@@ -1,6 +1,5 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MintyCore.Components.Client;
 using MintyCore.ECS;
@@ -25,8 +24,10 @@ public partial class VoxelRender : ASystem
     [ComponentQuery] private ComponentQuery<object, Camera> _cameraQuery = new();
 
     private Mesh _mesh;
-    private MemoryBuffer _buffer;
-    private DescriptorSet octreeDescriptorSet;
+    private MemoryBuffer _nodeBuffer;
+    private MemoryBuffer _dataBuffer;
+    private DescriptorSet octreeNodeDescriptorSet;
+    private DescriptorSet octreeDataDescriptorSet;
 
     private int totalNodeSize;
     private int totalDataSize;
@@ -53,28 +54,22 @@ public partial class VoxelRender : ASystem
         _mesh = MeshHandler.CreateDynamicMesh(vertices, (uint) vertices.Length);
 
         FillOctree();
-        CreateBuffer();
+        CreateNodeBuffer();
+        CreateDataBuffer();
         CreateDescriptors();
     }
 
     private unsafe void CreateDescriptors()
     {
-        octreeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree);
+        octreeNodeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctreeNode);
 
-        DescriptorBufferInfo nodeBufferInfo = new()
-        {
-            Buffer = _buffer.Buffer,
-            Offset = 0,
-            Range = (ulong) totalNodeSize
-        };
-        DescriptorBufferInfo dataBufferInfo = new()
-        {
-            Buffer = _buffer.Buffer,
-            Offset = (ulong) totalNodeSize,
-            Range = (ulong) totalDataSize
-        };
+        DescriptorBufferInfo nodeBufferInfo = new DescriptorBufferInfo(
+            _nodeBuffer.Buffer,
+            0,
+            _nodeBuffer.Size
+        );
 
-        Span<WriteDescriptorSet> writeSets = stackalloc WriteDescriptorSet[]
+        Span<WriteDescriptorSet> nodeDescriptorWrites = stackalloc WriteDescriptorSet[]
         {
             new WriteDescriptorSet()
             {
@@ -82,48 +77,57 @@ public partial class VoxelRender : ASystem
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 DstBinding = 0,
-                DstSet = octreeDescriptorSet,
+                DstSet = octreeNodeDescriptorSet,
+                DstArrayElement = 0,
                 PBufferInfo = &nodeBufferInfo
-            },
+            }
+        };
+
+
+        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, nodeDescriptorWrites, 0, null);
+
+
+        octreeDataDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctreeData);
+
+        DescriptorBufferInfo dataBufferInfo = new DescriptorBufferInfo(
+            _dataBuffer.Buffer,
+            0,
+            _dataBuffer.Size
+        );
+
+        Span<WriteDescriptorSet> dataDescriptorWrites = stackalloc WriteDescriptorSet[]
+        {
             new WriteDescriptorSet()
             {
                 SType = StructureType.WriteDescriptorSet,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
-                DstBinding = 1,
-                DstSet = octreeDescriptorSet,
+                DstBinding = 0,
+                DstSet = octreeDataDescriptorSet,
+                DstArrayElement = 0,
                 PBufferInfo = &dataBufferInfo
             }
         };
 
-        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, (uint) writeSets.Length, writeSets, 0,
-            Array.Empty<CopyDescriptorSet>().AsSpan());
+
+        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, dataDescriptorWrites, 0, null);
     }
 
-    private unsafe void CreateBuffer()
+    private unsafe void CreateNodeBuffer()
     {
         int nodeSize = Marshal.SizeOf<VoxelOctree.Node>();
-        int dataSize = Marshal.SizeOf<VoxelRenderData>();
-
         var nodeCount = _octree.NodeCount;
-        var dataCount = _octree.DataCount;
-
         totalNodeSize = nodeSize * nodeCount;
-        totalDataSize = dataSize * dataCount;
-
-        var dataOffset = totalNodeSize;
-
-        var totalSize = totalNodeSize + totalDataSize;
 
         Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
 
-        _buffer = MemoryBuffer.Create(
+        _nodeBuffer = MemoryBuffer.Create(
             BufferUsageFlags.BufferUsageStorageBufferBit | BufferUsageFlags.BufferUsageTransferDstBit,
-            (ulong) totalSize,
+            (ulong) totalNodeSize,
             SharingMode.Exclusive,
             queue, MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
 
-        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, (ulong) totalSize,
+        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, (ulong) totalNodeSize,
             SharingMode.Exclusive, queue,
             MemoryPropertyFlags.MemoryPropertyHostVisibleBit | MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
 
@@ -133,7 +137,40 @@ public partial class VoxelRender : ASystem
         var sourceNodes = _octree.Nodes.AsSpan(0, nodeCount);
         sourceNodes.CopyTo(targetNodes);
 
-        var targetData = new Span<VoxelRenderData>((void*) (stagingBufferPtr + dataOffset), dataCount);
+        MemoryManager.UnMap(stagingBuffer.Memory);
+
+        var commandBuffer = VulkanEngine.GetSingleTimeCommandBuffer();
+        Span<BufferCopy> bufferCopy = stackalloc BufferCopy[]
+        {
+            new BufferCopy(0, 0, (ulong) totalNodeSize),
+        };
+        VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, stagingBuffer.Buffer, _nodeBuffer.Buffer, bufferCopy);
+        VulkanEngine.ExecuteSingleTimeCommandBuffer(commandBuffer);
+
+        stagingBuffer.Dispose();
+    }
+
+    private unsafe void CreateDataBuffer()
+    {
+        int dataSize = Marshal.SizeOf<VoxelRenderData>();
+        var dataCount = _octree.DataCount;
+        totalDataSize = dataSize * dataCount;
+
+        Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
+
+        _dataBuffer = MemoryBuffer.Create(
+            BufferUsageFlags.BufferUsageStorageBufferBit | BufferUsageFlags.BufferUsageTransferDstBit,
+            (ulong) totalDataSize,
+            SharingMode.Exclusive,
+            queue, MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
+
+        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, (ulong) totalDataSize,
+            SharingMode.Exclusive, queue,
+            MemoryPropertyFlags.MemoryPropertyHostVisibleBit | MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
+
+        var stagingBufferPtr = MemoryManager.Map(stagingBuffer.Memory);
+
+        var targetData = new Span<VoxelRenderData>((void*) stagingBufferPtr, dataCount);
         var sourceData = _octree.Data.renderData.AsSpan(0, dataCount);
         sourceData.CopyTo(targetData);
 
@@ -142,9 +179,9 @@ public partial class VoxelRender : ASystem
         var commandBuffer = VulkanEngine.GetSingleTimeCommandBuffer();
         Span<BufferCopy> bufferCopy = stackalloc BufferCopy[]
         {
-            new BufferCopy(0, 0, (ulong) totalSize),
+            new BufferCopy(0, 0, (ulong) totalDataSize),
         };
-        VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, stagingBuffer.Buffer, _buffer.Buffer, bufferCopy);
+        VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, stagingBuffer.Buffer, _dataBuffer.Buffer, bufferCopy);
         VulkanEngine.ExecuteSingleTimeCommandBuffer(commandBuffer);
 
         stagingBuffer.Dispose();
@@ -160,6 +197,14 @@ public partial class VoxelRender : ASystem
         noise.SetFrequency(0.02f);
 
         //_octree.Insert(new VoxelData(BlockIDs.Stone), Vector3.Zero, 0);
+        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 0, 0), 3);
+        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 0, 15), 3);
+        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 15, 0), 3);
+        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 15, 15), 3);
+        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 0, 0), 3);
+        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 0, 15), 3);
+        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 15, 0), 3);
+        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 15, 15), 3);
 
         for (int x = 0; x < VoxelOctree.Dimensions; x++)
         {
@@ -177,12 +222,112 @@ public partial class VoxelRender : ASystem
 
                 for (int y = 6; y < 7 + noiseValue; y++)
                 {
+                    if (x == 3 && z == 15 && y == 9)
+                    {
+                        
+                    }
+                    
                     _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
                 }
             }
         }
 
         
+
+        Image<Rgba32> image = new Image<Rgba32>(1000, 1000);
+
+        var rotation = Matrix4x4.CreateFromYawPitchRoll(0, 0.0f, 0);
+
+        Stopwatch sw = Stopwatch.StartNew();
+
+        int iterations = 1;
+
+        for (int i = 0; i < iterations; i++)
+        for (int y = 0; y < image.Height; y++)
+        {
+            for (int x = 0; x < image.Width; x++)
+            {
+                var yAdjusted = (y - image.Height / 2) * 0.001f;
+                var xAdjusted = (x - image.Width / 2) * 0.001f;
+
+                var cameraDir = -Vector3.UnitZ;
+                var cameraPlaneU = Vector3.UnitX;
+                var cameraPlaneV = Vector3.UnitY;
+                var rayDir = cameraDir + xAdjusted * cameraPlaneU + yAdjusted * cameraPlaneV;
+                var rayPos = new Vector3(0, 0, 64);
+
+                //rotate the ray dir and pos by the rotation matrix
+                rayDir = Vector3.Transform(rayDir, rotation);
+                rayPos = Vector3.Transform(rayPos, rotation);
+
+                rayPos += new Vector3(8, 8, 0);
+
+                Rgba32 color = Color.White;
+
+                if (x == 400 && y == 475)
+                {
+                    
+                }
+
+                bool useConeTracing = false;
+                Vector3 normal;
+                if (useConeTracing)
+                {
+                    if (_octree.ConeTrace(rayPos, rayDir, 0.001f, out var node, out normal))
+                    {
+                        var voxel = _octree.GetVoxelRenderDataRef(ref node);
+                        var voxelColor = voxel.Color;
+                        color.FromVector4(voxelColor);
+                    }
+                }
+                else
+                {
+                    if (_octree.Raycast(rayPos, rayDir, out var node, out normal))
+                    {
+                        var voxel = _octree.GetVoxelRenderDataRef(ref node);
+                        var voxelColor = voxel.Color;
+                        color.FromVector4(voxelColor);
+                    }
+                }
+
+                if (normal.X < 0 || normal.Y < 0 || normal.Z < 0)
+                {
+                    normal = Vector3.Negate(normal);
+                }
+
+                if (normal.Equals(Vector3.UnitX))
+                {
+                    color.R = (byte) (color.R * 0.8);
+                    color.G = (byte) (color.G * 0.8);
+                    color.B = (byte) (color.B * 0.8);
+                }
+
+                if (normal.Equals(Vector3.UnitY))
+                {
+                    color.R = (byte) (color.R * 0.9);
+                    color.G = (byte) (color.G * 0.9);
+                    color.B = (byte) (color.B * 0.9);
+                }
+
+                if (normal.Equals(Vector3.UnitZ))
+                {
+                    color.R = (byte) (color.R * 1);
+                    color.G = (byte) (color.G * 1);
+                    color.B = (byte) (color.B * 1);
+                }
+
+                image[x, y] = color;
+            }
+        }
+
+        sw.Stop();
+
+        var fileStream = new FileStream("test.png", FileMode.Create);
+        image.SaveAsPng(fileStream);
+        fileStream.Dispose();
+
+        Console.WriteLine($"Rendering took {sw.Elapsed.TotalMilliseconds / iterations}ms per frame");
+        Console.WriteLine("Bye, World!");
     }
 
     public override void PreExecuteMainThread()
@@ -224,10 +369,17 @@ public partial class VoxelRender : ASystem
         };
         vk.CmdSetScissor(_commandBuffer, 0, scissors);
 
-        var descriptorSet = octreeDescriptorSet;
-        vk.CmdBindDescriptorSets(_commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
-            &descriptorSet, 0, null);
+        Span<DescriptorSet> descriptorSets = stackalloc DescriptorSet[]
+        {
+            octreeNodeDescriptorSet,
+            octreeDataDescriptorSet
+        };
 
+
+        vk.CmdBindDescriptorSets(_commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0,
+            (uint) descriptorSets.Length,
+            descriptorSets, 0, (uint*) null);
+        
         vk.CmdDraw(_commandBuffer, _mesh.VertexCount, 1, 0, 0);
     }
 
@@ -237,6 +389,5 @@ public partial class VoxelRender : ASystem
     {
         base.Dispose();
         _mesh.Dispose();
-        _buffer.Dispose();
     }
 }
