@@ -564,6 +564,7 @@ public unsafe class VoxelOctree : IDisposable
         {
             ref var compareChild = ref GetChildNode(ref parent, i);
             ref readonly var compareVoxel = ref GetVoxel(ref compareChild);
+            allEqual &= compareChild.IsLeaf;
             allEqual &= nodeVoxel.Equals(compareVoxel);
         }
 
