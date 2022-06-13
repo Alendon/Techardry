@@ -115,9 +115,10 @@ vec3 rotate(vec3 v, vec3 axis, float angle) {
 
 void main()
 {
-    vec3 octreePosition = vec3(0,0,0) + Dimensions * 1;
+    vec3 octreePosition = vec3(0,0,0) + Dimensions * 0.4;
 
     vec2 screenPos = vec2(in_position.xy);
+
     vec3 cameraDirection = normalize(vec3(0.00001, 0.00001, 1));
     vec3 cameraPlaneU = vec3(1.0, 0.0, 0.0);
 	vec3 cameraPlaneV = vec3(0.0, -1.0, 0.0) *  540.0 / 960.0;
@@ -148,7 +149,12 @@ void main()
     out_color = vec3(1,1,1);
 
     float T;
-    
+     if(aabbCheck(ray, boxMin, boxMax, hit)){
+        out_color = vec3(1,0.,0.);
+    }
+    else{
+        //out_color = vec3(1,0,0);
+    }
 
     Node result;
     bool oHit;
@@ -171,12 +177,14 @@ void main()
             out_color = vec3(1,0,0);
         }
     }
-    if(!aabbCheck(ray, boxMin, boxMax, hit)){
-        out_color += vec3(0.3,0.3,0.3);
+
+
+    /*if(!aabbCheck(ray, boxMin, boxMax, hit)){
+        out_color += vec3(0.5,0.,0.);
     }
     else{
         //out_color = vec3(1,0,0);
-    }
+    }*/
      
 
     //print the complete content of nodes.nodes[0]
@@ -266,6 +274,23 @@ int nextNode(vec3 tm, ivec3 c){
 
 bool raycastNew(vec3 position, Ray ray, out Node result, out bool octreeHit, out bool center){
 
+
+//#define AabbCheckForRaycast
+    
+    vec3 halfSize = vec3(Dimensions) / 2;
+    vec3 treeMin = position - halfSize;
+    vec3 treeMax = position + halfSize;
+
+#ifdef AabbCheckForRaycast
+    Hit hit;
+    if(!aabbCheck(ray, treeMin, treeMax, hit)){
+        octreeHit = false;
+
+        return false;
+    }
+    octreeHit = true;
+#endif
+
     int childIndexModifier = 0;
 
 /*
@@ -296,32 +321,17 @@ bool raycastNew(vec3 position, Ray ray, out Node result, out bool octreeHit, out
         return true;
     }
 
-    vec3 halfSize = vec3(Dimensions) / 2;
-    vec3 treeMin = position - halfSize;
-    vec3 treeMax = position + halfSize;
-
-    //normalize the tree position to be positive
-    if(treeMin.x < 0){
-        center = true;
-        return true;
-    }
-    if(treeMin.y < 0){
-        treeMax.y += -treeMin.y;
-        ray.origin.y += -treeMin.y;
-        treeMin.y = 0;
-    }
-    if(treeMin.z < 0){
-        treeMax.z += -treeMin.z;
-        ray.origin.z += -treeMin.z;
-        treeMin.z = 0;
-    }
-
 
 
     vec3 dirInverse = 1 / ray.direction;
 
     vec3 t0 = (treeMin - ray.origin) * dirInverse;
     vec3 t1 = (treeMax - ray.origin) * dirInverse;
+
+    
+
+    
+#ifndef AabbCheckForRaycast
 
     //Early exit if the tree isnt hit
     if(max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
@@ -331,6 +341,7 @@ bool raycastNew(vec3 position, Ray ray, out Node result, out bool octreeHit, out
     }
     octreeHit = true;
     //return true;
+#endif
 
     //Normally at this point a recursion is used to traverse the tree.
     //But since this is glsl we can't use recursion.
