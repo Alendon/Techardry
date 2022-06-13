@@ -53,7 +53,7 @@ struct Hit{
 
 bool raycast(vec3 position, vec3 origin, vec3 direction, out Voxel voxel, out vec3 normal);
 bool aabbCheck(Ray ray, vec3 boxMin, vec3 boxMax, out Hit hit);
-bool raycastNew(vec3 position, Ray ray, out Node result, out bool octreeHit);
+bool raycastNew(vec3 position, Ray ray, out Node result, out bool octreeHit, out bool center);
 
 int ParentChildIndex(Node node)
 {
@@ -118,12 +118,12 @@ void main()
     vec3 octreePosition = vec3(0,0,0) + Dimensions * 1;
 
     vec2 screenPos = vec2(in_position.xy);
-    vec3 cameraDirection = vec3(0,0,-1);
+    vec3 cameraDirection = normalize(vec3(0.00001, 0.00001, 1));
     vec3 cameraPlaneU = vec3(1.0, 0.0, 0.0);
 	vec3 cameraPlaneV = vec3(0.0, -1.0, 0.0) *  540.0 / 960.0;
-    vec3 rayPos = vec3(0, 0, 64) + Dimensions * 1;
+    vec3 rayPos = vec3(0, 0, -64) + Dimensions * 0;
 
-	vec3 rayDir = (cameraDirection + screenPos.x * cameraPlaneU + screenPos.y * cameraPlaneV);
+	vec3 rayDir = normalize((cameraDirection + screenPos.x * cameraPlaneU + screenPos.y * cameraPlaneV));
 
     //rayPos = rotate(rayPos, vec3(0,1,0), 1 * 3.14159265359);
     //rayDir = rotate(rayDir, vec3(0,1,0), 1 * 3.14159265359);
@@ -145,29 +145,39 @@ void main()
 
     Hit hit;
 
+    out_color = vec3(1,1,1);
+
+    float T;
+    
+
     Node result;
     bool oHit;
-    if(raycastNew(octreePosition, ray, result, oHit))
+    bool centerHit;
+    if(raycastNew(octreePosition, ray, result, oHit, centerHit))
     {
-        Voxel voxel = data.voxels[result.dataIndex];
-        out_color = vec3(voxel.color_r, voxel.color_g, voxel.color_b);
-        //out_color = vec3(0,1,0);
+        if(centerHit){
+            out_color = vec3(1,0,1);
+        }
+        else{        
+            Voxel voxel = data.voxels[result.dataIndex];
+            out_color = vec3(voxel.color_r, voxel.color_g, voxel.color_b);
+            //out_color = vec3(0,1,0);
+        }
     }
     else
     {
-        out_color = vec3(0,0,1);
+        //out_color = vec3(1,1,1);
         if(oHit){
             out_color = vec3(1,0,0);
         }
     }
-
-    float T;
-    if(aabbCheck(ray, boxMin, boxMax, hit)){
-        //out_color = vec3(0,1,0);
+    if(!aabbCheck(ray, boxMin, boxMax, hit)){
+        out_color += vec3(0.3,0.3,0.3);
     }
     else{
         //out_color = vec3(1,0,0);
     }
+     
 
     //print the complete content of nodes.nodes[0]
     printf("Children: %d %d %d %d %d %d %d %d, DataIndex: %d, Index: %d, ParentIndex: %d, Data: %d, %b\n",
@@ -254,47 +264,73 @@ int nextNode(vec3 tm, ivec3 c){
     
 }
 
-bool raycastNew(vec3 position, Ray ray, out Node result, out bool octreeHit){
+bool raycastNew(vec3 position, Ray ray, out Node result, out bool octreeHit, out bool center){
 
     int childIndexModifier = 0;
-    octreeHit = false;
 
 /*
  *  Prepare some stuff
  */
 
+    ray.direction = normalize(ray.direction);
+
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
     if(ray.direction.x < 0){
-        ray.origin.x = Dimensions - ray.origin.x;
+        ray.origin.x =  - ray.origin.x;
         ray.direction.x = -ray.direction.x;
-        ray.inverseDirection.x = -ray.inverseDirection.x;
         childIndexModifier |= 4;
     }
     if(ray.direction.y < 0){
-        ray.origin.y = Dimensions - ray.origin.y;
+        ray.origin.y =  - ray.origin.y;
         ray.direction.y = -ray.direction.y;
-        ray.inverseDirection.y = -ray.inverseDirection.y;
         childIndexModifier |= 2;
     }
     if(ray.direction.z < 0){
-        ray.origin.z = Dimensions - ray.origin.z;
+        ray.origin.z =  - ray.origin.z;
         ray.direction.z = -ray.direction.z;
-        ray.inverseDirection.z = -ray.inverseDirection.z;
         childIndexModifier |= 1;
+    }
+
+    if(abs(ray.direction.z - 1) < 0.00005){
+        center = true;
+        return true;
     }
 
     vec3 halfSize = vec3(Dimensions) / 2;
     vec3 treeMin = position - halfSize;
     vec3 treeMax = position + halfSize;
 
-    vec3 t0 = (treeMin - ray.origin) * ray.inverseDirection;
-    vec3 t1 = (treeMax - ray.origin) * ray.inverseDirection;
+    //normalize the tree position to be positive
+    if(treeMin.x < 0){
+        center = true;
+        return true;
+    }
+    if(treeMin.y < 0){
+        treeMax.y += -treeMin.y;
+        ray.origin.y += -treeMin.y;
+        treeMin.y = 0;
+    }
+    if(treeMin.z < 0){
+        treeMax.z += -treeMin.z;
+        ray.origin.z += -treeMin.z;
+        treeMin.z = 0;
+    }
+
+
+
+    vec3 dirInverse = 1 / ray.direction;
+
+    vec3 t0 = (treeMin - ray.origin) * dirInverse;
+    vec3 t1 = (treeMax - ray.origin) * dirInverse;
 
     //Early exit if the tree isnt hit
     if(max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
+        octreeHit = false;
+
         return false;
     }
     octreeHit = true;
+    //return true;
 
     //Normally at this point a recursion is used to traverse the tree.
     //But since this is glsl we can't use recursion.
