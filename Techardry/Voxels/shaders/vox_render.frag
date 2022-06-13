@@ -251,26 +251,17 @@ bool raycastNew(vec3 position, Ray ray, out Node result, out bool octreeHit, out
 
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
     if(ray.direction.x < 0){
-        float factor = position.x / Dimensions;
-        float shift = factor * 2 * Dimensions + Dimensions;
-        
-        ray.origin.x =  shift - ray.origin.x;
+        ray.origin.x =  position.x * 2 + Dimensions - ray.origin.x;
         ray.direction.x = -ray.direction.x;
         childIndexModifier |= 4;
     }
     if(ray.direction.y < 0){
-        float factor = position.y / Dimensions;
-        float shift = factor * 2 * Dimensions + Dimensions;
-
-        ray.origin.y = shift - ray.origin.y;
+        ray.origin.y = position.y * 2 + Dimensions - ray.origin.y;
         ray.direction.y = -ray.direction.y;
         childIndexModifier |= 2;
     }
     if(ray.direction.z < 0){
-        float factor = position.z / Dimensions;
-        float shift = factor * 2 * Dimensions + Dimensions;
-
-        ray.origin.z = factor - ray.origin.z;
+        ray.origin.z = position.z * 2 + Dimensions - ray.origin.z;
         ray.direction.z = -ray.direction.z;
         childIndexModifier |= 1;
     }
