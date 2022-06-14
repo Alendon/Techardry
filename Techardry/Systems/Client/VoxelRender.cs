@@ -196,17 +196,17 @@ public partial class VoxelRender : ASystem
         noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         noise.SetFrequency(0.02f);
 
-        //_octree.Insert(new VoxelData(BlockIDs.Stone), Vector3.Zero, 0);
-        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 0, 0), 3);
-        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 0, 15), 3);
-        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 15, 0), 3);
-        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 15, 15), 3);
-        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 0, 0), 3);
-        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 0, 15), 3);
-        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 15, 0), 3);
-        //_octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 15, 15), 3);
+        _octree.Insert(new VoxelData(BlockIDs.Stone), Vector3.Zero, 0);
+        _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(0, 0, 0), 3);
+        _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 0, 15), 3);
+        _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(0, 15, 0), 3);
+        _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 15, 15), 3);
+        _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(15, 0, 0), 3);
+        _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 0, 15), 3);
+        _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(15, 15, 0), 3);
+        _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 15, 15), 3);
 
-        for (int x = 0; x < VoxelOctree.Dimensions; x++)
+        /*for (int x = 0; x < VoxelOctree.Dimensions; x++)
         {
             for (int z = 0; z < VoxelOctree.Dimensions; z++)
             {
@@ -230,7 +230,7 @@ public partial class VoxelRender : ASystem
                     _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
                 }
             }
-        }
+        }*/
 
         return;
 
