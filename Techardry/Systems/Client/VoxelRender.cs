@@ -26,8 +26,12 @@ public partial class VoxelRender : ASystem
     private Mesh _mesh;
     private MemoryBuffer _nodeBuffer;
     private MemoryBuffer _dataBuffer;
-    private DescriptorSet octreeNodeDescriptorSet;
-    private DescriptorSet octreeDataDescriptorSet;
+    private DescriptorSet _octreeNodeDescriptorSet;
+    private DescriptorSet _octreeDataDescriptorSet;
+
+    private MemoryBuffer[] _cameraDataBuffers = Array.Empty<MemoryBuffer>();
+    private MemoryBuffer _cameraDataStagingBuffer;
+    private DescriptorSet[] _cameraDataDescriptors = Array.Empty<DescriptorSet>();
 
     private int totalNodeSize;
     private int totalDataSize;
@@ -57,11 +61,13 @@ public partial class VoxelRender : ASystem
         CreateNodeBuffer();
         CreateDataBuffer();
         CreateDescriptors();
+        CreateCameraDataBuffers();
+        CreateCameraDataDescriptors();
     }
 
     private unsafe void CreateDescriptors()
     {
-        octreeNodeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctreeNode);
+        _octreeNodeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctreeNode);
 
         DescriptorBufferInfo nodeBufferInfo = new DescriptorBufferInfo(
             _nodeBuffer.Buffer,
@@ -77,7 +83,7 @@ public partial class VoxelRender : ASystem
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 DstBinding = 0,
-                DstSet = octreeNodeDescriptorSet,
+                DstSet = _octreeNodeDescriptorSet,
                 DstArrayElement = 0,
                 PBufferInfo = &nodeBufferInfo
             }
@@ -87,7 +93,7 @@ public partial class VoxelRender : ASystem
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, nodeDescriptorWrites, 0, null);
 
 
-        octreeDataDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctreeData);
+        _octreeDataDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctreeData);
 
         DescriptorBufferInfo dataBufferInfo = new DescriptorBufferInfo(
             _dataBuffer.Buffer,
@@ -103,7 +109,7 @@ public partial class VoxelRender : ASystem
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 DstBinding = 0,
-                DstSet = octreeDataDescriptorSet,
+                DstSet = _octreeDataDescriptorSet,
                 DstArrayElement = 0,
                 PBufferInfo = &dataBufferInfo
             }
@@ -187,6 +193,87 @@ public partial class VoxelRender : ASystem
         stagingBuffer.Dispose();
     }
 
+    private unsafe void CreateCameraDataBuffers()
+    {
+        _cameraDataBuffers = new MemoryBuffer[VulkanEngine.SwapchainImageCount];
+        Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
+
+        for (int i = 0; i < _cameraDataBuffers.Length; i++)
+        {
+            ref var cameraDataBuffer = ref _cameraDataBuffers[i];
+            cameraDataBuffer = MemoryBuffer.Create(
+                BufferUsageFlags.BufferUsageUniformBufferBit |
+                BufferUsageFlags.BufferUsageTransferDstBit,
+                (ulong) Marshal.SizeOf<CameraData>(), SharingMode.Exclusive, queue,
+                MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
+        }
+
+        _cameraDataStagingBuffer = MemoryBuffer.Create(
+            BufferUsageFlags.BufferUsageTransferSrcBit,
+            (ulong) Marshal.SizeOf<CameraData>(), SharingMode.Exclusive, queue,
+            MemoryPropertyFlags.MemoryPropertyHostVisibleBit |
+            MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
+    }
+
+    private unsafe void CreateCameraDataDescriptors()
+    {
+        _cameraDataDescriptors = new DescriptorSet[VulkanEngine.SwapchainImageCount];
+
+        Span<WriteDescriptorSet> cameraDataDescriptorWrites = stackalloc WriteDescriptorSet[]
+        {
+            new WriteDescriptorSet()
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.UniformBuffer,
+                DstBinding = 0,
+                DstArrayElement = 0,
+            }
+        };
+
+        for (int i = 0; i < _cameraDataDescriptors.Length; i++)
+        {
+            ref var cameraDataDescriptor = ref _cameraDataDescriptors[i];
+            cameraDataDescriptor = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.CameraData);
+
+            var bufferInfo = new DescriptorBufferInfo()
+            {
+                Buffer = _cameraDataBuffers[i].Buffer,
+                Offset = 0,
+                Range = (ulong) Marshal.SizeOf<CameraData>()
+            };
+
+
+            cameraDataDescriptorWrites[0].DstSet = cameraDataDescriptor;
+            cameraDataDescriptorWrites[0].PBufferInfo = &bufferInfo;
+            
+            VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, cameraDataDescriptorWrites, 0, null);
+        }
+    }
+
+    private unsafe void UpdateCameraDataDescriptor()
+    {
+        var bufferInfo = new DescriptorBufferInfo()
+        {
+            Buffer = _cameraDataBuffers[VulkanEngine.ImageIndex].Buffer,
+            Offset = 0,
+            Range = (ulong) Marshal.SizeOf<CameraData>()
+        };
+        
+        var write = new WriteDescriptorSet()
+        {
+            SType = StructureType.WriteDescriptorSet,
+            DescriptorCount = 1,
+            DstBinding = 0,
+            DescriptorType = DescriptorType.UniformBuffer,
+            DstSet = _cameraDataDescriptors[VulkanEngine.ImageIndex],
+            DstArrayElement = 0,
+            PBufferInfo = &bufferInfo
+        };
+        
+        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, 1, &write, 0, null);
+    }
+
     private void FillOctree()
     {
         int seed = 4;
@@ -247,14 +334,27 @@ public partial class VoxelRender : ASystem
         {
             for (int x = 0; x < image.Width; x++)
             {
-                var yAdjusted = (y - image.Height / 2) * 0.001f;
-                var xAdjusted = (x - image.Width / 2) * 0.001f;
+                //transform x and y to be in range [-1, 1]
+                var xf = (x - image.Width / 2.0f) / (image.Width / 2.0f);
+                var yf = (y - image.Height / 2.0f) / (image.Height / 2.0f);
 
-                var cameraDir = -Vector3.UnitZ;
-                var cameraPlaneU = Vector3.UnitX;
-                var cameraPlaneV = Vector3.UnitY;
-                var rayDir = cameraDir + xAdjusted * cameraPlaneU + yAdjusted * cameraPlaneV;
-                var rayPos = new Vector3(0, 0, 64);
+                var horizontalFov = 1;
+                var verticalFov = 2 * MathF.Atan(MathF.Tan(horizontalFov / 2f) * image.Height / image.Width);
+
+                var horizontalAngle = xf * horizontalFov;
+                var verticalAngle = yf * verticalFov;
+
+                var rayDir = Vector3.Normalize(new Vector3(0, -0.5f, 1));
+
+                //Create Quaternion from horizontal angle and vertical angle
+                var q = Quaternion.CreateFromAxisAngle(Vector3.UnitY, horizontalAngle);
+                q *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, verticalAngle);
+
+                //Rotate ray direction
+                rayDir = Vector3.Transform(rayDir, q);
+
+
+                var rayPos = new Vector3(0, 30, -40);
 
                 //rotate the ray dir and pos by the rotation matrix
                 rayDir = Vector3.Transform(rayDir, rotation);
@@ -266,7 +366,6 @@ public partial class VoxelRender : ASystem
 
                 if (x == 400 && y == 475)
                 {
-                    
                 }
 
                 bool useConeTracing = false;
@@ -344,11 +443,34 @@ public partial class VoxelRender : ASystem
 
     protected override unsafe void Execute()
     {
-        //if (World is null) return;
-        //
-        //var cameraEntity = cameraQuery.FirstOrDefault();
-        //
-        //if (cameraEntity.Entity.ArchetypeId == default) return;
+        if (World is null) return;
+
+        var cameraEntity = _cameraQuery.FirstOrDefault();
+
+        if (cameraEntity.Entity.ArchetypeId == default) return;
+
+        var data = MemoryManager.Map(_cameraDataStagingBuffer.Memory);
+
+        var cameraData = cameraEntity.GetCamera();
+        var forward = cameraData.Forward;
+        var up = cameraData.Upward;
+
+        var cameraGpuData = (CameraData*) data;
+        cameraGpuData->Forward = forward;
+        cameraGpuData->Upward = up;
+        cameraGpuData->AspectRatio = VulkanEngine.SwapchainExtent.Height / (float) VulkanEngine.SwapchainExtent.Width;
+        cameraGpuData->HFov = cameraData.Fov;
+
+        MemoryManager.UnMap(_cameraDataStagingBuffer.Memory);
+
+        BufferCopy copyRegion = new BufferCopy(0, 0, _cameraDataStagingBuffer.Size);
+
+        var commandBuffer = VulkanEngine.GetSingleTimeCommandBuffer();
+        VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, _cameraDataStagingBuffer.Buffer,
+            _cameraDataBuffers[VulkanEngine.ImageIndex].Buffer, 1, &copyRegion);
+        VulkanEngine.ExecuteSingleTimeCommandBuffer(commandBuffer);
+        
+        UpdateCameraDataDescriptor();
 
         var pipeline = PipelineHandler.GetPipeline(PipelineIDs.Voxel);
         var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.Voxel);
@@ -371,15 +493,16 @@ public partial class VoxelRender : ASystem
 
         Span<DescriptorSet> descriptorSets = stackalloc DescriptorSet[]
         {
-            octreeNodeDescriptorSet,
-            octreeDataDescriptorSet
+            _octreeNodeDescriptorSet,
+            _octreeDataDescriptorSet,
+            _cameraDataDescriptors[VulkanEngine.ImageIndex]
         };
 
 
         vk.CmdBindDescriptorSets(_commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0,
             (uint) descriptorSets.Length,
             descriptorSets, 0, (uint*) null);
-        
+
         vk.CmdDraw(_commandBuffer, _mesh.VertexCount, 1, 0, 0);
     }
 
@@ -387,7 +510,40 @@ public partial class VoxelRender : ASystem
 
     public override void Dispose()
     {
-        base.Dispose();
+        foreach (var descriptor in _cameraDataDescriptors)
+        {
+            DescriptorSetHandler.FreeDescriptorSet(descriptor);
+        }
+
+        foreach (var memoryBuffer in _cameraDataBuffers)
+        {
+            memoryBuffer.Dispose();
+        }
+
+        _cameraDataStagingBuffer.Dispose();
+
+        DescriptorSetHandler.FreeDescriptorSet(_octreeNodeDescriptorSet);
+        DescriptorSetHandler.FreeDescriptorSet(_octreeDataDescriptorSet);
+
+        _dataBuffer.Dispose();
+        _nodeBuffer.Dispose();
+
+        _octree.Dispose();
+
         _mesh.Dispose();
+        base.Dispose();
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    struct CameraData
+    {
+        [FieldOffset(0)]
+        public float HFov;
+        [FieldOffset(4)]
+        public float AspectRatio;
+        [FieldOffset(8)]
+        public Vector3 Forward;
+        [FieldOffset(20)]
+        public Vector3 Upward;
     }
 }

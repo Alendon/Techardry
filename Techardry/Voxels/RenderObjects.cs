@@ -45,6 +45,21 @@ public static class RenderObjects
         }
     };
 
+    [RegisterDescriptorSet("camera_data")]
+    public static DescriptorSetInfo CameraData => new()
+    {
+        Bindings = new[]
+        {
+            new DescriptorSetLayoutBinding()
+            {
+                Binding = 0,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.UniformBuffer,
+                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
+            }
+        }
+    };
+
     [RegisterGraphicsPipeline("voxel")]
     public static GraphicsPipelineDescription VoxelPipeline
     {
@@ -66,7 +81,10 @@ public static class RenderObjects
                     Height = VulkanEngine.SwapchainExtent.Height,
                     MaxDepth = 1.0f
                 }},
-                DescriptorSets = new []{Identifications.DescriptorSetIDs.VoxelOctreeNode, Identifications.DescriptorSetIDs.VoxelOctreeData },
+                DescriptorSets = new []{
+                    Identifications.DescriptorSetIDs.VoxelOctreeNode,
+                    Identifications.DescriptorSetIDs.VoxelOctreeData, 
+                    Identifications.DescriptorSetIDs.CameraData },
                 DynamicStates = new [] {DynamicState.Scissor , DynamicState.Viewport},
                 RasterizationInfo =
                 {

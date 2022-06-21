@@ -10,6 +10,7 @@ layout (location = 0) in vec3 in_position;
 
 layout (location = 0) out vec3 out_color;
 
+
 struct Voxel
 {
     float color_r;
@@ -80,24 +81,71 @@ layout(std430, set = 1, binding = 0) readonly buffer OctreeData
     Voxel voxels[];
 } data;
 
+struct CameraDataStruct{
+    float HFov;
+    float AspectRatio;
+    float ForwardX;
+    float ForwardY;
+    float ForwardZ;
+    float UpwardX;
+    float UpwardY;
+    float UpwardZ;
+};
+
+layout(set = 2, binding = 0) readonly uniform CameraData
+{
+    CameraDataStruct data;
+} camera;
+
+
+
 bool raycast(vec3 position, Ray ray, out Node result);
+
+mat4 rotation3d(vec3 axis, float angle) {
+  axis = normalize(axis);
+  float s = sin(angle);
+  float c = cos(angle);
+  float oc = 1.0 - c;
+
+  return mat4(
+    oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
+    oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
+    oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
+    0.0,                                0.0,                                0.0,                                1.0
+  );
+}
 
 void main()
 {
-    vec3 octreePosition = vec3(-Dimensions * 0.5, -Dimensions * 0.5,0);
+    vec3 octreePosition = vec3(0, 0, 64);
 
     vec2 screenPos = vec2(in_position.xy);
     screenPos.y = -screenPos.y;
-    vec3 cameraDirection = normalize(vec3(0.00001, 0.00001, 1));
-    vec3 cameraPlaneU = vec3(1.0, 0.0, 0.0);
-	vec3 cameraPlaneV = vec3(0.0, 1.0, 0.0) *  540.0 / 960.0;
-    vec3 rayPos = vec3(0, 0, -64) + Dimensions * 0;
+    
+    vec3 forward = vec3(camera.data.ForwardX, camera.data.ForwardY, camera.data.ForwardZ);
+    //TODO Upward is currently not used. But is relevant for the future. If we want to rotate the camera
+    vec3 upward = vec3(camera.data.UpwardX, camera.data.UpwardY, camera.data.UpwardZ);
 
-	vec3 rayDir = normalize(cameraDirection + screenPos.x * cameraPlaneU + screenPos.y * cameraPlaneV);
+    float horizontalFov = camera.data.HFov;
+    float aspectRatio = camera.data.AspectRatio;
+    float verticalFov = 2 * atan(tan(horizontalFov / 2) * aspectRatio);
+
+    vec3 rayDir = normalize(forward);
+
+    float horizontalAngle = screenPos.x * horizontalFov;
+    float verticalAngle = screenPos.y * verticalFov;
+
+    mat4 horizontalRot = rotation3d(vec3(0, 1, 0), horizontalAngle);
+    mat4 verticalRot = rotation3d(vec3(1, 0, 0), verticalAngle);
+
+    //rotate the ray direction with the horizontal and vertical rotation
+    rayDir = ((horizontalRot * verticalRot) * vec4(rayDir,1)).xyz;
+
+
 
     Ray ray;
-    ray.origin = rayPos;
-    ray.direction = rayDir;
+    ray.origin = vec3(0);
+    ray.direction = normalize(rayDir);
     ray.inverseDirection = 1 / ray.direction;
 
     out_color = vec3(1,1,1);
@@ -109,7 +157,7 @@ void main()
         Voxel voxel = data.voxels[result.dataIndex];
         out_color = vec3(voxel.color_r, voxel.color_g, voxel.color_b);
     } 
-}
+    }
 
 int getFirstNode(vec3 t0, vec3 tm){
     int result = 0;
