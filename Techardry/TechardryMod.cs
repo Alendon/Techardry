@@ -2,6 +2,7 @@
 using JetBrains.Annotations;
 using MintyCore;
 using MintyCore.Components.Client;
+using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Identifications;
 using MintyCore.Modding;
@@ -47,8 +48,20 @@ public partial class TechardryMod : IMod
             if (!found) throw new Exception();
             var entity = world!.EntityManager.CreateEntity(ArchetypeIDs.TestCamera, player);
             var camera = world.EntityManager.GetComponent<Camera>(entity);
-            camera.Forward = Vector3.Normalize(new Vector3(0f, 1f, 1));
+            camera.Forward = Vector3.Normalize(new Vector3(0f, 0, 1));
             world.EntityManager.SetComponent(entity, camera);
+
+            var position = world.EntityManager.GetComponent<Position>(entity);
+            position.Value = new Vector3(0, 0, -64);
+            world.EntityManager.SetComponent(entity, position);
+
+            var box = world.EntityManager.CreateEntity(ArchetypeIDs.TestRender, null);
+            var render = world.EntityManager.GetComponent<InstancedRenderAble>(box);
+            render.MaterialMeshCombination = InstancedRenderDataIDs.Testing;
+            world.EntityManager.SetComponent(box, render);
+            var scale = world.EntityManager.GetComponent<Scale>(box);
+            scale.Value = new Vector3(32, 32, 32);
+            world.EntityManager.SetComponent(box, scale);
         };
     }
 

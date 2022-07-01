@@ -90,6 +90,9 @@ struct CameraDataStruct{
     float UpwardX;
     float UpwardY;
     float UpwardZ;
+    float PositionX;
+    float PositionY;
+    float PositionZ;
 };
 
 layout(set = 2, binding = 0) readonly uniform CameraData
@@ -115,49 +118,94 @@ mat4 rotation3d(vec3 axis, float angle) {
   );
 }
 
+bool aabbCheck(vec3 min, vec3 max, vec3 position, vec3 direction, out vec3 normal){
+    normal = vec3(0.0);
+    float tmin = 0.0;
+    float tmax = 0.0;
+    for(int i = 0; i < 3; i++){
+        if(direction[i] == 0.0){
+            if(position[i] < min[i] || position[i] > max[i]){
+                return false;
+            }
+        }
+        else{
+            float t1 = (min[i] - position[i]) / direction[i];
+            float t2 = (max[i] - position[i]) / direction[i];
+            if(t1 > t2){
+                float temp = t1;
+                t1 = t2;
+                t2 = temp;
+            }
+            if(t1 > tmin){
+                tmin = t1;
+            }
+            if(t2 < tmax){
+                tmax = t2;
+            }
+            if(tmin > tmax){
+                return false;
+            }
+        }
+    }
+    normal = normalize(position + tmin * direction - min);
+    return true;
+}
+
+mat4 rotationMatrix(vec3 axis, float angle) {
+    axis = normalize(axis);
+    float s = sin(angle);
+    float c = cos(angle);
+    float oc = 1.0 - c;
+    
+    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
+                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
+                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
+                0.0,                                0.0,                                0.0,                                1.0);
+}
+
+vec3 rotate(vec3 v, vec3 axis, float angle) {
+	mat4 m = rotationMatrix(axis, angle);
+	return (m * vec4(v, 1.0)).xyz;
+}
+
 void main()
 {
-    vec3 octreePosition = vec3(0, 0, 64);
+    
+    vec3 octreePosition = vec3(-Dimensions / 2, -Dimensions / 2, -Dimensions / 2);
+    vec3 camPos = vec3(camera.data.PositionX, camera.data.PositionY, camera.data.PositionZ);
 
     vec2 screenPos = vec2(in_position.xy);
-    screenPos.y = -screenPos.y;
     
-    vec3 forward = vec3(camera.data.ForwardX, camera.data.ForwardY, camera.data.ForwardZ);
-    //TODO Upward is currently not used. But is relevant for the future. If we want to rotate the camera
+    vec3 forward = normalize(-camPos);
     vec3 upward = vec3(camera.data.UpwardX, camera.data.UpwardY, camera.data.UpwardZ);
+    vec3 right = cross(forward, upward);
 
-    float horizontalFov = camera.data.HFov;
-    float aspectRatio = camera.data.AspectRatio;
-    float verticalFov = 2 * atan(tan(horizontalFov / 2) * aspectRatio);
+    float fov = camera.data.HFov;
+    float angle = tan(fov / 2);
 
-    vec3 rayDir = normalize(forward);
 
-    float horizontalAngle = screenPos.x * horizontalFov;
-    float verticalAngle = screenPos.y * verticalFov;
+    float ratio = camera.data.AspectRatio;
+    float x = screenPos.x * ratio * angle;
+    float y = screenPos.y * angle;
 
-    mat4 horizontalRot = rotation3d(vec3(0, 1, 0), horizontalAngle);
-    mat4 verticalRot = rotation3d(vec3(1, 0, 0), verticalAngle);
-
-    //rotate the ray direction with the horizontal and vertical rotation
-    rayDir = ((horizontalRot * verticalRot) * vec4(rayDir,1)).xyz;
-
+    vec3 direction = normalize(forward + x * right + y * upward);
 
 
     Ray ray;
-    ray.origin = vec3(0);
-    ray.direction = normalize(rayDir);
+    ray.origin = camPos;
+    ray.direction = normalize(direction);
     ray.inverseDirection = 1 / ray.direction;
 
-    out_color = vec3(1,1,1);
 
     Node result;
     if(raycast(octreePosition, ray, result))
     {
-      
+        
         Voxel voxel = data.voxels[result.dataIndex];
         out_color = vec3(voxel.color_r, voxel.color_g, voxel.color_b);
-    } 
+        
     }
+}
 
 int getFirstNode(vec3 t0, vec3 tm){
     int result = 0;
@@ -242,7 +290,6 @@ bool raycast(vec3 position, Ray ray, out Node result){
     if(max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
         return false;
     }
-    //return true;
 
     //Normally at this point a recursion is used to traverse the tree.
     //But since this is glsl we can't use recursion.

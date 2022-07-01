@@ -1,7 +1,9 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using MintyCore;
 using MintyCore.Components.Client;
+using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Registries;
 using MintyCore.Render;
@@ -21,7 +23,7 @@ namespace Techardry.Systems.Client;
 [ExecuteAfter(typeof(MintyCore.Systems.Client.RenderInstancedSystem))]
 public partial class VoxelRender : ASystem
 {
-    [ComponentQuery] private ComponentQuery<object, Camera> _cameraQuery = new();
+    [ComponentQuery] private ComponentQuery<object, (Camera, Position)> _cameraQuery = new();
 
     private Mesh _mesh;
     private MemoryBuffer _nodeBuffer;
@@ -276,24 +278,14 @@ public partial class VoxelRender : ASystem
 
     private void FillOctree()
     {
-        int seed = 4;
+        int seed = 5;
         Random rnd = new Random(seed);
 
         var noise = new FastNoiseLite(seed);
         noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         noise.SetFrequency(0.02f);
 
-        _octree.Insert(new VoxelData(BlockIDs.Stone), Vector3.Zero, 0);
-        _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(0, 0, 0), 3);
-        _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 0, 15), 3);
-        _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(0, 15, 0), 3);
-        _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(0, 15, 15), 3);
-        _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(15, 0, 0), 3);
-        _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 0, 15), 3);
-        _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(15, 15, 0), 3);
-        _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(15, 15, 15), 3);
-
-        /*for (int x = 0; x < VoxelOctree.Dimensions; x++)
+        for (int x = 0; x < VoxelOctree.Dimensions; x++)
         {
             for (int z = 0; z < VoxelOctree.Dimensions; z++)
             {
@@ -317,7 +309,7 @@ public partial class VoxelRender : ASystem
                     _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
                 }
             }
-        }*/
+        }
 
         return;
 
@@ -440,7 +432,7 @@ public partial class VoxelRender : ASystem
         base.PostExecuteMainThread();
         VulkanEngine.ExecuteSecondary(_commandBuffer);
     }
-
+    float Time = 0;
     protected override unsafe void Execute()
     {
         if (World is null) return;
@@ -452,14 +444,16 @@ public partial class VoxelRender : ASystem
         var data = MemoryManager.Map(_cameraDataStagingBuffer.Memory);
 
         var cameraData = cameraEntity.GetCamera();
+        var positionData = cameraEntity.GetPosition();
         var forward = cameraData.Forward;
         var up = cameraData.Upward;
 
         var cameraGpuData = (CameraData*) data;
         cameraGpuData->Forward = forward;
         cameraGpuData->Upward = up;
-        cameraGpuData->AspectRatio = VulkanEngine.SwapchainExtent.Height / (float) VulkanEngine.SwapchainExtent.Width;
+        cameraGpuData->AspectRatio = VulkanEngine.SwapchainExtent.Width / (float) VulkanEngine.SwapchainExtent.Height;
         cameraGpuData->HFov = cameraData.Fov;
+        cameraGpuData->Position = positionData.Value;
 
         MemoryManager.UnMap(_cameraDataStagingBuffer.Memory);
 
@@ -545,5 +539,8 @@ public partial class VoxelRender : ASystem
         public Vector3 Forward;
         [FieldOffset(20)]
         public Vector3 Upward;
+
+        [FieldOffset(32)] 
+        public Vector3 Position;
     }
 }

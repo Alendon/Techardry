@@ -18,4 +18,17 @@ public static class Archetypes
             typeof(Silk.NET.Vulkan.DescriptorSet).Assembly.Location
         }
     };
+
+    [RegisterArchetype("test_render")]
+    public static ArchetypeInfo TestRender => new()
+    {
+        ComponentIDs = new []
+        {
+            ComponentIDs.Position,
+            ComponentIDs.InstancedRenderAble,
+            ComponentIDs.Transform,
+            ComponentIDs.Scale,
+            ComponentIDs.Rotation,
+        }
+    };
 }
