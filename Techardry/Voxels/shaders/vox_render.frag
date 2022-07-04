@@ -100,9 +100,15 @@ layout(set = 2, binding = 0) readonly uniform CameraData
     CameraDataStruct data;
 } camera;
 
+struct Result{
+    Node node;
+    vec3 normal;
+    vec2 uv;
+    float t;
+};
 
 
-bool raycast(vec3 position, Ray ray, out Node result);
+bool raycast(vec3 position, Ray ray, out Result result);
 
 mat4 rotation3d(vec3 axis, float angle) {
   axis = normalize(axis);
@@ -118,38 +124,6 @@ mat4 rotation3d(vec3 axis, float angle) {
   );
 }
 
-bool aabbCheck(vec3 min, vec3 max, vec3 position, vec3 direction, out vec3 normal){
-    normal = vec3(0.0);
-    float tmin = 0.0;
-    float tmax = 0.0;
-    for(int i = 0; i < 3; i++){
-        if(direction[i] == 0.0){
-            if(position[i] < min[i] || position[i] > max[i]){
-                return false;
-            }
-        }
-        else{
-            float t1 = (min[i] - position[i]) / direction[i];
-            float t2 = (max[i] - position[i]) / direction[i];
-            if(t1 > t2){
-                float temp = t1;
-                t1 = t2;
-                t2 = temp;
-            }
-            if(t1 > tmin){
-                tmin = t1;
-            }
-            if(t2 < tmax){
-                tmax = t2;
-            }
-            if(tmin > tmax){
-                return false;
-            }
-        }
-    }
-    normal = normalize(position + tmin * direction - min);
-    return true;
-}
 
 mat4 rotationMatrix(vec3 axis, float angle) {
     axis = normalize(axis);
@@ -170,8 +144,7 @@ vec3 rotate(vec3 v, vec3 axis, float angle) {
 
 void main()
 {
-    
-    vec3 octreePosition = vec3(-Dimensions / 2, -Dimensions / 2, -Dimensions / 2);
+    vec3 octreePosition = vec3(-Dimensions / 2, -Dimensions / 2 - 10, -Dimensions / 2);
     vec3 camPos = vec3(camera.data.PositionX, camera.data.PositionY, camera.data.PositionZ);
 
     vec2 screenPos = vec2(in_position.xy);
@@ -197,13 +170,25 @@ void main()
     ray.inverseDirection = 1 / ray.direction;
 
 
-    Node result;
+    Result result;
     if(raycast(octreePosition, ray, result))
     {
         
-        Voxel voxel = data.voxels[result.dataIndex];
+        Voxel voxel = data.voxels[result.node.dataIndex];
         out_color = vec3(voxel.color_r, voxel.color_g, voxel.color_b);
-        
+        if(result.normal.x != 0)
+        {
+            out_color *= 0.5;
+        }
+        if(result.normal.y != 0)
+        {
+            out_color *= 0.75;
+        }
+        if(result.normal.z != 0)
+        {
+            out_color *= 1;
+        }
+        out_color = vec3(result.uv,0);
     }
 }
 
@@ -249,9 +234,15 @@ int nextNode(vec3 tm, ivec3 c){
     
 }
 
-bool raycast(vec3 position, Ray ray, out Node result){
+bool approxEqual(float a, float b){
+    return abs(a - b) < 0.00001;
+}
+
+bool raycast(vec3 position, Ray ray, out Result result){
 
     int childIndexModifier = 0;
+    vec3 originalRayDir = ray.direction;
+    vec3 originalOrigin = ray.origin;
 
 /*
  *  Prepare some stuff
@@ -325,7 +316,65 @@ bool raycast(vec3 position, Ray ray, out Node result){
             }
             else{
                 //TODO hit results
-                result = node;
+                result.node = node;
+                
+                if(t0.x > t0.y && t0.x > t0.z){
+                   
+                    result.t = t0.x;
+
+                    vec3 hitPos = originalOrigin + originalRayDir * result.t;
+                    result.uv = mod(vec2(hitPos.y - position.y, hitPos.z - position.z), 1);
+
+                    if(originalRayDir.x > 0 ){
+                        result.normal = vec3(-1, 0, 0);
+
+                        float temp = result.uv.r;
+                        result.uv.r = result.uv.g;
+                        result.uv.g = temp;
+
+                        result.uv.r = abs(1 - result.uv.r);
+                    }
+                    else{
+                        result.normal = vec3(1, 0, 0);
+
+                        float temp = result.uv.r;
+                        result.uv.r = result.uv.g;
+                        result.uv.g = temp;
+                    }
+                }
+                else if (t0.y > t0.x && t0.y > t0.z){
+                    
+
+                    result.t = t0.y;
+
+                    vec3 hitPos = originalOrigin + originalRayDir * result.t;
+                    result.uv = mod(vec2(hitPos.x - position.x, hitPos.z - position.z), 1);
+
+                    if(originalRayDir.y > 0 ){
+                        result.normal = vec3(0, -1, 0);
+                    }
+                    else{
+                        result.normal = vec3(0, 1, 0);
+                    }
+                }
+                else if (t0.z > t0.x && t0.z > t0.y){
+                    
+
+                    result.t = t0.z;
+
+                    vec3 hitPos = originalOrigin + originalRayDir * result.t;
+                    result.uv = mod(vec2(hitPos.x - position.x, hitPos.y - position.y), 1);
+
+                    if(originalRayDir.z > 0 ){
+                        result.normal = vec3(0, 0, -1);
+                    }
+                    else{
+                        result.normal = vec3(0, 0, 1);
+
+                        result.uv.r = abs(result.uv.r - 1);
+                    }
+                }
+
                 return true;
             }
         }
