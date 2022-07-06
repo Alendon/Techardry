@@ -18,6 +18,11 @@ struct Voxel
     float color_b;
     float color_a;
     int not_empty;
+    float texture_start_x;
+    float texture_start_y;
+    float array_index;
+    float texture_size_x;
+    float texture_size_y;
 };
 
 struct Node
@@ -81,6 +86,7 @@ layout(std430, set = 1, binding = 0) readonly buffer OctreeData
     Voxel voxels[];
 } data;
 
+
 struct CameraDataStruct{
     float HFov;
     float AspectRatio;
@@ -99,6 +105,9 @@ layout(set = 2, binding = 0) readonly uniform CameraData
 {
     CameraDataStruct data;
 } camera;
+
+layout(set = 3, binding = 0) uniform sampler2DArray tex;
+
 
 struct Result{
     Node node;
@@ -175,7 +184,13 @@ void main()
     {
         
         Voxel voxel = data.voxels[result.node.dataIndex];
-        out_color = vec3(voxel.color_r, voxel.color_g, voxel.color_b);
+
+        vec3 texStart = vec3(voxel.texture_start_x, voxel.texture_start_y, voxel.array_index);
+        printf("texStart: %f %f %f\n", texStart.x, texStart.y, texStart.z);
+        vec2 texSize = vec2(voxel.texture_size_x, voxel.texture_size_y);
+        out_color = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
+
+
         if(result.normal.x != 0)
         {
             out_color *= 0.5;
@@ -188,7 +203,6 @@ void main()
         {
             out_color *= 1;
         }
-        out_color = vec3(result.uv,0);
     }
 }
 

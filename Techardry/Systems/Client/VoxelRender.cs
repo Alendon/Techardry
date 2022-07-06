@@ -14,6 +14,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
+using Techardry.Render;
 using Techardry.Voxels;
 
 namespace Techardry.Systems.Client;
@@ -291,7 +292,7 @@ public partial class VoxelRender : ASystem
             {
                 for (int y = 0; y < 6; y++)
                 {
-                    _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
+                    _octree.Insert(new VoxelData(BlockIDs.Stone), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
                 }
 
                 var noiseValue = noise.GetNoise(x, z);
@@ -306,7 +307,7 @@ public partial class VoxelRender : ASystem
                         
                     }
                     
-                    _octree.Insert(new VoxelData(BlockIDs.Grass), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
+                    _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
                 }
             }
         }
@@ -484,12 +485,15 @@ public partial class VoxelRender : ASystem
             new Rect2D(new Offset2D(0, 0), VulkanEngine.SwapchainExtent)
         };
         vk.CmdSetScissor(_commandBuffer, 0, scissors);
+        
+        Logger.AssertAndThrow( TextureAtlasHandler.TryGetAtlasDescriptorSet(Identifications.TextureAtlasIDs.BlockTexture, out var atlasDescriptorSet), "Failed to get atlas descriptor set", "Techardry/Render");
 
         Span<DescriptorSet> descriptorSets = stackalloc DescriptorSet[]
         {
             _octreeNodeDescriptorSet,
             _octreeDataDescriptorSet,
-            _cameraDataDescriptors[VulkanEngine.ImageIndex]
+            _cameraDataDescriptors[VulkanEngine.ImageIndex],
+            atlasDescriptorSet 
         };
 
 

@@ -2,6 +2,7 @@
 using MintyCore.Registries;
 using MintyCore.Render;
 using Silk.NET.Vulkan;
+using Techardry.Render;
 using DescriptorSetIDs = MintyCore.Identifications.DescriptorSetIDs;
 using ShaderIDs = Techardry.Identifications.ShaderIDs;
 
@@ -84,7 +85,9 @@ public static class RenderObjects
                 DescriptorSets = new []{
                     Identifications.DescriptorSetIDs.VoxelOctreeNode,
                     Identifications.DescriptorSetIDs.VoxelOctreeData, 
-                    Identifications.DescriptorSetIDs.CameraData },
+                    Identifications.DescriptorSetIDs.CameraData,
+                    DescriptorSetIDs.SampledTexture
+                },
                 DynamicStates = new [] {DynamicState.Scissor , DynamicState.Viewport},
                 RasterizationInfo =
                 {

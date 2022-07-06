@@ -26,6 +26,11 @@ public static class BlockHandler
     {
         return _blocks[id].Color;
     }
+    
+    public static Identification GetBlockTexture(Identification id)
+    {
+        return _blocks[id].Texture;
+    }
 
     public static bool IsBlockSplittable(Identification blockId)
     {

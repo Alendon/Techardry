@@ -9,7 +9,10 @@ using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
 using MintyCore.Render;
 using MintyCore.Utils;
+using Techardry.Registries;
+using Techardry.Render;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
+using TextureIDs = Techardry.Identifications.TextureIDs;
 
 namespace Techardry;
 
@@ -68,6 +71,12 @@ public partial class TechardryMod : IMod
     public void PostLoad()
     {
     }
+
+    [RegisterTextureAtlas("block_texture")]
+    public static TextureAtlasInfo BlockTextureAtlas => new (new[]
+    {
+         TextureIDs.Dirt, TextureIDs.Stone
+    });
 
     public void Unload()
     {

@@ -1,7 +1,9 @@
 ﻿using System.Diagnostics;
+using System.Numerics;
 using MintyCore.Utils;
 using Techardry.Blocks;
 using Techardry.Identifications;
+using Techardry.Render;
 
 namespace Techardry.Voxels;
 
@@ -14,20 +16,32 @@ public readonly struct VoxelData : IEquatable<VoxelData>
     {
         Id = id;
     }
-    
+
     public VoxelPhysicsData GetPhysicsData()
     {
         return default;
     }
-    
+
     public VoxelRenderData GetRenderData()
     {
-        var color = BlockHandler.GetBlockColor(Id);
-        return new VoxelRenderData()
+        var renderData = new VoxelRenderData()
         {
-            Color = color.ToVector4(),
-            NotEmpty = Id != BlockIDs.Air ? 1 : 0
+            NotEmpty = Id != BlockIDs.Air ? 1 : 0,
+            Color = BlockHandler.GetBlockColor(Id).ToVector4(),
+            TextureStart = Vector3.Zero,
+            TextureSize = Vector2.Zero
         };
+
+        var textureId = BlockHandler.GetBlockTexture(Id);
+
+
+        if (!TextureAtlasHandler.TryGetAtlasLocation(TextureAtlasIDs.BlockTexture, textureId, out var info))
+            return renderData;
+        
+        renderData.TextureStart = new Vector3(info.Position.X, info.Position.Y, info.ArrayIndex);
+        renderData.TextureSize = new Vector2(info.Size.X, info.Size.Y);
+        
+        return renderData;
     }
 
     public bool Equals(VoxelData other)
