@@ -10,8 +10,8 @@ using MintyCore.Modding.Attributes;
 using MintyCore.Registries;
 using MintyCore.Render;
 using MintyCore.Utils;
+using Silk.NET.Vulkan;
 using Techardry.Registries;
-using Techardry.Render;
 using Techardry.World;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
 using InstancedRenderDataIDs = Techardry.Identifications.InstancedRenderDataIDs;
@@ -42,6 +42,12 @@ public partial class TechardryMod : IMod
     {
         Instance = this;
         VulkanEngine.AddDeviceExtension(ModName, "VK_KHR_shader_non_semantic_info", true);
+        VulkanEngine.AddDeviceFeatureExension(new PhysicalDeviceDescriptorIndexingFeaturesEXT()
+        {
+            SType = StructureType.PhysicalDeviceDescriptorIndexingFeaturesExt,
+            RuntimeDescriptorArray = true,
+            DescriptorBindingPartiallyBound = true
+        });
     }
 
     public void Load()

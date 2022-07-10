@@ -79,12 +79,12 @@ int DepthOfNode(Node node)
 layout(std430, set = 0, binding = 0) readonly buffer OctreeNodes
 {
     Node nodes[];
-} nodes;
+} nodes[];
 
-layout(std430, set = 1, binding = 0) readonly buffer OctreeData
+layout(std430, set = 0, binding = 1) readonly buffer OctreeData
 {
     Voxel voxels[];
-} data;
+} data[];
 
 
 struct CameraDataStruct{
@@ -103,15 +103,15 @@ struct CameraDataStruct{
     float Far;
 };
 
-layout(set = 2, binding = 0) readonly uniform CameraData
+layout(set = 1, binding = 0) readonly uniform CameraData
 {
     CameraDataStruct data;
 } camera;
 
-layout(set = 3, binding = 0) uniform sampler2DArray tex;
+layout(set = 2, binding = 0) uniform sampler2DArray tex;
 
-layout (input_attachment_index = 0, set = 4, binding = 0) uniform subpassInput inDepth;
-layout (input_attachment_index = 1, set = 4, binding = 1) uniform subpassInput inColor;
+layout (input_attachment_index = 0, set = 3, binding = 0) uniform subpassInput inDepth;
+layout (input_attachment_index = 1, set = 3, binding = 1) uniform subpassInput inColor;
 
 
 struct Result{
@@ -219,7 +219,7 @@ void main()
 
     
 
-    Voxel voxel = data.voxels[result.node.dataIndex];
+    Voxel voxel = data[0].voxels[result.node.dataIndex];
 
     vec3 texStart = vec3(voxel.texture_start_x, voxel.texture_start_y, voxel.array_index);
     
@@ -353,7 +353,7 @@ bool raycast(vec3 position, Ray ray, out Result result){
         t0 = currentEntry.t0;
         t1 = currentEntry.t1;
 
-        Node node = nodes.nodes[currentEntry.nodeIndex];
+        Node node = nodes[0].nodes[currentEntry.nodeIndex];
 
         if(t1.x < 0 || t1.y < 0 || t1.z < 0){
             continue;

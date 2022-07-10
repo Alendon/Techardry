@@ -1,7 +1,5 @@
-﻿using System.Diagnostics;
-using System.Numerics;
+﻿using System.Numerics;
 using System.Runtime.InteropServices;
-using MintyCore;
 using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
@@ -9,8 +7,6 @@ using MintyCore.Registries;
 using MintyCore.Render;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
 using Techardry.Render;
@@ -31,8 +27,7 @@ public partial class VoxelRender : ARenderSystem
     private Mesh _mesh;
     private MemoryBuffer _nodeBuffer;
     private MemoryBuffer _dataBuffer;
-    private DescriptorSet _octreeNodeDescriptorSet;
-    private DescriptorSet _octreeDataDescriptorSet;
+    private DescriptorSet _octreeDescriptorSet;
     private DescriptorSet[] _inputAttachmentDescriptorSet = new DescriptorSet[VulkanEngine.SwapchainImageCount];
 
     private ImageView[] _lastColorImageView = new ImageView[VulkanEngine.SwapchainImageCount];
@@ -123,13 +118,21 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe void CreateDescriptors()
     {
-        _octreeNodeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctreeNode);
+        _octreeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree);
 
         DescriptorBufferInfo nodeBufferInfo = new DescriptorBufferInfo(
             _nodeBuffer.Buffer,
             0,
             _nodeBuffer.Size
         );
+        
+        DescriptorBufferInfo dataBufferInfo = new DescriptorBufferInfo(
+            _dataBuffer.Buffer,
+            0,
+            _dataBuffer.Size
+        );
+        
+        
 
         Span<WriteDescriptorSet> nodeDescriptorWrites = stackalloc WriteDescriptorSet[]
         {
@@ -139,40 +142,24 @@ public partial class VoxelRender : ARenderSystem
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 DstBinding = 0,
-                DstSet = _octreeNodeDescriptorSet,
+                DstSet = _octreeDescriptorSet,
                 DstArrayElement = 0,
                 PBufferInfo = &nodeBufferInfo
-            }
-        };
-
-
-        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, nodeDescriptorWrites, 0, null);
-
-
-        _octreeDataDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctreeData);
-
-        DescriptorBufferInfo dataBufferInfo = new DescriptorBufferInfo(
-            _dataBuffer.Buffer,
-            0,
-            _dataBuffer.Size
-        );
-
-        Span<WriteDescriptorSet> dataDescriptorWrites = stackalloc WriteDescriptorSet[]
-        {
+            },
             new WriteDescriptorSet()
             {
                 SType = StructureType.WriteDescriptorSet,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
-                DstBinding = 0,
-                DstSet = _octreeDataDescriptorSet,
+                DstBinding = 1,
+                DstSet = _octreeDescriptorSet,
                 DstArrayElement = 0,
                 PBufferInfo = &dataBufferInfo
             }
         };
 
 
-        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, dataDescriptorWrites, 0, null);
+        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, nodeDescriptorWrites, 0, null);
     }
 
     private unsafe void CreateNodeBuffer()
@@ -424,8 +411,7 @@ public partial class VoxelRender : ARenderSystem
 
         Span<DescriptorSet> descriptorSets = stackalloc DescriptorSet[]
         {
-            _octreeNodeDescriptorSet,
-            _octreeDataDescriptorSet,
+            _octreeDescriptorSet,
             _cameraDataDescriptors[VulkanEngine.ImageIndex],
             atlasDescriptorSet,
             _inputAttachmentDescriptorSet[VulkanEngine.ImageIndex]
@@ -460,8 +446,7 @@ public partial class VoxelRender : ARenderSystem
 
         _cameraDataStagingBuffer.Dispose();
 
-        DescriptorSetHandler.FreeDescriptorSet(_octreeNodeDescriptorSet);
-        DescriptorSetHandler.FreeDescriptorSet(_octreeDataDescriptorSet);
+        DescriptorSetHandler.FreeDescriptorSet(_octreeDescriptorSet);
 
         _dataBuffer.Dispose();
         _nodeBuffer.Dispose();

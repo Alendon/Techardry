@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using BepuUtilities;
 using MintyCore.Physics;
-using MintyCore.Registries;
 
 namespace Techardry.World;
 

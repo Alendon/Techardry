@@ -1,6 +1,5 @@
 ﻿using System.Numerics;
 using System.Runtime.InteropServices;
-using SixLabors.ImageSharp.PixelFormats;
 
 namespace Techardry.Voxels;
 

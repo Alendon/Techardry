@@ -1,9 +1,7 @@
 ﻿using System.Numerics;
-using MintyCore.Identifications;
 using MintyCore.Registries;
 using MintyCore.Render;
 using Silk.NET.Vulkan;
-using Techardry.Render;
 using DescriptorSetIDs = MintyCore.Identifications.DescriptorSetIDs;
 using RenderPassIDs = Techardry.Identifications.RenderPassIDs;
 using ShaderIDs = Techardry.Identifications.ShaderIDs;
@@ -18,7 +16,7 @@ public static class RenderObjects
     [RegisterShader("voxel_vert","voxels/vox_render_vert.spv")]
     public static ShaderInfo VoxelVert => new (ShaderStageFlags.ShaderStageVertexBit);
     
-    [RegisterDescriptorSet("voxel_octree_node")]
+    [RegisterDescriptorSet("voxel_octree")]
     public static DescriptorSetInfo VoxelOctreeNodes => new()
     {
         Bindings = new[]
@@ -26,25 +24,22 @@ public static class RenderObjects
             new DescriptorSetLayoutBinding
             {
                 Binding = 0,
-                DescriptorCount = 1,
+                DescriptorCount = 10000,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
-            }
-        }
-    };
-
-    [RegisterDescriptorSet("voxel_octree_data")]
-    public static DescriptorSetInfo VoxelOctreeData => new()
-    {
-        Bindings = new[]
-        {
-            new DescriptorSetLayoutBinding()
+            },
+            new DescriptorSetLayoutBinding
             {
-                Binding = 0,
-                DescriptorCount = 1,
+                Binding = 1,
+                DescriptorCount = 10000,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
-            }
+            },
+        },
+        BindingFlags = new[]
+        {
+            DescriptorBindingFlags.DescriptorBindingPartiallyBoundBit,
+            
         }
     };
 
@@ -223,8 +218,7 @@ public static class RenderObjects
                     MaxDepth = 1.0f
                 }},
                 DescriptorSets = new []{
-                    Identifications.DescriptorSetIDs.VoxelOctreeNode,
-                    Identifications.DescriptorSetIDs.VoxelOctreeData, 
+                    Identifications.DescriptorSetIDs.VoxelOctree,
                     Identifications.DescriptorSetIDs.CameraData,
                     DescriptorSetIDs.SampledTexture,
                     Identifications.DescriptorSetIDs.InputAttachment
