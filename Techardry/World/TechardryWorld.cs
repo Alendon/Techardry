@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using BepuUtilities;
-using MintyCore.Identifications;
 using MintyCore.Physics;
+using MintyCore.Registries;
 
 namespace Techardry.World;
 
@@ -27,10 +27,11 @@ public class TechardryWorld : MintyCore.ECS.World
 
     public TechardryWorld(bool isServerWorld) : base(isServerWorld)
     {
-        
+        SystemManager.SetSystemActive(MintyCore.Identifications.SystemIDs.RenderInstanced, false);
     }
 
     public TechardryWorld(bool isServerWorld, PhysicsWorld physicsWorld) : base(isServerWorld, physicsWorld)
     {
+        SystemManager.SetSystemActive(MintyCore.Identifications.SystemIDs.RenderInstanced, false);
     }
 }

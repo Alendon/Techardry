@@ -99,6 +99,8 @@ struct CameraDataStruct{
     float PositionX;
     float PositionY;
     float PositionZ;
+    float Near;
+    float Far;
 };
 
 layout(set = 2, binding = 0) readonly uniform CameraData
@@ -107,6 +109,8 @@ layout(set = 2, binding = 0) readonly uniform CameraData
 } camera;
 
 layout(set = 3, binding = 0) uniform sampler2DArray tex;
+
+layout (input_attachment_index = 0, set = 4, binding = 0) uniform subpassInput inDepth;
 
 
 struct Result{
@@ -151,9 +155,22 @@ vec3 rotate(vec3 v, vec3 axis, float angle) {
 	return (m * vec4(v, 1.0)).xyz;
 }
 
+float linearDepth(float depth)
+{
+	float z = depth * 2.0f - 1.0f; 
+	return (2.0f * camera.data.Near * camera.data.Far) / (camera.data.Far + camera.data.Near - z * (camera.data.Far - camera.data.Near));	
+}
+
+//delinearize depth to get the depth value in the range [0, 1]
+//(the inverse of linearDepth)
+float delinearizeDepth(float linearDepth)
+{
+    return ((- (((2 * camera.data.Near * camera.data.Far) / linearDepth) - camera.data.Far - camera.data.Near) / (camera.data.Far - camera.data.Near)) + 1.0f) / 2.0f;
+}
+
 void main()
 {
-    vec3 octreePosition = vec3(-Dimensions / 2, -Dimensions / 2 - 10, -Dimensions / 2);
+    vec3 octreePosition = vec3(-Dimensions / 2, -Dimensions / 2 - 20, -Dimensions / 2);
     vec3 camPos = vec3(camera.data.PositionX, camera.data.PositionY, camera.data.PositionZ);
 
     vec2 screenPos = vec2(in_position.xy);
@@ -177,33 +194,50 @@ void main()
     ray.origin = camPos;
     ray.direction = normalize(direction);
     ray.inverseDirection = 1 / ray.direction;
-
+    float depth = subpassLoad(inDepth).r;
 
     Result result;
-    if(raycast(octreePosition, ray, result))
-    {
-        
-        Voxel voxel = data.voxels[result.node.dataIndex];
 
-        vec3 texStart = vec3(voxel.texture_start_x, voxel.texture_start_y, voxel.array_index);
-        printf("texStart: %f %f %f\n", texStart.x, texStart.y, texStart.z);
-        vec2 texSize = vec2(voxel.texture_size_x, voxel.texture_size_y);
-        out_color = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
-
-
-        if(result.normal.x != 0)
-        {
-            out_color *= 0.5;
-        }
-        if(result.normal.y != 0)
-        {
-            out_color *= 0.75;
-        }
-        if(result.normal.z != 0)
-        {
-            out_color *= 1;
-        }
+    if(!raycast(octreePosition, ray, result)){
+        discard;
+        return;
     }
+
+    float lDepth = linearDepth(depth);
+
+    float hitDepth = result.t - camera.data.Near;
+
+    if(hitDepth > lDepth){
+        discard;
+        return;
+    }
+
+    float newDepth = delinearizeDepth(hitDepth);
+    gl_FragDepth = newDepth;
+
+    
+
+    Voxel voxel = data.voxels[result.node.dataIndex];
+
+    vec3 texStart = vec3(voxel.texture_start_x, voxel.texture_start_y, voxel.array_index);
+    
+    vec2 texSize = vec2(voxel.texture_size_x, voxel.texture_size_y);
+    out_color = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
+
+
+    if(result.normal.x != 0)
+    {
+        out_color *= 0.5;
+    }
+    if(result.normal.y != 0)
+    {
+        out_color *= 0.75;
+    }
+    if(result.normal.z != 0)
+    {
+        out_color *= 1;
+    }
+
 }
 
 int getFirstNode(vec3 t0, vec3 tm){

@@ -1,13 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using MintyCore;
 using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Registries;
 using MintyCore.Render;
-using MintyCore.SystemGroups;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using SixLabors.ImageSharp;
@@ -16,13 +14,16 @@ using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
 using Techardry.Render;
 using Techardry.Voxels;
+using DescriptorSetIDs = Techardry.Identifications.DescriptorSetIDs;
+using PipelineIDs = Techardry.Identifications.PipelineIDs;
+using SystemIDs = Techardry.Identifications.SystemIDs;
 
 namespace Techardry.Systems.Client;
 
 [RegisterSystem("voxel_render")]
-[ExecuteInSystemGroup(typeof(PresentationSystemGroup))]
-[ExecuteAfter(typeof(MintyCore.Systems.Client.RenderInstancedSystem))]
-public partial class VoxelRender : ASystem
+[ExecuteInSystemGroup(typeof(DualRenderSystemGroup))]
+[ExecuteAfter(typeof(RenderInstancedSystem))]
+public partial class VoxelRender : ARenderSystem
 {
     [ComponentQuery] private ComponentQuery<object, (Camera, Position)> _cameraQuery = new();
 
@@ -31,6 +32,7 @@ public partial class VoxelRender : ASystem
     private MemoryBuffer _dataBuffer;
     private DescriptorSet _octreeNodeDescriptorSet;
     private DescriptorSet _octreeDataDescriptorSet;
+    private DescriptorSet _depthInputDescriptorSet;
 
     private MemoryBuffer[] _cameraDataBuffers = Array.Empty<MemoryBuffer>();
     private MemoryBuffer _cameraDataStagingBuffer;
@@ -38,8 +40,6 @@ public partial class VoxelRender : ASystem
 
     private int totalNodeSize;
     private int totalDataSize;
-
-    private CommandBuffer _commandBuffer;
 
     private VoxelOctree _octree = new();
 
@@ -60,12 +60,18 @@ public partial class VoxelRender : ASystem
 
         _mesh = MeshHandler.CreateDynamicMesh(vertices, (uint) vertices.Length);
 
+
         FillOctree();
         CreateNodeBuffer();
         CreateDataBuffer();
         CreateDescriptors();
         CreateCameraDataBuffers();
         CreateCameraDataDescriptors();
+
+        SetRenderArguments(new RenderPassArguments
+        {
+            SubpassIndex = 1
+        });
     }
 
     private unsafe void CreateDescriptors()
@@ -120,6 +126,27 @@ public partial class VoxelRender : ASystem
 
 
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, dataDescriptorWrites, 0, null);
+
+        _depthInputDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.InputAttachment);
+
+        DescriptorImageInfo imageInfo = new()
+        {
+            ImageLayout = ImageLayout.General,
+            ImageView = VulkanEngine.DepthImageView
+        };
+
+        WriteDescriptorSet writeDescriptorSet = new()
+        {
+            SType = StructureType.WriteDescriptorSet,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.InputAttachment,
+            DstBinding = 0,
+            DstSet = _depthInputDescriptorSet,
+            DstArrayElement = 0,
+            PImageInfo = &imageInfo
+        };
+
+        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, 1, writeDescriptorSet, 0, null);
     }
 
     private unsafe void CreateNodeBuffer()
@@ -249,7 +276,7 @@ public partial class VoxelRender : ASystem
 
             cameraDataDescriptorWrites[0].DstSet = cameraDataDescriptor;
             cameraDataDescriptorWrites[0].PBufferInfo = &bufferInfo;
-            
+
             VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, cameraDataDescriptorWrites, 0, null);
         }
     }
@@ -262,7 +289,7 @@ public partial class VoxelRender : ASystem
             Offset = 0,
             Range = (ulong) Marshal.SizeOf<CameraData>()
         };
-        
+
         var write = new WriteDescriptorSet()
         {
             SType = StructureType.WriteDescriptorSet,
@@ -273,7 +300,7 @@ public partial class VoxelRender : ASystem
             DstArrayElement = 0,
             PBufferInfo = &bufferInfo
         };
-        
+
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, 1, &write, 0, null);
     }
 
@@ -304,9 +331,8 @@ public partial class VoxelRender : ASystem
                 {
                     if (x == 3 && z == 15 && y == 9)
                     {
-                        
                     }
-                    
+
                     _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
                 }
             }
@@ -422,18 +448,8 @@ public partial class VoxelRender : ASystem
         Console.WriteLine("Bye, World!");
     }
 
-    public override void PreExecuteMainThread()
-    {
-        base.PreExecuteMainThread();
-        _commandBuffer = VulkanEngine.GetSecondaryCommandBuffer();
-    }
-
-    public override void PostExecuteMainThread()
-    {
-        base.PostExecuteMainThread();
-        VulkanEngine.ExecuteSecondary(_commandBuffer);
-    }
     float Time = 0;
+
     protected override unsafe void Execute()
     {
         if (World is null) return;
@@ -455,6 +471,8 @@ public partial class VoxelRender : ASystem
         cameraGpuData->AspectRatio = VulkanEngine.SwapchainExtent.Width / (float) VulkanEngine.SwapchainExtent.Height;
         cameraGpuData->HFov = cameraData.Fov;
         cameraGpuData->Position = positionData.Value;
+        cameraGpuData->Near = 0.1f;
+        cameraGpuData->Far = 200f;
 
         MemoryManager.UnMap(_cameraDataStagingBuffer.Memory);
 
@@ -464,50 +482,55 @@ public partial class VoxelRender : ASystem
         VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, _cameraDataStagingBuffer.Buffer,
             _cameraDataBuffers[VulkanEngine.ImageIndex].Buffer, 1, &copyRegion);
         VulkanEngine.ExecuteSingleTimeCommandBuffer(commandBuffer);
-        
+
         UpdateCameraDataDescriptor();
 
         var pipeline = PipelineHandler.GetPipeline(PipelineIDs.Voxel);
         var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.Voxel);
 
         var vk = VulkanEngine.Vk;
-        vk.CmdBindPipeline(_commandBuffer, PipelineBindPoint.Graphics, pipeline);
-        vk.CmdBindVertexBuffers(_commandBuffer, 0, 1, _mesh.MemoryBuffer.Buffer, 0);
+        vk.CmdBindPipeline(CommandBuffer, PipelineBindPoint.Graphics, pipeline);
+        vk.CmdBindVertexBuffers(CommandBuffer, 0, 1, _mesh.MemoryBuffer.Buffer, 0);
 
         Span<Viewport> viewports = stackalloc Viewport[]
         {
             new Viewport(0, 0, VulkanEngine.SwapchainExtent.Width, VulkanEngine.SwapchainExtent.Height, 0, 1)
         };
-        vk.CmdSetViewport(_commandBuffer, 0, viewports);
+        vk.CmdSetViewport(CommandBuffer, 0, viewports);
 
         Span<Rect2D> scissors = stackalloc Rect2D[]
         {
             new Rect2D(new Offset2D(0, 0), VulkanEngine.SwapchainExtent)
         };
-        vk.CmdSetScissor(_commandBuffer, 0, scissors);
-        
-        Logger.AssertAndThrow( TextureAtlasHandler.TryGetAtlasDescriptorSet(Identifications.TextureAtlasIDs.BlockTexture, out var atlasDescriptorSet), "Failed to get atlas descriptor set", "Techardry/Render");
+        vk.CmdSetScissor(CommandBuffer, 0, scissors);
+
+        Logger.AssertAndThrow(
+            TextureAtlasHandler.TryGetAtlasDescriptorSet(Identifications.TextureAtlasIDs.BlockTexture,
+                out var atlasDescriptorSet), "Failed to get atlas descriptor set", "Techardry/Render");
 
         Span<DescriptorSet> descriptorSets = stackalloc DescriptorSet[]
         {
             _octreeNodeDescriptorSet,
             _octreeDataDescriptorSet,
             _cameraDataDescriptors[VulkanEngine.ImageIndex],
-            atlasDescriptorSet 
+            atlasDescriptorSet,
+            _depthInputDescriptorSet
         };
 
 
-        vk.CmdBindDescriptorSets(_commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0,
+        vk.CmdBindDescriptorSets(CommandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0,
             (uint) descriptorSets.Length,
             descriptorSets, 0, (uint*) null);
 
-        vk.CmdDraw(_commandBuffer, _mesh.VertexCount, 1, 0, 0);
+        vk.CmdDraw(CommandBuffer, _mesh.VertexCount, 1, 0, 0);
     }
 
     public override Identification Identification => SystemIDs.VoxelRender;
 
     public override void Dispose()
     {
+        DescriptorSetHandler.FreeDescriptorSet(_depthInputDescriptorSet);
+
         foreach (var descriptor in _cameraDataDescriptors)
         {
             DescriptorSetHandler.FreeDescriptorSet(descriptor);
@@ -535,16 +558,13 @@ public partial class VoxelRender : ASystem
     [StructLayout(LayoutKind.Explicit)]
     struct CameraData
     {
-        [FieldOffset(0)]
-        public float HFov;
-        [FieldOffset(4)]
-        public float AspectRatio;
-        [FieldOffset(8)]
-        public Vector3 Forward;
-        [FieldOffset(20)]
-        public Vector3 Upward;
+        [FieldOffset(0)] public float HFov;
+        [FieldOffset(4)] public float AspectRatio;
+        [FieldOffset(8)] public Vector3 Forward;
+        [FieldOffset(20)] public Vector3 Upward;
 
-        [FieldOffset(32)] 
-        public Vector3 Position;
+        [FieldOffset(32)] public Vector3 Position;
+        [FieldOffset(44)] public float Near;
+        [FieldOffset(48)] public float Far;
     }
 }

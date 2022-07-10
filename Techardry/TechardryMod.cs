@@ -7,11 +7,16 @@ using MintyCore.ECS;
 using MintyCore.Identifications;
 using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
+using MintyCore.Registries;
 using MintyCore.Render;
 using MintyCore.Utils;
 using Techardry.Registries;
 using Techardry.Render;
+using Techardry.World;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
+using InstancedRenderDataIDs = Techardry.Identifications.InstancedRenderDataIDs;
+using MaterialIDs = Techardry.Identifications.MaterialIDs;
+using PipelineIDs = Techardry.Identifications.PipelineIDs;
 using TextureIDs = Techardry.Identifications.TextureIDs;
 
 namespace Techardry;
@@ -60,10 +65,10 @@ public partial class TechardryMod : IMod
 
             var box = world.EntityManager.CreateEntity(ArchetypeIDs.TestRender, null);
             var render = world.EntityManager.GetComponent<InstancedRenderAble>(box);
-            render.MaterialMeshCombination = InstancedRenderDataIDs.Testing;
+            render.MaterialMeshCombination = InstancedRenderDataIDs.DualBlock;
             world.EntityManager.SetComponent(box, render);
             var scale = world.EntityManager.GetComponent<Scale>(box);
-            scale.Value = new Vector3(32, 32, 32);
+            scale.Value = new Vector3(16, 16, 16);
             world.EntityManager.SetComponent(box, scale);
         };
     }
@@ -77,6 +82,32 @@ public partial class TechardryMod : IMod
     {
          TextureIDs.Dirt, TextureIDs.Stone
     });
+    
+    [OverrideWorld("default", "minty_core")]
+    public static WorldInfo TechardryWorldInfo => new()
+    {
+        WorldCreateFunction = serverWorld => new TechardryWorld(serverWorld),
+    };
+
+    [RegisterMaterial("dual_block")]
+    public static MaterialInfo DualBlock => new()
+    {
+        DescriptorSets = new[]
+        {
+            (TextureIDs.Dirt, 1u)
+        },
+        PipelineId = PipelineIDs.DualTexture
+    };
+
+    [RegisterInstancedRenderData("dual_block")]
+    public static InstancedRenderDataInfo DualBlockRenderData => new()
+    {
+        MeshId = MeshIDs.Cube,
+        MaterialIds = new[]
+        {
+            MaterialIDs.DualBlock
+        }
+    };
 
     public void Unload()
     {

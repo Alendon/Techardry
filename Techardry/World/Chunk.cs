@@ -26,7 +26,7 @@ public class Chunk
         BlockRotation rotation = BlockRotation.None)
     {
         Logger.AssertAndThrow(BlockHandler.DoesBlockExist(blockId), "Block to place does not exist", "World");
-        Logger.AssertAndThrow(depth > VoxelOctree.SizeOneDepth || BlockHandler.IsBlockSplittable(blockId),
+        Logger.AssertAndThrow(depth >= VoxelOctree.SizeOneDepth || BlockHandler.IsBlockSplittable(blockId),
             "Invalid block placement depth", "World");
         Logger.AssertAndThrow(rotation == BlockRotation.None || BlockHandler.IsBlockRotatable(blockId),
             "Invalid block placement rotation", "World");
