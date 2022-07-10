@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using MintyCore;
 using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
@@ -32,7 +33,9 @@ public partial class VoxelRender : ARenderSystem
     private MemoryBuffer _dataBuffer;
     private DescriptorSet _octreeNodeDescriptorSet;
     private DescriptorSet _octreeDataDescriptorSet;
-    private DescriptorSet _depthInputDescriptorSet;
+    private DescriptorSet[] _inputAttachmentDescriptorSet = new DescriptorSet[VulkanEngine.SwapchainImageCount];
+
+    private ImageView[] _lastColorImageView = new ImageView[VulkanEngine.SwapchainImageCount];
 
     private MemoryBuffer[] _cameraDataBuffers = Array.Empty<MemoryBuffer>();
     private MemoryBuffer _cameraDataStagingBuffer;
@@ -72,6 +75,50 @@ public partial class VoxelRender : ARenderSystem
         {
             SubpassIndex = 1
         });
+    }
+
+    public override void PreExecuteMainThread()
+    {
+        var index = VulkanEngine.ImageIndex;
+        if (VulkanEngine.SwapchainImageViews[index].Handle != _lastColorImageView[index].Handle)
+        {
+            DescriptorSetHandler.FreeDescriptorSet(_inputAttachmentDescriptorSet[index]);
+            CreateInputAttachments(index);
+        }
+
+        base.PreExecuteMainThread();
+    }
+
+    private unsafe void CreateInputAttachments(uint index)
+    {
+        _inputAttachmentDescriptorSet[index] =
+            DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.InputAttachment);
+
+        DescriptorImageInfo depthImageInfo = new()
+        {
+            ImageLayout = ImageLayout.General,
+            ImageView = VulkanEngine.DepthImageView
+        };
+
+        DescriptorImageInfo colorImageInfo = new()
+        {
+            ImageLayout = ImageLayout.General,
+            ImageView = VulkanEngine.SwapchainImageViews[index]
+        };
+
+        Span<WriteDescriptorSet> writeDescriptorSets = stackalloc WriteDescriptorSet[]
+        {
+            new WriteDescriptorSet(StructureType.WriteDescriptorSet, null, _inputAttachmentDescriptorSet[index], 0, 0,
+                1, DescriptorType.InputAttachment, &depthImageInfo),
+            
+            new WriteDescriptorSet(StructureType.WriteDescriptorSet, null, _inputAttachmentDescriptorSet[index], 1, 0,
+                1, DescriptorType.InputAttachment, &colorImageInfo)
+        };
+
+        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, (uint) writeDescriptorSets.Length,
+            writeDescriptorSets.GetPinnableReference(), 0, null);
+        
+        _lastColorImageView[index] = VulkanEngine.SwapchainImageViews[index];
     }
 
     private unsafe void CreateDescriptors()
@@ -126,27 +173,6 @@ public partial class VoxelRender : ARenderSystem
 
 
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, dataDescriptorWrites, 0, null);
-
-        _depthInputDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.InputAttachment);
-
-        DescriptorImageInfo imageInfo = new()
-        {
-            ImageLayout = ImageLayout.General,
-            ImageView = VulkanEngine.DepthImageView
-        };
-
-        WriteDescriptorSet writeDescriptorSet = new()
-        {
-            SType = StructureType.WriteDescriptorSet,
-            DescriptorCount = 1,
-            DescriptorType = DescriptorType.InputAttachment,
-            DstBinding = 0,
-            DstSet = _depthInputDescriptorSet,
-            DstArrayElement = 0,
-            PImageInfo = &imageInfo
-        };
-
-        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, 1, writeDescriptorSet, 0, null);
     }
 
     private unsafe void CreateNodeBuffer()
@@ -307,8 +333,7 @@ public partial class VoxelRender : ARenderSystem
     private void FillOctree()
     {
         int seed = 5;
-        Random rnd = new Random(seed);
-
+        
         var noise = new FastNoiseLite(seed);
         noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         noise.SetFrequency(0.02f);
@@ -337,119 +362,8 @@ public partial class VoxelRender : ARenderSystem
                 }
             }
         }
-
-        return;
-
-        Image<Rgba32> image = new Image<Rgba32>(1000, 1000);
-
-        var rotation = Matrix4x4.CreateFromYawPitchRoll(0, 0.0f, 0);
-
-        Stopwatch sw = Stopwatch.StartNew();
-
-        int iterations = 1;
-
-        for (int i = 0; i < iterations; i++)
-        for (int y = 0; y < image.Height; y++)
-        {
-            for (int x = 0; x < image.Width; x++)
-            {
-                //transform x and y to be in range [-1, 1]
-                var xf = (x - image.Width / 2.0f) / (image.Width / 2.0f);
-                var yf = (y - image.Height / 2.0f) / (image.Height / 2.0f);
-
-                var horizontalFov = 1;
-                var verticalFov = 2 * MathF.Atan(MathF.Tan(horizontalFov / 2f) * image.Height / image.Width);
-
-                var horizontalAngle = xf * horizontalFov;
-                var verticalAngle = yf * verticalFov;
-
-                var rayDir = Vector3.Normalize(new Vector3(0, -0.5f, 1));
-
-                //Create Quaternion from horizontal angle and vertical angle
-                var q = Quaternion.CreateFromAxisAngle(Vector3.UnitY, horizontalAngle);
-                q *= Quaternion.CreateFromAxisAngle(Vector3.UnitX, verticalAngle);
-
-                //Rotate ray direction
-                rayDir = Vector3.Transform(rayDir, q);
-
-
-                var rayPos = new Vector3(0, 30, -40);
-
-                //rotate the ray dir and pos by the rotation matrix
-                rayDir = Vector3.Transform(rayDir, rotation);
-                rayPos = Vector3.Transform(rayPos, rotation);
-
-                rayPos += new Vector3(8, 8, 0);
-
-                Rgba32 color = Color.White;
-
-                if (x == 400 && y == 475)
-                {
-                }
-
-                bool useConeTracing = false;
-                Vector3 normal;
-                if (useConeTracing)
-                {
-                    if (_octree.ConeTrace(rayPos, rayDir, 0.001f, out var node, out normal))
-                    {
-                        var voxel = _octree.GetVoxelRenderDataRef(ref node);
-                        var voxelColor = voxel.Color;
-                        color.FromVector4(voxelColor);
-                    }
-                }
-                else
-                {
-                    if (_octree.Raycast(rayPos, rayDir, out var node, out normal))
-                    {
-                        var voxel = _octree.GetVoxelRenderDataRef(ref node);
-                        var voxelColor = voxel.Color;
-                        color.FromVector4(voxelColor);
-                    }
-                }
-
-                if (normal.X < 0 || normal.Y < 0 || normal.Z < 0)
-                {
-                    normal = Vector3.Negate(normal);
-                }
-
-                if (normal.Equals(Vector3.UnitX))
-                {
-                    color.R = (byte) (color.R * 0.8);
-                    color.G = (byte) (color.G * 0.8);
-                    color.B = (byte) (color.B * 0.8);
-                }
-
-                if (normal.Equals(Vector3.UnitY))
-                {
-                    color.R = (byte) (color.R * 0.9);
-                    color.G = (byte) (color.G * 0.9);
-                    color.B = (byte) (color.B * 0.9);
-                }
-
-                if (normal.Equals(Vector3.UnitZ))
-                {
-                    color.R = (byte) (color.R * 1);
-                    color.G = (byte) (color.G * 1);
-                    color.B = (byte) (color.B * 1);
-                }
-
-                image[x, y] = color;
-            }
-        }
-
-        sw.Stop();
-
-        var fileStream = new FileStream("test.png", FileMode.Create);
-        image.SaveAsPng(fileStream);
-        fileStream.Dispose();
-
-        Console.WriteLine($"Rendering took {sw.Elapsed.TotalMilliseconds / iterations}ms per frame");
-        Console.WriteLine("Bye, World!");
     }
-
-    float Time = 0;
-
+    
     protected override unsafe void Execute()
     {
         if (World is null) return;
@@ -514,7 +428,7 @@ public partial class VoxelRender : ARenderSystem
             _octreeDataDescriptorSet,
             _cameraDataDescriptors[VulkanEngine.ImageIndex],
             atlasDescriptorSet,
-            _depthInputDescriptorSet
+            _inputAttachmentDescriptorSet[VulkanEngine.ImageIndex]
         };
 
 
@@ -529,7 +443,10 @@ public partial class VoxelRender : ARenderSystem
 
     public override void Dispose()
     {
-        DescriptorSetHandler.FreeDescriptorSet(_depthInputDescriptorSet);
+        foreach (var descriptorSet in _inputAttachmentDescriptorSet)
+        {
+            DescriptorSetHandler.FreeDescriptorSet(descriptorSet);
+        }
 
         foreach (var descriptor in _cameraDataDescriptors)
         {

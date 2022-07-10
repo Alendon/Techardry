@@ -111,6 +111,7 @@ layout(set = 2, binding = 0) readonly uniform CameraData
 layout(set = 3, binding = 0) uniform sampler2DArray tex;
 
 layout (input_attachment_index = 0, set = 4, binding = 0) uniform subpassInput inDepth;
+layout (input_attachment_index = 1, set = 4, binding = 1) uniform subpassInput inColor;
 
 
 struct Result{
@@ -195,11 +196,12 @@ void main()
     ray.direction = normalize(direction);
     ray.inverseDirection = 1 / ray.direction;
     float depth = subpassLoad(inDepth).r;
+    vec3 oldColor = subpassLoad(inColor).rgb;
 
     Result result;
 
     if(!raycast(octreePosition, ray, result)){
-        discard;
+        out_color = oldColor;
         return;
     }
 
@@ -208,7 +210,7 @@ void main()
     float hitDepth = result.t - camera.data.Near;
 
     if(hitDepth > lDepth){
-        discard;
+         out_color = oldColor;
         return;
     }
 

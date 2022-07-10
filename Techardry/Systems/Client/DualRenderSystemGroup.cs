@@ -17,9 +17,8 @@ public class DualRenderSystemGroup : ARenderSystemGroup
 {
     public override Identification Identification => SystemIDs.DualRender;
 
-    private Texture _depthTexture;
-    private ImageView _depthImageView;
     private Framebuffer[] _framebuffers = Array.Empty<Framebuffer>();
+    private ImageView[] _colorImageViews = Array.Empty<ImageView>();
 
     public override void Setup(SystemManager systemManager)
     {
@@ -27,52 +26,16 @@ public class DualRenderSystemGroup : ARenderSystemGroup
         {
             RenderPass = RenderPassIDs.DualPipeline
         });
-        
-        CreateDepthImage();
+
         CreateFramebuffers();
-        
+
         base.Setup(systemManager);
-    }
-
-    private unsafe void CreateDepthImage()
-    {
-        TextureDescription desc = TextureDescription.Texture2D(VulkanEngine.SwapchainExtent.Width,
-            VulkanEngine.SwapchainExtent.Height, 1, 1, Format.D16Unorm, TextureUsage.DepthStencil);
-
-        desc.AdditionalUsageFlags = ImageUsageFlags.ImageUsageInputAttachmentBit;
-        _depthTexture = Texture.Create(ref desc);
-
-        ImageViewCreateInfo createInfo = new()
-        {
-            SType =  StructureType.ImageViewCreateInfo,
-            /*Components = new ComponentMapping()
-            {
-                A = ComponentSwizzle.A,
-                R = ComponentSwizzle.R,
-                G = ComponentSwizzle.G,
-                B = ComponentSwizzle.B
-            },*/
-            Flags = 0,
-            Format = Format.D16Unorm,
-            Image = _depthTexture.Image,
-            SubresourceRange =
-            {
-                AspectMask = ImageAspectFlags.ImageAspectDepthBit | ImageAspectFlags.ImageAspectStencilBit,
-                LayerCount = 1,
-                LevelCount = 1,
-                BaseArrayLayer = 0,
-                BaseMipLevel = 0
-            },
-            ViewType = ImageViewType.ImageViewType2D
-        };
-
-        VulkanEngine.Vk.CreateImageView(VulkanEngine.Device, createInfo, VulkanEngine.AllocationCallback,
-            out _depthImageView);
     }
 
     private unsafe void CreateFramebuffers()
     {
         _framebuffers = new Framebuffer[VulkanEngine.SwapchainImageCount];
+        _colorImageViews = new ImageView[VulkanEngine.SwapchainImageCount];
 
         Span<ImageView> imageViews = stackalloc ImageView[2];
         imageViews[1] = VulkanEngine.DepthImageView;
@@ -80,6 +43,7 @@ public class DualRenderSystemGroup : ARenderSystemGroup
         for (var i = 0; i < VulkanEngine.SwapchainImageCount; i++)
         {
             imageViews[0] = VulkanEngine.SwapchainImageViews[i];
+            _colorImageViews[i] = imageViews[0];
 
             FramebufferCreateInfo createInfo = new()
             {
@@ -98,8 +62,37 @@ public class DualRenderSystemGroup : ARenderSystemGroup
         }
     }
 
-    protected override void PreExecuteSystem(ASystem system)
+    protected override unsafe void PreExecuteSystem(ASystem system)
     {
+        if (_colorImageViews[VulkanEngine.ImageIndex].Handle !=
+            VulkanEngine.SwapchainImageViews[VulkanEngine.ImageIndex].Handle)
+        {
+            ref var framebuffer = ref _framebuffers[VulkanEngine.ImageIndex];
+            
+            VulkanEngine.Vk.DestroyFramebuffer(VulkanEngine.Device, framebuffer, VulkanEngine.AllocationCallback);
+            
+            _colorImageViews[VulkanEngine.ImageIndex] = VulkanEngine.SwapchainImageViews[VulkanEngine.ImageIndex];
+            
+            Span<ImageView> imageViews = stackalloc ImageView[2];
+            imageViews[0] = VulkanEngine.SwapchainImageViews[VulkanEngine.ImageIndex];
+            imageViews[1] = VulkanEngine.DepthImageView;
+            
+            FramebufferCreateInfo createInfo = new()
+            {
+                SType = StructureType.FramebufferCreateInfo,
+                Flags = 0,
+                Height = VulkanEngine.SwapchainExtent.Height,
+                Width = VulkanEngine.SwapchainExtent.Width,
+                Layers = 1,
+                AttachmentCount = (uint) imageViews.Length,
+                PAttachments = (ImageView*) Unsafe.AsPointer(ref imageViews.GetPinnableReference()),
+                RenderPass = RenderPassHandler.GetRenderPass(RenderPassIDs.DualPipeline)
+            };
+            
+            VulkanEngine.Vk.CreateFramebuffer(VulkanEngine.Device, createInfo, VulkanEngine.AllocationCallback,
+                out framebuffer);
+        }
+
         base.PreExecuteSystem(system);
     }
 

@@ -68,9 +68,19 @@ public static class RenderObjects
     {
         Bindings = new[]
         {
+            //Depth attachment
             new DescriptorSetLayoutBinding()
             {
                 Binding = 0,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.InputAttachment,
+                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
+            },
+            
+            //Color attachment
+            new DescriptorSetLayoutBinding()
+            {
+                Binding = 1,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.InputAttachment,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
@@ -147,6 +157,11 @@ public static class RenderObjects
                     new AttachmentReference()
                     {
                         Attachment = 1u,
+                        Layout = ImageLayout.General
+                    },
+                    new AttachmentReference()
+                    {
+                        Attachment = 0u,
                         Layout = ImageLayout.General
                     }
                 },
