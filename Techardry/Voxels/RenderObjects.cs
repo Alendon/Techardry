@@ -27,18 +27,10 @@ public static class RenderObjects
                 DescriptorCount = 100,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
-            },
-            new DescriptorSetLayoutBinding
-            {
-                Binding = 1,
-                DescriptorCount = 100,
-                DescriptorType = DescriptorType.StorageBuffer,
-                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
-            },
+            }
         },
         BindingFlags = new[]
         {
-            DescriptorBindingFlags.DescriptorBindingPartiallyBoundBit,
             DescriptorBindingFlags.DescriptorBindingPartiallyBoundBit
         },
         CreateFlags = DescriptorSetLayoutCreateFlags.DescriptorSetLayoutCreateUpdateAfterBindPoolBit

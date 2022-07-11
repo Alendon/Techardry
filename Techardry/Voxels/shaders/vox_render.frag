@@ -1,5 +1,6 @@
 ﻿#version 460
 #extension GL_EXT_debug_printf : enable
+#extension GL_EXT_nonuniform_qualifier : require
 
 #define Dimensions 16
 #define ChildCount 8
@@ -9,31 +10,6 @@
 layout (location = 0) in vec3 in_position;
 
 layout (location = 0) out vec3 out_color;
-
-
-struct Voxel
-{
-    uint color;
-    uint not_empty;
-    uint texture_start_x;
-    uint texture_start_y;
-    uint array_index;
-    uint texture_size_x;
-    uint texture_size_y;
-};
-
-struct Node
-{
-    uint children[8];
-    uint dataIndex;
-    uint Index;
-    uint ParentIndex;
-    uint ParentChildIndex;
-    uint Leaf;
-    uint ShareData;
-    uint Depth;
-    uint IsEmpty;
-};
 
 struct Ray{
     vec3 origin, direction, inverseDirection;
@@ -47,30 +23,6 @@ struct Hit{
     vec3 normal;
 };
 
-
-uint ParentChildIndex(Node node)
-{
-    return node.ParentChildIndex;
-}
-
-bool IsLeaf(Node node)
-{
-    return node.Leaf != 0;
-}
-
-bool IsEmpty(Node node){
-    return node.IsEmpty != 0;
-}
-
-bool SharesDataWithParent(Node node)
-{
-    return node.ShareData != 0;
-}
-
-uint DepthOfNode(Node node)
-{
-    return node.Depth;
-}
 
 struct CameraDataStruct{
     float HFov;
@@ -98,18 +50,125 @@ layout(set = 1, binding = 0) uniform sampler2DArray tex;
 layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
 layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
 
-layout(std430, set = 3, binding = 0) readonly buffer OctreeNodes
+layout(std430, set = 3, binding = 0) readonly buffer Octree
 {
-    Node nodes[];
-} nodes[];
+    uint nodeCount;
+    uint data[];
+} trees[];
 
-layout(std430, set = 3, binding = 1) readonly buffer OctreeData
-{
-    Voxel voxels[];
-} data[];
+#define NodeSize 16
+
+#define Node_Children_Offset 0
+uint NodeChildren(uint tree, uint nodeIndex, uint childIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_Children_Offset + childIndex];
+}
+#undef Node_Children_Offset
+
+#define Node_DataIndex_Offset 8
+uint NodeDataIndex(uint tree, uint nodeIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
+}
+#undef Node_DataIndex_Offset
+
+#define Node_Index_Offset 9
+uint NodeIndex(uint tree, uint nodeIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_Index_Offset];
+}
+#undef Node_Index_Offset
+
+#define Node_ParentIndex_Offset 10
+uint NodeParentIndex(uint tree, uint nodeIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
+}
+#undef Node_ParentIndex_Offset
+
+#define Node_ParentChildIndex_Offset 11
+uint NodeParentChildIndex(uint tree, uint nodeIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_ParentChildIndex_Offset];
+}
+#undef Node_ParentChildIndex_Offset
+
+#define Node_Leaf_Offset 12
+uint NodeLeaf(uint tree, uint nodeIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_Leaf_Offset];
+}
+#undef Node_Leaf_Offset
+
+#define Node_ShareData_Offset 13
+uint NodeShareData(uint tree, uint nodeIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_ShareData_Offset];
+}
+#undef Node_ShareData_Offset
+
+#define Node_Depth_Offset 14
+uint NodeDepth(uint tree, uint nodeIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_Depth_Offset];
+}
+#undef Node_Depth_Offset
+
+#define Node_IsEmpty_Offset 15
+uint NodeIsEmpty(uint tree, uint nodeIndex){
+    return trees[tree].data[nodeIndex * NodeSize + Node_IsEmpty_Offset];
+}
+#undef Node_IsEmpty_Offset
+
+#define VoxelSize 7
+
+#define Voxel_Color_Offset 0
+uint VoxelColor(uint tree, uint voxelIndex){
+    uint nodeCount = trees[tree].nodeCount;
+    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
+}
+#undef Voxel_Color_Offset
+
+#define Voxel_NotEmpty_Offset 1
+uint VoxelNotEmpty(uint tree, uint voxelIndex){
+    uint nodeCount = trees[tree].nodeCount;
+    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_NotEmpty_Offset];
+}
+#undef Voxel_NotEmpty_Offset
+
+#define Voxel_TextureStartX_Offset 2
+uint VoxelTextureStartX(uint tree, uint voxelIndex){
+    uint nodeCount = trees[tree].nodeCount;
+    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
+}
+#undef Voxel_TextureStartX_Offset
+
+#define Voxel_TextureStartY_Offset 3
+uint VoxelTextureStartY(uint tree, uint voxelIndex){
+    uint nodeCount = trees[tree].nodeCount;
+    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
+}
+#undef Voxel_TextureStartY_Offset
+
+#define Voxel_ArrayIndex_Offset 4
+uint VoxelArrayIndex(uint tree, uint voxelIndex){
+    uint nodeCount = trees[tree].nodeCount;
+    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
+}
+#undef Voxel_ArrayIndex_Offset
+
+#define Voxel_TextureSizeX_Offset 5
+uint VoxelTextureSizeX(uint tree, uint voxelIndex){
+    uint nodeCount = trees[tree].nodeCount;
+    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
+}
+#undef Voxel_TextureSizeX_Offset
+
+#define Voxel_TextureSizeY_Offset 6
+uint VoxelTextureSizeY(uint tree, uint voxelIndex){
+    uint nodeCount = trees[tree].nodeCount;
+    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];
+}
+#undef Voxel_TextureSizeY_Offset
+
+#undef VoxelSize
+
+#undef NodeSize
 
 struct Result{
-    Node node;
+    uint nodeIndex;
     vec3 normal;
     vec2 uv;
     float t;
@@ -163,6 +222,8 @@ float delinearizeDepth(float linearDepth)
     return ((- (((2 * camera.data.Near * camera.data.Far) / linearDepth) - camera.data.Far - camera.data.Near) / (camera.data.Far - camera.data.Near)) + 1.0f) / 2.0f;
 }
 
+#define TREE 0
+
 void main()
 {
     vec3 octreePosition = vec3(-Dimensions / 2, -Dimensions / 2 - 20, -Dimensions / 2);
@@ -213,11 +274,15 @@ void main()
 
     #define TextureSize 128.
 
-    Voxel voxel = data[0].voxels[result.node.dataIndex];
-
-    vec3 texStart = vec3(voxel.texture_start_x / TextureSize, voxel.texture_start_y / TextureSize, voxel.array_index);
     
-    vec2 texSize = vec2(voxel.texture_size_x / TextureSize, voxel.texture_size_y / TextureSize);
+
+    uint voxel = NodeDataIndex(TREE, result.nodeIndex);
+
+
+
+    vec3 texStart = vec3(VoxelTextureStartX(TREE, voxel) / TextureSize, VoxelTextureStartY(TREE, voxel) / TextureSize, VoxelArrayIndex(TREE, voxel));
+    
+    vec2 texSize = vec2(VoxelTextureSizeX(TREE, voxel) / TextureSize, VoxelTextureSizeY(TREE, voxel) / TextureSize);
     out_color = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
 
 
@@ -347,20 +412,20 @@ bool raycast(vec3 position, Ray ray, out Result result){
         t0 = currentEntry.t0;
         t1 = currentEntry.t1;
 
-        Node node = nodes[0].nodes[currentEntry.nodeIndex];
+        uint node = currentEntry.nodeIndex;
 
         if(t1.x < 0 || t1.y < 0 || t1.z < 0){
             continue;
         }
 
-        if(IsLeaf(node)){
+        if(NodeLeaf(TREE, node) != 0){
             //We found a leaf.
-            if(IsEmpty(node)){
+            if( NodeIsEmpty(TREE, node) != 0){
                 continue;
             }
             else{
                 //TODO hit results
-                result.node = node;
+                result.nodeIndex = node;
                 
                 if(t0.x > t0.y && t0.x > t0.z){
                    
@@ -523,7 +588,7 @@ bool raycast(vec3 position, Ray ray, out Result result){
         stack[stackIndex] = currentEntry;
         
         stackIndex++;
-        stack[stackIndex] = StackEntry(node.children[nextChildIndex ^ childIndexModifier], -1, childT0, childT1);
+        stack[stackIndex] = StackEntry( NodeChildren(TREE, node, nextChildIndex ^ childIndexModifier), -1, childT0, childT1);
     }
 
 

@@ -25,8 +25,8 @@ public partial class VoxelRender : ARenderSystem
     [ComponentQuery] private ComponentQuery<object, (Camera, Position)> _cameraQuery = new();
 
     private Mesh _mesh;
-    private MemoryBuffer _nodeBuffer;
-    private MemoryBuffer _dataBuffer;
+    private MemoryBuffer _octreeBuffer;
+    private ulong _octreeBufferSize;
     private DescriptorSet _octreeDescriptorSet;
     private DescriptorSet[] _inputAttachmentDescriptorSet = new DescriptorSet[VulkanEngine.SwapchainImageCount];
 
@@ -35,9 +35,6 @@ public partial class VoxelRender : ARenderSystem
     private MemoryBuffer[] _cameraDataBuffers = Array.Empty<MemoryBuffer>();
     private MemoryBuffer _cameraDataStagingBuffer;
     private DescriptorSet[] _cameraDataDescriptors = Array.Empty<DescriptorSet>();
-
-    private uint totalNodeSize;
-    private uint totalDataSize;
 
     private VoxelOctree _octree = new();
 
@@ -60,8 +57,7 @@ public partial class VoxelRender : ARenderSystem
 
 
         FillOctree();
-        CreateNodeBuffer();
-        CreateDataBuffer();
+        CreateVoxelBuffer();
         CreateDescriptors();
         CreateCameraDataBuffers();
         CreateCameraDataDescriptors();
@@ -105,14 +101,14 @@ public partial class VoxelRender : ARenderSystem
         {
             new WriteDescriptorSet(StructureType.WriteDescriptorSet, null, _inputAttachmentDescriptorSet[index], 0, 0,
                 1, DescriptorType.InputAttachment, &depthImageInfo),
-            
+
             new WriteDescriptorSet(StructureType.WriteDescriptorSet, null, _inputAttachmentDescriptorSet[index], 1, 0,
                 1, DescriptorType.InputAttachment, &colorImageInfo)
         };
 
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, (uint) writeDescriptorSets.Length,
             writeDescriptorSets.GetPinnableReference(), 0, null);
-        
+
         _lastColorImageView[index] = VulkanEngine.SwapchainImageViews[index];
     }
 
@@ -120,19 +116,13 @@ public partial class VoxelRender : ARenderSystem
     {
         _octreeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree);
 
-        DescriptorBufferInfo nodeBufferInfo = new DescriptorBufferInfo(
-            _nodeBuffer.Buffer,
+        DescriptorBufferInfo octreeBufferInfo = new DescriptorBufferInfo(
+            _octreeBuffer.Buffer,
             0,
-            _nodeBuffer.Size
+            _octreeBuffer.Size
         );
-        
-        DescriptorBufferInfo dataBufferInfo = new DescriptorBufferInfo(
-            _dataBuffer.Buffer,
-            0,
-            _dataBuffer.Size
-        );
-        
-        
+
+
 
         Span<WriteDescriptorSet> nodeDescriptorWrites = stackalloc WriteDescriptorSet[]
         {
@@ -144,17 +134,7 @@ public partial class VoxelRender : ARenderSystem
                 DstBinding = 0,
                 DstSet = _octreeDescriptorSet,
                 DstArrayElement = 0,
-                PBufferInfo = &nodeBufferInfo
-            },
-            new WriteDescriptorSet()
-            {
-                SType = StructureType.WriteDescriptorSet,
-                DescriptorCount = 1,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DstBinding = 1,
-                DstSet = _octreeDescriptorSet,
-                DstArrayElement = 0,
-                PBufferInfo = &dataBufferInfo
+                PBufferInfo = &octreeBufferInfo
             }
         };
 
@@ -162,77 +142,71 @@ public partial class VoxelRender : ARenderSystem
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, nodeDescriptorWrites, 0, null);
     }
 
-    private unsafe void CreateNodeBuffer()
+    struct OctreeHeader
     {
-        uint nodeSize = (uint) Marshal.SizeOf<VoxelOctree.Node>();
-        var nodeCount = _octree.NodeCount;
-        totalNodeSize = nodeSize * nodeCount;
-
-        Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
-
-        _nodeBuffer = MemoryBuffer.Create(
-            BufferUsageFlags.BufferUsageStorageBufferBit | BufferUsageFlags.BufferUsageTransferDstBit,
-            totalNodeSize,
-            SharingMode.Exclusive,
-            queue, MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
-
-        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, totalNodeSize,
-            SharingMode.Exclusive, queue,
-            MemoryPropertyFlags.MemoryPropertyHostVisibleBit | MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
-
-        var stagingBufferPtr = MemoryManager.Map(stagingBuffer.Memory);
-
-        var targetNodes = new Span<VoxelOctree.Node>((void*) stagingBufferPtr, (int) nodeCount);
-        var sourceNodes = _octree.Nodes.AsSpan(0, (int) nodeCount);
-        sourceNodes.CopyTo(targetNodes);
-
-        MemoryManager.UnMap(stagingBuffer.Memory);
-
-        var commandBuffer = VulkanEngine.GetSingleTimeCommandBuffer();
-        Span<BufferCopy> bufferCopy = stackalloc BufferCopy[]
-        {
-            new BufferCopy(0, 0, totalNodeSize),
-        };
-        VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, stagingBuffer.Buffer, _nodeBuffer.Buffer, bufferCopy);
-        VulkanEngine.ExecuteSingleTimeCommandBuffer(commandBuffer);
-
-        stagingBuffer.Dispose();
+        public uint NodeCount;
     }
 
-    private unsafe void CreateDataBuffer()
+    private unsafe void CreateVoxelBuffer()
     {
-        uint dataSize = (uint) Marshal.SizeOf<VoxelRenderData>();
+        var headerSize = (uint) Marshal.SizeOf<OctreeHeader>();
+        var nodeSize = (uint) Marshal.SizeOf<VoxelOctree.Node>();
+        var dataSize = (uint) Marshal.SizeOf<VoxelRenderData>();
+
+        var nodeCount = _octree.NodeCount;
         var dataCount = _octree.DataCount;
-        totalDataSize = dataSize * dataCount;
+
+        _octreeBufferSize = headerSize + nodeCount * nodeSize + dataCount * dataSize;
 
         Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
 
-        _dataBuffer = MemoryBuffer.Create(
+        _octreeBuffer = MemoryBuffer.Create(
             BufferUsageFlags.BufferUsageStorageBufferBit | BufferUsageFlags.BufferUsageTransferDstBit,
-            totalDataSize,
+            _octreeBufferSize,
             SharingMode.Exclusive,
-            queue, MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
+            queue,
+            MemoryPropertyFlags.MemoryPropertyDeviceLocalBit,
+            false);
 
-        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, totalDataSize,
-            SharingMode.Exclusive, queue,
-            MemoryPropertyFlags.MemoryPropertyHostVisibleBit | MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
+        var stagingBuffer = MemoryBuffer.Create(
+            BufferUsageFlags.BufferUsageTransferSrcBit,
+            _octreeBufferSize,
+            SharingMode.Exclusive,
+            queue,
+            MemoryPropertyFlags.MemoryPropertyHostVisibleBit | MemoryPropertyFlags.MemoryPropertyHostCoherentBit,
+            true);
 
         var stagingBufferPtr = MemoryManager.Map(stagingBuffer.Memory);
 
-        var targetData = new Span<VoxelRenderData>((void*) stagingBufferPtr, (int) dataCount);
-        var sourceData = _octree.Data.renderData.AsSpan(0, (int) dataCount);
-        sourceData.CopyTo(targetData);
+        var header = new OctreeHeader
+        {
+            NodeCount = nodeCount
+        };
+
+        *(OctreeHeader*) stagingBufferPtr = header;
+
+        var srcNodes = _octree.Nodes.AsSpan(0, (int) _octree.NodeCount);
+        var dstNodes = new Span<VoxelOctree.Node>((void*) (stagingBufferPtr + (int) headerSize), srcNodes.Length);
+        srcNodes.CopyTo(dstNodes);
+
+        var srcData = _octree.Data.renderData.AsSpan(0, (int) _octree.DataCount);
+        var dstData =
+            new Span<VoxelRenderData>((void*) (stagingBufferPtr + (int) headerSize + (int) (nodeCount * nodeSize)),
+                srcData.Length);
+        srcData.CopyTo(dstData);
 
         MemoryManager.UnMap(stagingBuffer.Memory);
 
-        var commandBuffer = VulkanEngine.GetSingleTimeCommandBuffer();
-        Span<BufferCopy> bufferCopy = stackalloc BufferCopy[]
+        var cb = VulkanEngine.GetSingleTimeCommandBuffer();
+        BufferCopy copy = new()
         {
-            new BufferCopy(0, 0, totalDataSize),
+            Size = _octreeBufferSize,
+            SrcOffset = 0,
+            DstOffset = 0
         };
-        VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, stagingBuffer.Buffer, _dataBuffer.Buffer, bufferCopy);
-        VulkanEngine.ExecuteSingleTimeCommandBuffer(commandBuffer);
 
+        VulkanEngine.Vk.CmdCopyBuffer(cb, stagingBuffer.Buffer, _octreeBuffer.Buffer, 1, copy);
+        VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
         stagingBuffer.Dispose();
     }
 
@@ -320,7 +294,7 @@ public partial class VoxelRender : ARenderSystem
     private void FillOctree()
     {
         int seed = 5;
-        
+
         var noise = new FastNoiseLite(seed);
         noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         noise.SetFrequency(0.02f);
@@ -348,10 +322,12 @@ public partial class VoxelRender : ARenderSystem
                 }
             }
         }
-        
-        Logger.WriteLog($"{placed} voxels placed. {_octree.NodeCount} nodes and {_octree.DataCount} data elements used.", LogImportance.Debug, "VoxelRender");
+
+        Logger.WriteLog(
+            $"{placed} voxels placed. {_octree.NodeCount} nodes and {_octree.DataCount} data elements used.",
+            LogImportance.Debug, "VoxelRender");
     }
-    
+
     protected override unsafe void Execute()
     {
         if (World is null) return;
@@ -448,9 +424,6 @@ public partial class VoxelRender : ARenderSystem
         _cameraDataStagingBuffer.Dispose();
 
         DescriptorSetHandler.FreeDescriptorSet(_octreeDescriptorSet);
-
-        _dataBuffer.Dispose();
-        _nodeBuffer.Dispose();
 
         _octree.Dispose();
 
