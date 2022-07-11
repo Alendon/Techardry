@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using System.Runtime.InteropServices;
+using JetBrains.Annotations;
 using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
@@ -114,7 +115,7 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe void CreateDescriptors()
     {
-        _octreeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree);
+        _octreeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree, 1);
 
         DescriptorBufferInfo octreeBufferInfo = new DescriptorBufferInfo(
             _octreeBuffer.Buffer,
@@ -144,7 +145,7 @@ public partial class VoxelRender : ARenderSystem
 
     struct OctreeHeader
     {
-        public uint NodeCount;
+        [UsedImplicitly] public uint NodeCount;
     }
 
     private unsafe void CreateVoxelBuffer()
@@ -406,6 +407,7 @@ public partial class VoxelRender : ARenderSystem
 
     public override void Dispose()
     {
+        
         foreach (var descriptorSet in _inputAttachmentDescriptorSet)
         {
             DescriptorSetHandler.FreeDescriptorSet(descriptorSet);
@@ -424,6 +426,7 @@ public partial class VoxelRender : ARenderSystem
         _cameraDataStagingBuffer.Dispose();
 
         DescriptorSetHandler.FreeDescriptorSet(_octreeDescriptorSet);
+        _octreeBuffer.Dispose();
 
         _octree.Dispose();
 

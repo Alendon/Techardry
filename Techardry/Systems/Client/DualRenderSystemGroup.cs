@@ -32,6 +32,16 @@ public class DualRenderSystemGroup : ARenderSystemGroup
         base.Setup(systemManager);
     }
 
+    public override unsafe void Dispose()
+    {
+        foreach (var framebuffer in _framebuffers)
+        {
+            VulkanEngine.Vk.DestroyFramebuffer(VulkanEngine.Device, framebuffer, VulkanEngine.AllocationCallback);
+        }
+        
+        base.Dispose();
+    }
+
     private unsafe void CreateFramebuffers()
     {
         _framebuffers = new Framebuffer[VulkanEngine.SwapchainImageCount];

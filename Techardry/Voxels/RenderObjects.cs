@@ -31,7 +31,8 @@ public static class RenderObjects
         },
         BindingFlags = new[]
         {
-            DescriptorBindingFlags.DescriptorBindingPartiallyBoundBit
+            DescriptorBindingFlags.DescriptorBindingPartiallyBoundBit |
+            DescriptorBindingFlags.DescriptorBindingVariableDescriptorCountBit
         },
         CreateFlags = DescriptorSetLayoutCreateFlags.DescriptorSetLayoutCreateUpdateAfterBindPoolBit
     };
