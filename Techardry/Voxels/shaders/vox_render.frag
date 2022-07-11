@@ -349,7 +349,7 @@ bool approxEqual(float a, float b){
 
 bool raycast(vec3 position, Ray ray, out Result result){
 
-    int childIndexModifier = 0;
+    uint childIndexModifier = 0;
     vec3 originalRayDir = ray.direction;
     vec3 originalOrigin = ray.origin;
 
@@ -363,17 +363,17 @@ bool raycast(vec3 position, Ray ray, out Result result){
     if(ray.direction.x < 0){
         ray.origin.x =  position.x * 2 + Dimensions - ray.origin.x;
         ray.direction.x = -ray.direction.x;
-        childIndexModifier |= 4;
+        childIndexModifier |= 4u;
     }
     if(ray.direction.y < 0){
         ray.origin.y = position.y * 2 + Dimensions - ray.origin.y;
         ray.direction.y = -ray.direction.y;
-        childIndexModifier |= 2;
+        childIndexModifier |= 2u;
     }
     if(ray.direction.z < 0){
         ray.origin.z = position.z * 2 + Dimensions - ray.origin.z;
         ray.direction.z = -ray.direction.z;
-        childIndexModifier |= 1;
+        childIndexModifier |= 1u;
     }
 
     vec3 treeMin = position;
