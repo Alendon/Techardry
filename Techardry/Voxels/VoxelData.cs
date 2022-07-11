@@ -27,7 +27,7 @@ public readonly struct VoxelData : IEquatable<VoxelData>
     {
         var renderData = new VoxelRenderData()
         {
-            NotEmpty = Id != BlockIDs.Air ? 1 : 0,
+            NotEmpty = Id != BlockIDs.Air ? 1u : 0,
             Color = BlockHandler.GetBlockColor(Id).Rgba,
             TextureStart = Vector3D<uint>.Zero,
             TextureSize = Vector2D<uint>.Zero

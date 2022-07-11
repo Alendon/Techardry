@@ -36,8 +36,8 @@ public partial class VoxelRender : ARenderSystem
     private MemoryBuffer _cameraDataStagingBuffer;
     private DescriptorSet[] _cameraDataDescriptors = Array.Empty<DescriptorSet>();
 
-    private int totalNodeSize;
-    private int totalDataSize;
+    private uint totalNodeSize;
+    private uint totalDataSize;
 
     private VoxelOctree _octree = new();
 
@@ -164,7 +164,7 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe void CreateNodeBuffer()
     {
-        int nodeSize = Marshal.SizeOf<VoxelOctree.Node>();
+        uint nodeSize = (uint) Marshal.SizeOf<VoxelOctree.Node>();
         var nodeCount = _octree.NodeCount;
         totalNodeSize = nodeSize * nodeCount;
 
@@ -172,18 +172,18 @@ public partial class VoxelRender : ARenderSystem
 
         _nodeBuffer = MemoryBuffer.Create(
             BufferUsageFlags.BufferUsageStorageBufferBit | BufferUsageFlags.BufferUsageTransferDstBit,
-            (ulong) totalNodeSize,
+            totalNodeSize,
             SharingMode.Exclusive,
             queue, MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
 
-        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, (ulong) totalNodeSize,
+        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, totalNodeSize,
             SharingMode.Exclusive, queue,
             MemoryPropertyFlags.MemoryPropertyHostVisibleBit | MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
 
         var stagingBufferPtr = MemoryManager.Map(stagingBuffer.Memory);
 
-        var targetNodes = new Span<VoxelOctree.Node>((void*) stagingBufferPtr, nodeCount);
-        var sourceNodes = _octree.Nodes.AsSpan(0, nodeCount);
+        var targetNodes = new Span<VoxelOctree.Node>((void*) stagingBufferPtr, (int) nodeCount);
+        var sourceNodes = _octree.Nodes.AsSpan(0, (int) nodeCount);
         sourceNodes.CopyTo(targetNodes);
 
         MemoryManager.UnMap(stagingBuffer.Memory);
@@ -191,7 +191,7 @@ public partial class VoxelRender : ARenderSystem
         var commandBuffer = VulkanEngine.GetSingleTimeCommandBuffer();
         Span<BufferCopy> bufferCopy = stackalloc BufferCopy[]
         {
-            new BufferCopy(0, 0, (ulong) totalNodeSize),
+            new BufferCopy(0, 0, totalNodeSize),
         };
         VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, stagingBuffer.Buffer, _nodeBuffer.Buffer, bufferCopy);
         VulkanEngine.ExecuteSingleTimeCommandBuffer(commandBuffer);
@@ -201,7 +201,7 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe void CreateDataBuffer()
     {
-        int dataSize = Marshal.SizeOf<VoxelRenderData>();
+        uint dataSize = (uint) Marshal.SizeOf<VoxelRenderData>();
         var dataCount = _octree.DataCount;
         totalDataSize = dataSize * dataCount;
 
@@ -209,18 +209,18 @@ public partial class VoxelRender : ARenderSystem
 
         _dataBuffer = MemoryBuffer.Create(
             BufferUsageFlags.BufferUsageStorageBufferBit | BufferUsageFlags.BufferUsageTransferDstBit,
-            (ulong) totalDataSize,
+            totalDataSize,
             SharingMode.Exclusive,
             queue, MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
 
-        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, (ulong) totalDataSize,
+        var stagingBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit, totalDataSize,
             SharingMode.Exclusive, queue,
             MemoryPropertyFlags.MemoryPropertyHostVisibleBit | MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
 
         var stagingBufferPtr = MemoryManager.Map(stagingBuffer.Memory);
 
-        var targetData = new Span<VoxelRenderData>((void*) stagingBufferPtr, dataCount);
-        var sourceData = _octree.Data.renderData.AsSpan(0, dataCount);
+        var targetData = new Span<VoxelRenderData>((void*) stagingBufferPtr, (int) dataCount);
+        var sourceData = _octree.Data.renderData.AsSpan(0, (int) dataCount);
         sourceData.CopyTo(targetData);
 
         MemoryManager.UnMap(stagingBuffer.Memory);
@@ -228,7 +228,7 @@ public partial class VoxelRender : ARenderSystem
         var commandBuffer = VulkanEngine.GetSingleTimeCommandBuffer();
         Span<BufferCopy> bufferCopy = stackalloc BufferCopy[]
         {
-            new BufferCopy(0, 0, (ulong) totalDataSize),
+            new BufferCopy(0, 0, totalDataSize),
         };
         VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, stagingBuffer.Buffer, _dataBuffer.Buffer, bufferCopy);
         VulkanEngine.ExecuteSingleTimeCommandBuffer(commandBuffer);

@@ -11,7 +11,7 @@ public struct VoxelRenderData
     public uint Color;
 
     [FieldOffset(sizeof(int))]
-    public int NotEmpty;
+    public uint NotEmpty;
 
     [FieldOffset(sizeof(int) * 2)]
     //Third component represents array index

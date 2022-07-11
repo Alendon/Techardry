@@ -14,7 +14,7 @@ layout (location = 0) out vec3 out_color;
 struct Voxel
 {
     uint color;
-    int not_empty;
+    uint not_empty;
     uint texture_start_x;
     uint texture_start_y;
     uint array_index;
@@ -24,15 +24,15 @@ struct Voxel
 
 struct Node
 {
-    int children[8];
-    int dataIndex;
-    int Index;
-    int ParentIndex;
-    int ParentChildIndex;
-    int Leaf;
-    int ShareData;
-    int Depth;
-    int IsEmpty;
+    uint children[8];
+    uint dataIndex;
+    uint Index;
+    uint ParentIndex;
+    uint ParentChildIndex;
+    uint Leaf;
+    uint ShareData;
+    uint Depth;
+    uint IsEmpty;
 };
 
 struct Ray{
@@ -48,7 +48,7 @@ struct Hit{
 };
 
 
-int ParentChildIndex(Node node)
+uint ParentChildIndex(Node node)
 {
     return node.ParentChildIndex;
 }
@@ -67,7 +67,7 @@ bool SharesDataWithParent(Node node)
     return node.ShareData != 0;
 }
 
-int DepthOfNode(Node node)
+uint DepthOfNode(Node node)
 {
     return node.Depth;
 }
@@ -331,8 +331,8 @@ bool raycast(vec3 position, Ray ray, out Result result){
     //So we use a stack to store the nodes to traverse.
 
     struct StackEntry{
-        int nodeIndex;
-        int lastChildIndex;
+        uint nodeIndex;
+        uint lastChildIndex;
         vec3 t0;
         vec3 t1;
     } stack[MaxDepth + 1];
@@ -425,8 +425,8 @@ bool raycast(vec3 position, Ray ray, out Result result){
 
         vec3 tm = (t0 + t1) * 0.5;
 
-        int lastChildIndex = currentEntry.lastChildIndex;
-        int nextChildIndex;
+        uint lastChildIndex = currentEntry.lastChildIndex;
+        uint nextChildIndex;
         //Get the next child index
         switch(lastChildIndex){
             case -1:{
