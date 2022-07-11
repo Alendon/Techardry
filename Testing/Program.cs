@@ -98,8 +98,7 @@ for (int y = 0; y < image.Height; y++)
             if (tree.ConeTrace(rayPos, rayDir, 0.001f, out var node, out normal))
             {
                 var voxel = tree.GetVoxelRenderDataRef(ref node);
-                var voxelColor = voxel.Color;
-                color.FromVector4(voxelColor);
+                color = new Rgba32(voxel.Color);
             }
         }
         else
@@ -107,8 +106,8 @@ for (int y = 0; y < image.Height; y++)
             if (tree.Raycast(rayPos, rayDir, out var node, out normal))
             {
                 var voxel = tree.GetVoxelRenderDataRef(ref node);
-                var voxelColor = voxel.Color;
-                color.FromVector4(voxelColor);
+                color = new Rgba32(voxel.Color);
+
             }
         }
 

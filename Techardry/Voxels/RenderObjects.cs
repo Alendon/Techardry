@@ -24,14 +24,14 @@ public static class RenderObjects
             new DescriptorSetLayoutBinding
             {
                 Binding = 0,
-                DescriptorCount = 10000,
+                DescriptorCount = 100,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
             },
             new DescriptorSetLayoutBinding
             {
                 Binding = 1,
-                DescriptorCount = 10000,
+                DescriptorCount = 100,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
             },
@@ -39,8 +39,9 @@ public static class RenderObjects
         BindingFlags = new[]
         {
             DescriptorBindingFlags.DescriptorBindingPartiallyBoundBit,
-            
-        }
+            DescriptorBindingFlags.DescriptorBindingPartiallyBoundBit
+        },
+        CreateFlags = DescriptorSetLayoutCreateFlags.DescriptorSetLayoutCreateUpdateAfterBindPoolBit
     };
 
     [RegisterDescriptorSet("camera_data")]
@@ -218,10 +219,10 @@ public static class RenderObjects
                     MaxDepth = 1.0f
                 }},
                 DescriptorSets = new []{
-                    Identifications.DescriptorSetIDs.VoxelOctree,
                     Identifications.DescriptorSetIDs.CameraData,
                     DescriptorSetIDs.SampledTexture,
-                    Identifications.DescriptorSetIDs.InputAttachment
+                    Identifications.DescriptorSetIDs.InputAttachment,
+                    Identifications.DescriptorSetIDs.VoxelOctree,
                 },
                 DynamicStates = new [] {DynamicState.Scissor , DynamicState.Viewport},
                 RasterizationInfo =

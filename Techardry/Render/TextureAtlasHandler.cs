@@ -3,6 +3,7 @@ using JetBrains.Annotations;
 using MintyCore.Identifications;
 using MintyCore.Render;
 using MintyCore.Utils;
+using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 
 namespace Techardry.Render;
@@ -47,7 +48,7 @@ public static class TextureAtlasHandler
 
         var cb = VulkanEngine.GetSingleTimeCommandBuffer();
 
-        for (var index = 0; index < textures.Length; index++)
+        for (var index = 0u; index < textures.Length; index++)
         {
             var texture = textures[index];
 
@@ -64,7 +65,7 @@ public static class TextureAtlasHandler
                 AspectMask = ImageAspectFlags.ImageAspectColorBit,
                 LayerCount = 1,
                 MipLevel = 0,
-                BaseArrayLayer = (uint) index
+                BaseArrayLayer = index
             };
 
             var copy = new ImageCopy()
@@ -79,18 +80,18 @@ public static class TextureAtlasHandler
             var oldSrcLayout = texture.tex.GetImageLayout(0, 0);
             texture.tex.TransitionImageLayout(cb, 0, 1, 0, 1, ImageLayout.TransferSrcOptimal);
 
-            var oldDstLayout = atlas.GetImageLayout(0, (uint) index);
-            atlas.TransitionImageLayout(cb, 0, 1, (uint) index, 1, ImageLayout.TransferDstOptimal);
+            var oldDstLayout = atlas.GetImageLayout(0, index);
+            atlas.TransitionImageLayout(cb, 0, 1, index, 1, ImageLayout.TransferDstOptimal);
 
 
             VulkanEngine.Vk.CmdCopyImage(cb, texture.tex.Image, ImageLayout.TransferSrcOptimal, atlas.Image,
                 ImageLayout.TransferDstOptimal, 1, copy);
 
             texture.tex.TransitionImageLayout(cb, 0, 1, 0, 1, oldSrcLayout);
-            atlas.TransitionImageLayout(cb, 0, 1, (uint) index, 1, oldDstLayout);
+            atlas.TransitionImageLayout(cb, 0, 1, index, 1, oldDstLayout);
 
-            textureLocationInfos[texture.id] = new AtlasLocationInfo(Vector2.Zero,
-                new Vector2((float) texture.tex.Width / atlas.Width, (float) texture.tex.Height / atlas.Height), index);
+            textureLocationInfos[texture.id] = new AtlasLocationInfo(Vector2D<uint>.Zero,
+                new Vector2D<uint>(texture.tex.Width, texture.tex.Height), index);
         }
 
         VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
@@ -240,4 +241,4 @@ public static class TextureAtlasHandler
     }
 }
 
-public record struct AtlasLocationInfo([UsedImplicitly] Vector2 Position, Vector2 Size, int ArrayIndex);
+public record struct AtlasLocationInfo([UsedImplicitly] Vector2D<uint> Position, Vector2D<uint> Size, uint ArrayIndex);

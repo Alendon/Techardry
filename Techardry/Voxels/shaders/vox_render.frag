@@ -13,16 +13,13 @@ layout (location = 0) out vec3 out_color;
 
 struct Voxel
 {
-    float color_r;
-    float color_g;
-    float color_b;
-    float color_a;
+    uint color;
     int not_empty;
-    float texture_start_x;
-    float texture_start_y;
-    float array_index;
-    float texture_size_x;
-    float texture_size_y;
+    uint texture_start_x;
+    uint texture_start_y;
+    uint array_index;
+    uint texture_size_x;
+    uint texture_size_y;
 };
 
 struct Node
@@ -75,18 +72,6 @@ int DepthOfNode(Node node)
     return node.Depth;
 }
 
-
-layout(std430, set = 0, binding = 0) readonly buffer OctreeNodes
-{
-    Node nodes[];
-} nodes[];
-
-layout(std430, set = 0, binding = 1) readonly buffer OctreeData
-{
-    Voxel voxels[];
-} data[];
-
-
 struct CameraDataStruct{
     float HFov;
     float AspectRatio;
@@ -103,16 +88,25 @@ struct CameraDataStruct{
     float Far;
 };
 
-layout(set = 1, binding = 0) readonly uniform CameraData
+layout(set = 0, binding = 0) readonly uniform CameraData
 {
     CameraDataStruct data;
 } camera;
 
-layout(set = 2, binding = 0) uniform sampler2DArray tex;
+layout(set = 1, binding = 0) uniform sampler2DArray tex;
 
-layout (input_attachment_index = 0, set = 3, binding = 0) uniform subpassInput inDepth;
-layout (input_attachment_index = 1, set = 3, binding = 1) uniform subpassInput inColor;
+layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
+layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
 
+layout(std430, set = 3, binding = 0) readonly buffer OctreeNodes
+{
+    Node nodes[];
+} nodes[];
+
+layout(std430, set = 3, binding = 1) readonly buffer OctreeData
+{
+    Voxel voxels[];
+} data[];
 
 struct Result{
     Node node;
@@ -217,13 +211,13 @@ void main()
     float newDepth = delinearizeDepth(hitDepth);
     gl_FragDepth = newDepth;
 
-    
+    #define TextureSize 128.
 
     Voxel voxel = data[0].voxels[result.node.dataIndex];
 
-    vec3 texStart = vec3(voxel.texture_start_x, voxel.texture_start_y, voxel.array_index);
+    vec3 texStart = vec3(voxel.texture_start_x / TextureSize, voxel.texture_start_y / TextureSize, voxel.array_index);
     
-    vec2 texSize = vec2(voxel.texture_size_x, voxel.texture_size_y);
+    vec2 texSize = vec2(voxel.texture_size_x / TextureSize, voxel.texture_size_y / TextureSize);
     out_color = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
 
 

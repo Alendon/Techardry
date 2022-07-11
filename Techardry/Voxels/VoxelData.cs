@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
 using MintyCore.Utils;
+using Silk.NET.Maths;
 using Techardry.Blocks;
 using Techardry.Identifications;
 using Techardry.Render;
@@ -27,9 +28,9 @@ public readonly struct VoxelData : IEquatable<VoxelData>
         var renderData = new VoxelRenderData()
         {
             NotEmpty = Id != BlockIDs.Air ? 1 : 0,
-            Color = BlockHandler.GetBlockColor(Id).ToVector4(),
-            TextureStart = Vector3.Zero,
-            TextureSize = Vector2.Zero
+            Color = BlockHandler.GetBlockColor(Id).Rgba,
+            TextureStart = Vector3D<uint>.Zero,
+            TextureSize = Vector2D<uint>.Zero
         };
 
         var textureId = BlockHandler.GetBlockTexture(Id);
@@ -38,8 +39,8 @@ public readonly struct VoxelData : IEquatable<VoxelData>
         if (!TextureAtlasHandler.TryGetAtlasLocation(TextureAtlasIDs.BlockTexture, textureId, out var info))
             return renderData;
         
-        renderData.TextureStart = new Vector3(info.Position.X, info.Position.Y, info.ArrayIndex);
-        renderData.TextureSize = new Vector2(info.Size.X, info.Size.Y);
+        renderData.TextureStart = new Vector3D<uint>(info.Position.X, info.Position.Y, info.ArrayIndex);
+        renderData.TextureSize = new Vector2D<uint>(info.Size.X, info.Size.Y);
         
         return renderData;
     }

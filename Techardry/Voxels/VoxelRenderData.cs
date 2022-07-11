@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using System.Runtime.InteropServices;
+using Silk.NET.Maths;
 
 namespace Techardry.Voxels;
 
@@ -7,15 +8,15 @@ namespace Techardry.Voxels;
 public struct VoxelRenderData
 {
     [FieldOffset(0)]
-    public Vector4 Color;
+    public uint Color;
 
-    [FieldOffset(sizeof(float) * 4)]
+    [FieldOffset(sizeof(int))]
     public int NotEmpty;
 
-    [FieldOffset(sizeof(float) * 5)]
+    [FieldOffset(sizeof(int) * 2)]
     //Third component represents array index
-    public Vector3 TextureStart;
+    public Vector3D<uint> TextureStart;
     
-    [FieldOffset(sizeof(float) * 8)]
-    public Vector2 TextureSize;
+    [FieldOffset(sizeof(int) * 5)]
+    public Vector2D<uint> TextureSize;
 }

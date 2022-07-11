@@ -325,12 +325,14 @@ public partial class VoxelRender : ARenderSystem
         noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         noise.SetFrequency(0.02f);
 
+        int placed = 0;
         for (int x = 0; x < VoxelOctree.Dimensions; x++)
         {
             for (int z = 0; z < VoxelOctree.Dimensions; z++)
             {
                 for (int y = 0; y < 6; y++)
                 {
+                    placed++;
                     _octree.Insert(new VoxelData(BlockIDs.Stone), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
                 }
 
@@ -341,14 +343,13 @@ public partial class VoxelRender : ARenderSystem
 
                 for (int y = 6; y < 7 + noiseValue; y++)
                 {
-                    if (x == 3 && z == 15 && y == 9)
-                    {
-                    }
-
+                    placed++;
                     _octree.Insert(new VoxelData(BlockIDs.Dirt), new Vector3(x, y, z), VoxelOctree.SizeOneDepth);
                 }
             }
         }
+        
+        Logger.WriteLog($"{placed} voxels placed. {_octree.NodeCount} nodes and {_octree.DataCount} data elements used.", LogImportance.Debug, "VoxelRender");
     }
     
     protected override unsafe void Execute()
@@ -411,10 +412,10 @@ public partial class VoxelRender : ARenderSystem
 
         Span<DescriptorSet> descriptorSets = stackalloc DescriptorSet[]
         {
-            _octreeDescriptorSet,
             _cameraDataDescriptors[VulkanEngine.ImageIndex],
             atlasDescriptorSet,
-            _inputAttachmentDescriptorSet[VulkanEngine.ImageIndex]
+            _inputAttachmentDescriptorSet[VulkanEngine.ImageIndex],
+            _octreeDescriptorSet,
         };
 
 

@@ -42,11 +42,14 @@ public partial class TechardryMod : IMod
     {
         Instance = this;
         VulkanEngine.AddDeviceExtension(ModName, "VK_KHR_shader_non_semantic_info", true);
-        VulkanEngine.AddDeviceFeatureExension(new PhysicalDeviceDescriptorIndexingFeaturesEXT()
+        VulkanEngine.AddDeviceFeatureExension(new PhysicalDeviceVulkan12Features()
         {
-            SType = StructureType.PhysicalDeviceDescriptorIndexingFeaturesExt,
+            SType = StructureType.PhysicalDeviceVulkan12Features,
             RuntimeDescriptorArray = true,
-            DescriptorBindingPartiallyBound = true
+            DescriptorBindingPartiallyBound = true,
+            ShaderStorageBufferArrayNonUniformIndexing = true,
+            DescriptorBindingVariableDescriptorCount = true,
+            
         });
     }
 
