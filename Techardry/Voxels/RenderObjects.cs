@@ -15,6 +15,21 @@ public static class RenderObjects
     
     [RegisterShader("voxel_vert","voxels/vox_render_vert.spv")]
     public static ShaderInfo VoxelVert => new (ShaderStageFlags.ShaderStageVertexBit);
+
+    [RegisterDescriptorSet("master_octree")]
+    public static DescriptorSetInfo MasterOctree => new()
+    {
+        Bindings = new[]
+        {
+            new DescriptorSetLayoutBinding()
+            {
+                Binding = 0,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageBuffer,
+                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
+            }
+        }
+    };
     
     [RegisterDescriptorSet("voxel_octree")]
     public static DescriptorSetInfo VoxelOctreeNodes => new()
@@ -215,6 +230,7 @@ public static class RenderObjects
                     Identifications.DescriptorSetIDs.CameraData,
                     DescriptorSetIDs.SampledTexture,
                     Identifications.DescriptorSetIDs.InputAttachment,
+                    Identifications.DescriptorSetIDs.MasterOctree,
                     Identifications.DescriptorSetIDs.VoxelOctree,
                 },
                 DynamicStates = new [] {DynamicState.Scissor , DynamicState.Viewport},

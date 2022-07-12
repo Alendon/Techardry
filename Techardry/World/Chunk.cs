@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
-using BepuUtilities;
 using MintyCore.Utils;
 using Techardry.Blocks;
+using Techardry.Utils;
 using Techardry.Voxels;
 
 namespace Techardry.World;
@@ -9,13 +9,14 @@ namespace Techardry.World;
 public class Chunk
 {
     public Int3 Position { get; }
-    private readonly VoxelOctree _octree;
+    internal VoxelOctree Octree { get; }
 
     public Chunk(Int3 chunkPos)
     {
         Position = chunkPos;
-        _octree = new VoxelOctree();
+        Octree = new VoxelOctree();
     }
+    
 
     public void SetBlock(Vector3 blockPos, Identification blockId, BlockRotation rotation = BlockRotation.None)
     {
@@ -31,7 +32,7 @@ public class Chunk
         Logger.AssertAndThrow(rotation == BlockRotation.None || BlockHandler.IsBlockRotatable(blockId),
             "Invalid block placement rotation", "World");
         
-        _octree.Insert(new VoxelData(blockId), blockPos, depth);
+        Octree.Insert(new VoxelData(blockId), blockPos, depth);
     }
 }
 
