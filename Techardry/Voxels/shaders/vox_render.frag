@@ -50,11 +50,7 @@ layout(set = 1, binding = 0) uniform sampler2DArray tex;
 layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
 layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
 
-layout(std430, set = 3, binding = 0) readonly buffer MasterOctree{
-    int data;
-} masterOctree;
-
-layout(std430, set = 4, binding = 0) readonly buffer Octree
+layout(std430, set = 3, binding = 0) readonly buffer Octree
 {
     uint nodeCount;
     uint data[];
