@@ -1,9 +1,9 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using MintyCore.Physics;
 using MintyCore.Utils;
-using Silk.NET.Maths;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
 using Techardry.Utils;
@@ -13,7 +13,7 @@ namespace Techardry.World;
 
 public class TechardryWorld : MintyCore.ECS.World
 {
-    private Dictionary<Int3, Chunk> _chunks = new();
+    private ConcurrentDictionary<Int3, Chunk> _chunks = new();
 
     internal void CreateChunk(Int3 chunkPos)
     {
@@ -23,7 +23,7 @@ public class TechardryWorld : MintyCore.ECS.World
         }
 
         var chunk = new Chunk(chunkPos);
-        _chunks.Add(chunkPos, chunk);
+        _chunks.TryAdd(chunkPos, chunk);
     }
 
     public bool TryGetChunk(Int3 chunkPos, [MaybeNullWhen(false)] out Chunk chunk)
@@ -54,7 +54,7 @@ public class TechardryWorld : MintyCore.ECS.World
         Int3 ChunkRadius = new()
         {
             X = 5,
-            Y = 0,
+            Y = 1,
             Z = 5
         };
 
@@ -68,6 +68,8 @@ public class TechardryWorld : MintyCore.ECS.World
         noise.SetFrequency(0.02f);
         
         Stopwatch sw = Stopwatch.StartNew();
+        
+        List<Task> tasks = new();
 
         for(ChunkPos.X = -ChunkRadius.X; ChunkPos.X <= ChunkRadius.X; ChunkPos.X++)
         {
@@ -75,10 +77,17 @@ public class TechardryWorld : MintyCore.ECS.World
             {
                 for(ChunkPos.Z = -ChunkRadius.Z; ChunkPos.Z <= ChunkRadius.Z; ChunkPos.Z++)
                 {
-                    CreateAndFillChunk(ChunkPos, noise);
+                    tasks.Add(Start(ChunkPos));
+
+                    Task Start(Int3 pos)
+                    {
+                        return Task.Run(() => CreateAndFillChunk(pos, noise!));
+                    }
                 }
             }
         }
+        
+        Task.WaitAll(tasks.ToArray());
         
         sw.Stop();
         Logger.WriteLog($"Chunk gen took {sw.ElapsedMilliseconds}ms", LogImportance.Debug, "TechardryWorld");
