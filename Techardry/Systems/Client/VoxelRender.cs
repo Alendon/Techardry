@@ -25,7 +25,6 @@ public partial class VoxelRender : ARenderSystem
 {
     [ComponentQuery] private ComponentQuery<object, (Camera, Position)> _cameraQuery = new();
 
-    private Mesh _mesh;
     private MemoryBuffer _octreeBuffer;
     private ulong _octreeBufferSize;
     private DescriptorSet _octreeDescriptorSet;
@@ -42,20 +41,6 @@ public partial class VoxelRender : ARenderSystem
     public override void Setup(SystemManager systemManager)
     {
         _cameraQuery.Setup(this);
-
-        Span<Vertex> vertices = stackalloc Vertex[]
-        {
-            new Vertex(new Vector3(-1, 1, 0), Vector3.Zero, Vector3.Zero, Vector2.Zero),
-            new Vertex(new Vector3(-1, -1, 0), Vector3.Zero, Vector3.Zero, Vector2.Zero),
-            new Vertex(new Vector3(1, -1, 0), Vector3.Zero, Vector3.Zero, Vector2.Zero),
-
-            new Vertex(new Vector3(-1, 1, 0), Vector3.Zero, Vector3.Zero, Vector2.Zero),
-            new Vertex(new Vector3(1, -1, 0), Vector3.Zero, Vector3.Zero, Vector2.Zero),
-            new Vertex(new Vector3(1, 1, 0), Vector3.Zero, Vector3.Zero, Vector2.Zero),
-        };
-
-        _mesh = MeshHandler.CreateDynamicMesh(vertices, (uint) vertices.Length);
-
 
         FillOctree();
         CreateVoxelBuffer();
@@ -369,7 +354,6 @@ public partial class VoxelRender : ARenderSystem
 
         var vk = VulkanEngine.Vk;
         vk.CmdBindPipeline(CommandBuffer, PipelineBindPoint.Graphics, pipeline);
-        vk.CmdBindVertexBuffers(CommandBuffer, 0, 1, _mesh.MemoryBuffer.Buffer, 0);
 
         Span<Viewport> viewports = stackalloc Viewport[]
         {
@@ -400,7 +384,7 @@ public partial class VoxelRender : ARenderSystem
             (uint) descriptorSets.Length,
             descriptorSets, 0, (uint*) null);
 
-        vk.CmdDraw(CommandBuffer, _mesh.VertexCount, 1, 0, 0);
+        vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
     }
 
     public override Identification Identification => SystemIDs.VoxelRender;
@@ -430,7 +414,6 @@ public partial class VoxelRender : ARenderSystem
 
         _octree.Dispose();
 
-        _mesh.Dispose();
         base.Dispose();
     }
 

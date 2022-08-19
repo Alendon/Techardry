@@ -248,8 +248,8 @@ public static class RenderObjects
                     }
                 },
                 DepthStencilInfo = default,
-                VertexAttributeDescriptions = Vertex.GetVertexAttributes(),
-                VertexInputBindingDescriptions = new[] {Vertex.GetVertexBinding()}
+                VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
+                VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>()
             };
         }
     }
