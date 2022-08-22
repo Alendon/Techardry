@@ -1,7 +1,10 @@
-﻿using JetBrains.Annotations;
+﻿using System.Diagnostics;
+using System.Numerics;
+using JetBrains.Annotations;
 
 namespace Techardry.Utils;
 
+[DebuggerDisplay("<{X}. {Y}. {Z}>")]
 [PublicAPI]
 public struct Int3 : IEquatable<Int3>
 {
@@ -82,7 +85,15 @@ public struct Int3 : IEquatable<Int3>
     {
         return new Int3(-value.X, -value.Y, -value.Z);
     }
-    
+
+    public static Int3 One => new(1);
+    public static Int3 Zero => new(0);
+    public static Int3 UnitX => new(1, 0, 0);
+    public static Int3 UnitY => new(0, 1, 0);
+    public static Int3 UnitZ => new(0, 0, 1);
+    public static Int3 MinValue => new(int.MinValue);
+    public static Int3 MaxValue => new(int.MaxValue);
+
     public static Int3 Abs(Int3 value)
     {
         return new Int3(Math.Abs(value.X), Math.Abs(value.Y), Math.Abs(value.Z));

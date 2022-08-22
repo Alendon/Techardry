@@ -54,9 +54,9 @@ public class TechardryWorld : MintyCore.ECS.World
 
         Int3 ChunkRadius = new()
         {
-            X = 5,
+            X = 2,
             Y = 1,
-            Z = 5
+            Z = 2
         };
 
         Int3 ChunkPos = default;
@@ -70,11 +70,11 @@ public class TechardryWorld : MintyCore.ECS.World
         
         Stopwatch sw = Stopwatch.StartNew();
         
-        for(ChunkPos.X = -ChunkRadius.X; ChunkPos.X <= ChunkRadius.X; ChunkPos.X++)
+        for(ChunkPos.X = -ChunkRadius.X; ChunkPos.X < ChunkRadius.X; ChunkPos.X++)
         {
-            for(ChunkPos.Y = -ChunkRadius.Y; ChunkPos.Y <= ChunkRadius.Y; ChunkPos.Y++)
+            for(ChunkPos.Y = 0; ChunkPos.Y < 1; ChunkPos.Y++)
             {
-                for(ChunkPos.Z = -ChunkRadius.Z; ChunkPos.Z <= ChunkRadius.Z; ChunkPos.Z++)
+                for(ChunkPos.Z = -ChunkRadius.Z; ChunkPos.Z < ChunkRadius.Z; ChunkPos.Z++)
                 {
                     CreateChunk(ChunkPos);
 
@@ -98,19 +98,27 @@ public class TechardryWorld : MintyCore.ECS.World
         {
             for (int z = 0; z < VoxelOctree.Dimensions; z++)
             {
+                Vector3 pos = new()
+                {
+                    X = x ,
+                    Y = 0,
+                    Z = z
+                };
                 for (int y = 0; y < 6; y++)
                 {
-                    chunk.SetBlock(new Vector3(x, y, z), BlockIDs.Stone);
+                    pos.Y = y;
+                    chunk.SetBlock(pos, BlockIDs.Stone);
                 }
 
-                var noiseValue = fastNoiseLite.GetNoise(x, z);
+                var noiseValue = fastNoiseLite.GetNoise(x + chunk.Position.X * VoxelOctree.Dimensions, z+ chunk.Position.Z * VoxelOctree.Dimensions);
                 noiseValue += 0.5f;
                 noiseValue /= 0.5f;
                 noiseValue *= 6;
 
                 for (int y = 6; y < 7 + noiseValue; y++)
                 {
-                    chunk.SetBlock(new Vector3(x, y, z), BlockIDs.Dirt);
+                    pos.Y = y;
+                    chunk.SetBlock(pos, BlockIDs.Dirt);
                 }
             }
         }
