@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using MintyCore.Physics;
 using MintyCore.Utils;
 using Techardry.Identifications;
@@ -69,60 +70,49 @@ public class TechardryWorld : MintyCore.ECS.World
         
         Stopwatch sw = Stopwatch.StartNew();
         
-        List<Task> tasks = new();
-
         for(ChunkPos.X = -ChunkRadius.X; ChunkPos.X <= ChunkRadius.X; ChunkPos.X++)
         {
             for(ChunkPos.Y = -ChunkRadius.Y; ChunkPos.Y <= ChunkRadius.Y; ChunkPos.Y++)
             {
                 for(ChunkPos.Z = -ChunkRadius.Z; ChunkPos.Z <= ChunkRadius.Z; ChunkPos.Z++)
                 {
-                    tasks.Add(Start(ChunkPos));
+                    CreateChunk(ChunkPos);
 
-                    Task Start(Int3 pos)
+                    if (!TryGetChunk(ChunkPos, out var chunk))
                     {
-                        return Task.Run(() => CreateAndFillChunk(pos, noise!));
+                        continue;
                     }
+                    
+                    FillChunk(chunk, noise);
                 }
             }
         }
-        
-        Task.WaitAll(tasks.ToArray());
         
         sw.Stop();
         Logger.WriteLog($"Chunk gen took {sw.ElapsedMilliseconds}ms", LogImportance.Debug, "TechardryWorld");
-
-        void CreateAndFillChunk(Int3 chunkPos, FastNoiseLite fastNoiseLite)
+    }
+    
+    void FillChunk(Chunk chunk, FastNoiseLite fastNoiseLite)
+    {
+        for (int x = 0; x < VoxelOctree.Dimensions; x++)
         {
-            CreateChunk(chunkPos);
-
-            if (!TryGetChunk(chunkPos, out var chunk))
+            for (int z = 0; z < VoxelOctree.Dimensions; z++)
             {
-                return;
-            }
-
-
-            for (int x = 0; x < VoxelOctree.Dimensions; x++)
-            {
-                for (int z = 0; z < VoxelOctree.Dimensions; z++)
+                for (int y = 0; y < 6; y++)
                 {
-                    for (int y = 0; y < 6; y++)
-                    {
-                        chunk.SetBlock(new Vector3(x, y, z), BlockIDs.Stone);
-                    }
+                    chunk.SetBlock(new Vector3(x, y, z), BlockIDs.Stone);
+                }
 
-                    var noiseValue = fastNoiseLite.GetNoise(x, z);
-                    noiseValue += 0.5f;
-                    noiseValue /= 0.5f;
-                    noiseValue *= 6;
+                var noiseValue = fastNoiseLite.GetNoise(x, z);
+                noiseValue += 0.5f;
+                noiseValue /= 0.5f;
+                noiseValue *= 6;
 
-                    for (int y = 6; y < 7 + noiseValue; y++)
-                    {
-                        chunk.SetBlock(new Vector3(x, y, z), BlockIDs.Dirt);
-                    }
+                for (int y = 6; y < 7 + noiseValue; y++)
+                {
+                    chunk.SetBlock(new Vector3(x, y, z), BlockIDs.Dirt);
                 }
             }
         }
-
     }
 }

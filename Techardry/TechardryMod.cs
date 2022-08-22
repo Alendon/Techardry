@@ -69,7 +69,7 @@ public partial class TechardryMod : IMod
             world.EntityManager.SetComponent(entity, camera);
 
             var position = world.EntityManager.GetComponent<Position>(entity);
-            position.Value = new Vector3(0, 0, -64);
+            position.Value = new Vector3(32, 0, -64);
             world.EntityManager.SetComponent(entity, position);
 
             var box = world.EntityManager.CreateEntity(ArchetypeIDs.TestRender, null);

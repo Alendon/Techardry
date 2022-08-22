@@ -3,7 +3,6 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 #define Dimensions 16
-#define ChildCount 8
 #define MaxDepth 10
 #define printf debugPrintfEXT
 
@@ -14,15 +13,6 @@ layout (location = 0) out vec3 out_color;
 struct Ray{
     vec3 origin, direction, inverseDirection;
 };
-
-struct Hit{
-    vec3 position;
-    float t;
-    float tMax;
-    float tMin;
-    vec3 normal;
-};
-
 
 struct CameraDataStruct{
     float HFov;
@@ -50,7 +40,28 @@ layout(set = 1, binding = 0) uniform sampler2DArray tex;
 layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
 layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
 
-layout(std430, set = 3, binding = 0) readonly buffer Octree
+layout(std430, set = 3, binding = 0) readonly buffer MasterOctree
+{
+    int minX;
+    int minY;
+    int minZ;
+    int dimension;
+    int depth;
+    int data[];
+} masterOctree;
+
+/*struct MasterOctree{
+    int minX;
+    int minY;
+    int minZ;
+    int dimension;
+    int depth;
+    int data[8];
+};
+
+MasterOctree masterOctree = MasterOctree(-Dimensions, -Dimensions, -Dimensions, Dimensions * 2, 1, int[8](-1, -1, -1, -1, -1, -1, -1, -1));*/
+
+layout(std430, set = 4, binding = 0) readonly buffer Octree
 {
     uint nodeCount;
     uint data[];
@@ -175,39 +186,7 @@ struct Result{
 };
 
 
-bool raycast(vec3 position, Ray ray, out Result result);
-
-mat4 rotation3d(vec3 axis, float angle) {
-  axis = normalize(axis);
-  float s = sin(angle);
-  float c = cos(angle);
-  float oc = 1.0 - c;
-
-  return mat4(
-    oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
-    oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
-    oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
-    0.0,                                0.0,                                0.0,                                1.0
-  );
-}
-
-
-mat4 rotationMatrix(vec3 axis, float angle) {
-    axis = normalize(axis);
-    float s = sin(angle);
-    float c = cos(angle);
-    float oc = 1.0 - c;
-    
-    return mat4(oc * axis.x * axis.x + c,           oc * axis.x * axis.y - axis.z * s,  oc * axis.z * axis.x + axis.y * s,  0.0,
-                oc * axis.x * axis.y + axis.z * s,  oc * axis.y * axis.y + c,           oc * axis.y * axis.z - axis.x * s,  0.0,
-                oc * axis.z * axis.x - axis.y * s,  oc * axis.y * axis.z + axis.x * s,  oc * axis.z * axis.z + c,           0.0,
-                0.0,                                0.0,                                0.0,                                1.0);
-}
-
-vec3 rotate(vec3 v, vec3 axis, float angle) {
-	mat4 m = rotationMatrix(axis, angle);
-	return (m * vec4(v, 1.0)).xyz;
-}
+bool raycast(Ray ray, out Result result);
 
 float linearDepth(float depth)
 {
@@ -255,7 +234,7 @@ void main()
 
     Result result;
 
-    if(!raycast(octreePosition, ray, result)){
+    if(!raycast(ray, result)){
         out_color = oldColor;
         return;
     }
@@ -343,49 +322,36 @@ int nextNode(vec3 tm, ivec3 c){
     
 }
 
-bool approxEqual(float a, float b){
-    return abs(a - b) < 0.00001;
-}
+bool raycast(Ray ray, out Result result){
+    vec3 treeMin = vec3(masterOctree.minX, masterOctree.minY, masterOctree.minZ);
+    vec3 treeMax = treeMin + masterOctree.dimension;
 
-bool raycast(vec3 position, Ray ray, out Result result){
-
-    uint childIndexModifier = 0;
-    vec3 originalRayDir = ray.direction;
-    vec3 originalOrigin = ray.origin;
-
-/*
- *  Prepare some stuff
- */
-
+    int childIndexModifier = 0;
     ray.direction = normalize(ray.direction);
+    Ray originalRay = ray;
 
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
     if(ray.direction.x < 0){
-        ray.origin.x =  position.x * 2 + Dimensions - ray.origin.x;
+        ray.origin.x =  treeMin.x * 2 + masterOctree.dimension - ray.origin.x;
         ray.direction.x = -ray.direction.x;
-        childIndexModifier |= 4u;
+        childIndexModifier |= 4;
     }
     if(ray.direction.y < 0){
-        ray.origin.y = position.y * 2 + Dimensions - ray.origin.y;
+        ray.origin.y = treeMin.y * 2 + masterOctree.dimension - ray.origin.y;
         ray.direction.y = -ray.direction.y;
-        childIndexModifier |= 2u;
+        childIndexModifier |= 2;
     }
     if(ray.direction.z < 0){
-        ray.origin.z = position.z * 2 + Dimensions - ray.origin.z;
+        ray.origin.z = treeMin.z * 2 + masterOctree.dimension - ray.origin.z;
         ray.direction.z = -ray.direction.z;
-        childIndexModifier |= 1u;
+        childIndexModifier |= 1;
     }
-
-    vec3 treeMin = position;
-    vec3 treeMax = position + Dimensions;
-
 
     vec3 dirInverse = 1 / ray.direction;
 
     vec3 t0 = (treeMin - ray.origin) * dirInverse;
     vec3 t1 = (treeMax - ray.origin) * dirInverse;
-
-
+    
     //Early exit if the tree isnt hit
     if(max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
         return false;
@@ -397,13 +363,14 @@ bool raycast(vec3 position, Ray ray, out Result result){
 
     struct StackEntry{
         uint nodeIndex;
-        uint lastChildIndex;
+        int lastChildIndex;
+        int tree;
         vec3 t0;
         vec3 t1;
     } stack[MaxDepth + 1];
 
     int stackIndex = 0;
-    stack[0] = StackEntry(0, -1, t0, t1);
+    stack[0] = StackEntry(0, -1, -1, t0, t1);
 
     while(stackIndex >= 0){
         StackEntry currentEntry = stack[stackIndex];
@@ -418,9 +385,22 @@ bool raycast(vec3 position, Ray ray, out Result result){
             continue;
         }
 
-        if(NodeLeaf(TREE, node) != 0){
+        int currentDepth = stackIndex + 1;
+        int masterOctreeTargetDepth = masterOctree.depth;
+        int tree = currentEntry.tree;
+
+        if( currentDepth == masterOctreeTargetDepth){
+            tree = masterOctree.data[node];
+            node = 0;
+            currentEntry.nodeIndex = 0;
+            if(tree == -1){
+                continue;
+            }
+        }
+        
+        if(tree != -1 && NodeLeaf(tree, node) != 0){
             //We found a leaf.
-            if( NodeIsEmpty(TREE, node) != 0){
+            if( NodeIsEmpty(tree, node) != 0){
                 continue;
             }
             else{
@@ -431,10 +411,10 @@ bool raycast(vec3 position, Ray ray, out Result result){
                    
                     result.t = t0.x;
 
-                    vec3 hitPos = originalOrigin + originalRayDir * result.t;
-                    result.uv = mod(vec2(hitPos.y - position.y, hitPos.z - position.z), 1);
+                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
+                    result.uv = mod(vec2(hitPos.y, hitPos.z), 1);
 
-                    if(originalRayDir.x > 0 ){
+                    if(originalRay.direction.x > 0 ){
                         result.normal = vec3(-1, 0, 0);
 
                         float temp = result.uv.r;
@@ -456,10 +436,10 @@ bool raycast(vec3 position, Ray ray, out Result result){
 
                     result.t = t0.y;
 
-                    vec3 hitPos = originalOrigin + originalRayDir * result.t;
-                    result.uv = mod(vec2(hitPos.x - position.x, hitPos.z - position.z), 1);
+                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
+                    result.uv = mod(vec2(hitPos.x, hitPos.z), 1);
 
-                    if(originalRayDir.y > 0 ){
+                    if(originalRay.direction.y > 0 ){
                         result.normal = vec3(0, -1, 0);
                     }
                     else{
@@ -471,10 +451,10 @@ bool raycast(vec3 position, Ray ray, out Result result){
 
                     result.t = t0.z;
 
-                    vec3 hitPos = originalOrigin + originalRayDir * result.t;
-                    result.uv = mod(vec2(hitPos.x - position.x, hitPos.y - position.y), 1);
+                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
+                    result.uv = mod(vec2(hitPos.x, hitPos.y), 1);
 
-                    if(originalRayDir.z > 0 ){
+                    if(originalRay.direction.z > 0 ){
                         result.normal = vec3(0, 0, -1);
                     }
                     else{
@@ -490,8 +470,8 @@ bool raycast(vec3 position, Ray ray, out Result result){
 
         vec3 tm = (t0 + t1) * 0.5;
 
-        uint lastChildIndex = currentEntry.lastChildIndex;
-        uint nextChildIndex;
+        int lastChildIndex = currentEntry.lastChildIndex;
+        int nextChildIndex;
         //Get the next child index
         switch(lastChildIndex){
             case -1:{
@@ -588,7 +568,15 @@ bool raycast(vec3 position, Ray ray, out Result result){
         stack[stackIndex] = currentEntry;
         
         stackIndex++;
-        stack[stackIndex] = StackEntry( NodeChildren(TREE, node, nextChildIndex ^ childIndexModifier), -1, childT0, childT1);
+
+        uint nodeChildren;
+        if(tree == -1){
+            nodeChildren = node * 8 + (nextChildIndex ^ childIndexModifier);
+        }else{
+            nodeChildren = NodeChildren(tree, node, nextChildIndex ^ childIndexModifier);
+        }
+
+        stack[stackIndex] = StackEntry( nodeChildren, -1, tree, childT0, childT1);
     }
 
 
