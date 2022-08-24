@@ -2,15 +2,58 @@
 
 using System.Diagnostics;
 using System.Numerics;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Text.Json;
 using MintyCore.Utils;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using Techardry.Blocks;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
+using Techardry.Utils;
 using Techardry.Voxels;
 using Techardry.World;
 using MathHelper = Techardry.Utils.MathHelper;
 
+
+var indices = JsonSerializer.Deserialize<Int3[]>(File.ReadAllText("indices.json"));
+
+
+
+for (int i = 0; i < indices.Length; i++)
+{
+    if (!File.Exists($"renderdoc_export_{i}.bin")) continue;
+
+    var fromCode = File.ReadAllBytes($"code_export_{indices[i].X}_{indices[i].Y}_{indices[i].Z}.bin");
+    var fromRenderDoc = File.ReadAllBytes($"renderdoc_export_{i}.bin");
+
+    var codeSpan = fromCode.AsSpan(0, fromRenderDoc.Length);
+    var renderSpan = fromRenderDoc.AsSpan(0);
+    bool equals = codeSpan.SequenceEqual(renderSpan);
+    Console.WriteLine( $"{indices[i]} + {i}: {equals}");
+
+    if(equals) continue;
+
+    int misMatches = 0;
+    
+    
+    for (int j = 0; j < codeSpan.Length; j++)
+    {
+        if (codeSpan[j] != renderSpan[j])
+        {
+            misMatches++;
+        }
+    }
+    
+    Console.WriteLine($"{codeSpan.Length} - {misMatches} : {(double)misMatches/ codeSpan.Length}");
+}
+
+
+
+
+
+return;
 Console.WriteLine("Hello, World!");
 
 MathHelper.BoxIntersect((Vector3.Zero, Vector3.One), (new Vector3(0.5f, 5, 0.5f), new Vector3(0, -1, 0)), out _);

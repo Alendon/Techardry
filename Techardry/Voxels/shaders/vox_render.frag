@@ -183,6 +183,7 @@ struct Result{
     vec3 normal;
     vec2 uv;
     float t;
+    int tree;
 };
 
 
@@ -200,8 +201,6 @@ float delinearizeDepth(float linearDepth)
 {
     return ((- (((2 * camera.data.Near * camera.data.Far) / linearDepth) - camera.data.Far - camera.data.Near) / (camera.data.Far - camera.data.Near)) + 1.0f) / 2.0f;
 }
-
-#define TREE 0
 
 void main()
 {
@@ -253,15 +252,13 @@ void main()
 
     #define TextureSize 128.
 
+    uint voxel = NodeDataIndex(result.tree, result.nodeIndex);
+
+
+
+    vec3 texStart = vec3(VoxelTextureStartX(result.tree, voxel) / TextureSize, VoxelTextureStartY(result.tree, voxel) / TextureSize, VoxelArrayIndex(result.tree, voxel));
     
-
-    uint voxel = NodeDataIndex(TREE, result.nodeIndex);
-
-
-
-    vec3 texStart = vec3(VoxelTextureStartX(TREE, voxel) / TextureSize, VoxelTextureStartY(TREE, voxel) / TextureSize, VoxelArrayIndex(TREE, voxel));
-    
-    vec2 texSize = vec2(VoxelTextureSizeX(TREE, voxel) / TextureSize, VoxelTextureSizeY(TREE, voxel) / TextureSize);
+    vec2 texSize = vec2(VoxelTextureSizeX(result.tree, voxel) / TextureSize, VoxelTextureSizeY(result.tree, voxel) / TextureSize);
     out_color = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
 
 
@@ -389,8 +386,9 @@ bool raycast(Ray ray, out Result result){
         int masterOctreeTargetDepth = masterOctree.depth;
         int tree = currentEntry.tree;
 
-        if( currentDepth == masterOctreeTargetDepth){
+        if( tree == -1 && currentDepth == masterOctreeTargetDepth){
             tree = masterOctree.data[node];
+            currentEntry.tree = tree;
             node = 0;
             currentEntry.nodeIndex = 0;
             if(tree == -1){
@@ -406,6 +404,7 @@ bool raycast(Ray ray, out Result result){
             else{
                 //TODO hit results
                 result.nodeIndex = node;
+                result.tree = tree;
                 
                 if(t0.x > t0.y && t0.x > t0.z){
                    
@@ -416,19 +415,9 @@ bool raycast(Ray ray, out Result result){
 
                     if(originalRay.direction.x > 0 ){
                         result.normal = vec3(-1, 0, 0);
-
-                        float temp = result.uv.r;
-                        result.uv.r = result.uv.g;
-                        result.uv.g = temp;
-
-                        result.uv.r = abs(1 - result.uv.r);
                     }
                     else{
                         result.normal = vec3(1, 0, 0);
-
-                        float temp = result.uv.r;
-                        result.uv.r = result.uv.g;
-                        result.uv.g = temp;
                     }
                 }
                 else if (t0.y > t0.x && t0.y > t0.z){

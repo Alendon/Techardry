@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
+using System.Text.Json.Serialization;
 using JetBrains.Annotations;
 
 namespace Techardry.Utils;
@@ -8,9 +9,9 @@ namespace Techardry.Utils;
 [PublicAPI]
 public struct Int3 : IEquatable<Int3>
 {
-    public int X;
-    public int Y;
-    public int Z;
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Z { get; set; }
     
     public Int3(int x, int y, int z)
     {
@@ -107,6 +108,11 @@ public struct Int3 : IEquatable<Int3>
     public static Int3 Max(Int3 value1, Int3 value2)
     {
         return new Int3(Math.Max(value1.X, value2.X), Math.Max(value1.Y, value2.Y), Math.Max(value1.Z, value2.Z));
+    }
+
+    public override string ToString()
+    {
+        return $"<{X}, {Y}, {Z}>";
     }
 
     public bool Equals(Int3 other)
