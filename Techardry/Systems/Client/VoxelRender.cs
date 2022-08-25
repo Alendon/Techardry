@@ -165,9 +165,11 @@ public partial class VoxelRender : ARenderSystem
             JsonSerializer.Serialize(_chunkDescriptorSetIndices.OrderBy(pair => pair.Value).Select(x => x.Key)));
     }
 
+    [StructLayout(LayoutKind.Explicit)]
     struct OctreeHeader
     {
-        [UsedImplicitly] public uint NodeCount;
+        [UsedImplicitly] [FieldOffset(0)] public uint NodeCount;
+        [UsedImplicitly] [FieldOffset(4)] public Int3 treeMin;
     }
 
     private unsafe void CreateVoxelBuffer()
@@ -179,7 +181,6 @@ public partial class VoxelRender : ARenderSystem
         var dataSize = (uint) Marshal.SizeOf<VoxelRenderData>();
 
         Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
-        
 
 
         foreach (var chunkPos in techardryWorld.GetLoadedChunks())
@@ -206,22 +207,22 @@ public partial class VoxelRender : ARenderSystem
             _chunkOctreeBuffers.Add(chunkPos, buffer);
 
 
-
             MemoryBuffer stagingBuffer = MemoryBuffer.Create(
-                    BufferUsageFlags.BufferUsageTransferSrcBit,
-                    buffer.Size,
-                    SharingMode.Exclusive,
-                    queue,
-                    MemoryPropertyFlags.MemoryPropertyHostVisibleBit |
-                    MemoryPropertyFlags.MemoryPropertyHostCoherentBit,
-                    true);
-            
+                BufferUsageFlags.BufferUsageTransferSrcBit,
+                buffer.Size,
+                SharingMode.Exclusive,
+                queue,
+                MemoryPropertyFlags.MemoryPropertyHostVisibleBit |
+                MemoryPropertyFlags.MemoryPropertyHostCoherentBit,
+                true);
+
 
             var stagingBufferPtr = MemoryManager.Map(stagingBuffer.Memory);
 
             var header = new OctreeHeader
             {
-                NodeCount = nodeCount
+                NodeCount = nodeCount,
+                treeMin = chunkPos
             };
 
             *(OctreeHeader*) stagingBufferPtr = header;
@@ -250,7 +251,7 @@ public partial class VoxelRender : ARenderSystem
 
             VulkanEngine.Vk.CmdCopyBuffer(cb, stagingBuffer.Buffer, buffer.Buffer, 1, copy);
             VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
-            
+
             stagingBuffer.Dispose();
         }
     }
@@ -413,18 +414,21 @@ public partial class VoxelRender : ARenderSystem
                 {
                     var coordinates = new Int3(x, y, z);
                     var chunkCoordinates = chunkMin + coordinates;
-                    if(!_chunkDescriptorSetIndices.TryGetValue(chunkCoordinates, out var descriptorSetIndex))
+                    if (!_chunkDescriptorSetIndices.TryGetValue(chunkCoordinates, out var descriptorSetIndex))
                     {
                         continue;
                     }
 
-                    max = descriptorSetIndex > max ? descriptorSetIndex : max;
-                    
-                    targetNodes[CoordinatesToIndex(coordinates, chunkDiameter)] = 14;
+
+                    targetNodes[CoordinatesToIndex(coordinates, chunkDiameter)] = descriptorSetIndex;
                 }
             }
         }
-        Console.WriteLine(max);
+
+        var stream = new FileStream("master_buffer.bin", FileMode.Create);
+        var data = new Span<byte>(pointer.ToPointer(), (int) stagingBuffer.Size);
+        stream.Write(data);
+        stream.Dispose();
 
         MemoryManager.UnMap(stagingBuffer.Memory);
 

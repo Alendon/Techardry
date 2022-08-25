@@ -64,6 +64,9 @@ MasterOctree masterOctree = MasterOctree(-Dimensions, -Dimensions, -Dimensions, 
 layout(std430, set = 4, binding = 0) readonly buffer Octree
 {
     uint nodeCount;
+    int minX;
+    int minY;
+    int minZ;
     uint data[];
 } trees[];
 
@@ -73,110 +76,110 @@ layout(std430, set = 4, binding = 0) readonly buffer Octree
 uint NodeChildren(uint tree, uint nodeIndex, uint childIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_Children_Offset + childIndex];
 }
-#undef Node_Children_Offset
+    #undef Node_Children_Offset
 
-#define Node_DataIndex_Offset 8
+    #define Node_DataIndex_Offset 8
 uint NodeDataIndex(uint tree, uint nodeIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
 }
-#undef Node_DataIndex_Offset
+    #undef Node_DataIndex_Offset
 
-#define Node_Index_Offset 9
+    #define Node_Index_Offset 9
 uint NodeIndex(uint tree, uint nodeIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_Index_Offset];
 }
-#undef Node_Index_Offset
+    #undef Node_Index_Offset
 
-#define Node_ParentIndex_Offset 10
+    #define Node_ParentIndex_Offset 10
 uint NodeParentIndex(uint tree, uint nodeIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
 }
-#undef Node_ParentIndex_Offset
+    #undef Node_ParentIndex_Offset
 
-#define Node_ParentChildIndex_Offset 11
+    #define Node_ParentChildIndex_Offset 11
 uint NodeParentChildIndex(uint tree, uint nodeIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_ParentChildIndex_Offset];
 }
-#undef Node_ParentChildIndex_Offset
+    #undef Node_ParentChildIndex_Offset
 
-#define Node_Leaf_Offset 12
+    #define Node_Leaf_Offset 12
 uint NodeLeaf(uint tree, uint nodeIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_Leaf_Offset];
 }
-#undef Node_Leaf_Offset
+    #undef Node_Leaf_Offset
 
-#define Node_ShareData_Offset 13
+    #define Node_ShareData_Offset 13
 uint NodeShareData(uint tree, uint nodeIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_ShareData_Offset];
 }
-#undef Node_ShareData_Offset
+    #undef Node_ShareData_Offset
 
-#define Node_Depth_Offset 14
+    #define Node_Depth_Offset 14
 uint NodeDepth(uint tree, uint nodeIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_Depth_Offset];
 }
-#undef Node_Depth_Offset
+    #undef Node_Depth_Offset
 
-#define Node_IsEmpty_Offset 15
+    #define Node_IsEmpty_Offset 15
 uint NodeIsEmpty(uint tree, uint nodeIndex){
     return trees[tree].data[nodeIndex * NodeSize + Node_IsEmpty_Offset];
 }
-#undef Node_IsEmpty_Offset
+    #undef Node_IsEmpty_Offset
 
-#define VoxelSize 7
+    #define VoxelSize 7
 
-#define Voxel_Color_Offset 0
+    #define Voxel_Color_Offset 0
 uint VoxelColor(uint tree, uint voxelIndex){
     uint nodeCount = trees[tree].nodeCount;
     return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
 }
-#undef Voxel_Color_Offset
+    #undef Voxel_Color_Offset
 
-#define Voxel_NotEmpty_Offset 1
+    #define Voxel_NotEmpty_Offset 1
 uint VoxelNotEmpty(uint tree, uint voxelIndex){
     uint nodeCount = trees[tree].nodeCount;
     return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_NotEmpty_Offset];
 }
-#undef Voxel_NotEmpty_Offset
+    #undef Voxel_NotEmpty_Offset
 
-#define Voxel_TextureStartX_Offset 2
+    #define Voxel_TextureStartX_Offset 2
 uint VoxelTextureStartX(uint tree, uint voxelIndex){
     uint nodeCount = trees[tree].nodeCount;
     return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
 }
-#undef Voxel_TextureStartX_Offset
+    #undef Voxel_TextureStartX_Offset
 
-#define Voxel_TextureStartY_Offset 3
+    #define Voxel_TextureStartY_Offset 3
 uint VoxelTextureStartY(uint tree, uint voxelIndex){
     uint nodeCount = trees[tree].nodeCount;
     return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
 }
-#undef Voxel_TextureStartY_Offset
+    #undef Voxel_TextureStartY_Offset
 
-#define Voxel_ArrayIndex_Offset 4
+    #define Voxel_ArrayIndex_Offset 4
 uint VoxelArrayIndex(uint tree, uint voxelIndex){
     uint nodeCount = trees[tree].nodeCount;
     return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
 }
-#undef Voxel_ArrayIndex_Offset
+    #undef Voxel_ArrayIndex_Offset
 
-#define Voxel_TextureSizeX_Offset 5
+    #define Voxel_TextureSizeX_Offset 5
 uint VoxelTextureSizeX(uint tree, uint voxelIndex){
     uint nodeCount = trees[tree].nodeCount;
     return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
 }
-#undef Voxel_TextureSizeX_Offset
+    #undef Voxel_TextureSizeX_Offset
 
-#define Voxel_TextureSizeY_Offset 6
+    #define Voxel_TextureSizeY_Offset 6
 uint VoxelTextureSizeY(uint tree, uint voxelIndex){
     uint nodeCount = trees[tree].nodeCount;
     return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];
 }
-#undef Voxel_TextureSizeY_Offset
+    #undef Voxel_TextureSizeY_Offset
 
-#undef VoxelSize
+    #undef VoxelSize
 
-#undef NodeSize
+    #undef NodeSize
 
 struct Result{
     uint nodeIndex;
@@ -184,15 +187,18 @@ struct Result{
     vec2 uv;
     float t;
     int tree;
+    bool fail;
 };
 
 
-bool raycast(Ray ray, out Result result);
+bool raycast(in Ray ray, inout Result result);
+bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier, inout Result result);
+
 
 float linearDepth(float depth)
 {
-	float z = depth * 2.0f - 1.0f; 
-	return (2.0f * camera.data.Near * camera.data.Far) / (camera.data.Far + camera.data.Near - z * (camera.data.Far - camera.data.Near));	
+    float z = depth * 2.0f - 1.0f;
+    return (2.0f * camera.data.Near * camera.data.Far) / (camera.data.Far + camera.data.Near - z * (camera.data.Far - camera.data.Near));
 }
 
 //delinearize depth to get the depth value in the range [0, 1]
@@ -208,7 +214,7 @@ void main()
     vec3 camPos = vec3(camera.data.PositionX, camera.data.PositionY, camera.data.PositionZ);
 
     vec2 screenPos = vec2(in_position.xy);
-    
+
     vec3 forward = normalize(-camPos);
     vec3 upward = vec3(camera.data.UpwardX, camera.data.UpwardY, camera.data.UpwardZ);
     vec3 right = cross(forward, upward);
@@ -233,19 +239,65 @@ void main()
 
     Result result;
 
-    if(!raycast(ray, result)){
+    int tries = 0;
+    int tree;
+    float t = 1000000000;
+    
+
+    /*for(int tree = 0; tree < 16; tree++){
+        Result lastResult;
+        if(raycastChunk(ray, tree, lastResult)){
+            hit = true;
+            if(lastResult.t < result.t){
+                result = lastResult;
+            }
+        }
+        
+    }*/
+
+    /*while(raycast(ray, tree, t) && !hit && tries < 100){
+        tries++;
+        if(tree >= 0 && tree < 16)
+        {
+            if(raycastChunk(ray, tree, result))
+            {
+                hit = true;
+            }
+        }
+        if(!hit){
+            ray.origin += ray.direction * t;
+        }
+    }*/
+
+    //print hit, tree and t
+
+    bool hit = raycast(ray, result);
+
+    if(result.fail){
+        printf("Failed %d\n", result.tree);
+        out_color = vec3(1,0,0);
+        return;
+    }
+
+    if ( !hit){
         out_color = oldColor;
         return;
     }
+    
+    
+    
+    //out_color = vec3(result.tree / 16.); return;
+
 
     float lDepth = linearDepth(depth);
 
     float hitDepth = result.t - camera.data.Near;
 
-    if(hitDepth > lDepth){
-         out_color = oldColor;
+    if (hitDepth > lDepth){
+        out_color = oldColor;
         return;
     }
+    
 
     float newDepth = delinearizeDepth(hitDepth);
     gl_FragDepth = newDepth;
@@ -257,20 +309,20 @@ void main()
 
 
     vec3 texStart = vec3(VoxelTextureStartX(result.tree, voxel) / TextureSize, VoxelTextureStartY(result.tree, voxel) / TextureSize, VoxelArrayIndex(result.tree, voxel));
-    
+
     vec2 texSize = vec2(VoxelTextureSizeX(result.tree, voxel) / TextureSize, VoxelTextureSizeY(result.tree, voxel) / TextureSize);
     out_color = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
 
 
-    if(result.normal.x != 0)
+    if (result.normal.x != 0)
     {
         out_color *= 0.5;
     }
-    if(result.normal.y != 0)
+    if (result.normal.y != 0)
     {
         out_color *= 0.75;
     }
-    if(result.normal.z != 0)
+    if (result.normal.z != 0)
     {
         out_color *= 1;
     }
@@ -280,46 +332,124 @@ void main()
 int getFirstNode(vec3 t0, vec3 tm){
     int result = 0;
 
-    if(t0.x > t0.y){
-		if(t0.x > t0.z)// PLANE YZ
-        { 
-			if(tm.y < t0.x) result|=2;	// set bit at position 1
-			if(tm.z < t0.x) result|=1;	// set bit at position 0 			
-            return  result; 		           
-        } 	            
-    } 	        
-    else 
-    { 		
-        if(t0.y > t0.z)// PLANE XZ
-        { 
-            if(tm.x < t0.y) result|=4;	// set bit at position 2
-			if(tm.z < t0.y) result|=1;	// set bit at position 0
-			return result;
-		}
-	}
+    if (t0.x > t0.y){
+        if (t0.x > t0.z)// PLANE YZ
+        {
+            if (tm.y < t0.x) result|=2;// set bit at position 1
+            if (tm.z < t0.x) result|=1;// set bit at position 0 			
+            return result;
+        }
+    }
+    else
+    {
+        if (t0.y > t0.z)// PLANE XZ
+        {
+            if (tm.x < t0.y) result|=4;// set bit at position 2
+            if (tm.z < t0.y) result|=1;// set bit at position 0
+            return result;
+        }
+    }
 
-	// PLANE XY
-	if(tm.x < t0.z) result|=4;	// set bit at position 2
-	if(tm.y < t0.z) result|=2;	// set bit at position 1
-	return result;
+    // PLANE XY
+    if (tm.x < t0.z) result|=4;// set bit at position 2
+    if (tm.y < t0.z) result|=2;// set bit at position 1
+    return result;
 }
 
 int nextNode(vec3 tm, ivec3 c){
-    if(tm.x < tm.y){
-        if(tm.x < tm.z){
+    if (tm.x < tm.y){
+        if (tm.x < tm.z){
             return c.x;
         }
     }
-    else{
-        if(tm.y < tm.z){
+    else {
+        if (tm.y < tm.z){
             return c.y;
         }
     }
     return c.z;
-    
+
 }
 
-bool raycast(Ray ray, out Result result){
+int getNextChildIndex(int currentChildIndex, vec3 t0, vec3 t1, vec3 tm){
+    switch (currentChildIndex){
+        case -1:{
+            return getFirstNode(t0, tm);
+        }
+        case 0:{
+            return nextNode(vec3(tm.x, tm.y, tm.z), ivec3(4, 2, 1));
+        }
+        case 1:{
+            return nextNode(vec3(tm.x, tm.y, t1.z), ivec3(5, 3, 8));
+        }
+        case 2:{
+            return nextNode(vec3(tm.x, t1.y, tm.z), ivec3(6, 8, 3));
+        }
+        case 3:{
+            return nextNode(vec3(tm.x, t1.y, t1.z), ivec3(7, 8, 8));
+        }
+        case 4:{
+            return nextNode(vec3(t1.x, tm.y, tm.z), ivec3(8, 6, 5));
+        }
+        case 5:{
+            return nextNode(vec3(t1.x, tm.y, t1.z), ivec3(8, 7, 8));
+        }
+        case 6:{
+            return nextNode(vec3(t1.x, t1.y, tm.z), ivec3(8, 8, 7));
+        }
+        default :{
+            return 8;
+        }
+    }
+}
+
+void getChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out vec3 childT1){
+    switch (childIndex){
+        case 0:{
+            childT0 = vec3(t0.x, t0.y, t0.z);
+            childT1 = vec3(tm.x, tm.y, tm.z);
+            break;
+        }
+        case 1:{
+            childT0 = vec3(t0.x, t0.y, tm.z);
+            childT1 = vec3(tm.x, tm.y, t1.z);
+            break;
+        }
+        case 2:{
+            childT0 = vec3(t0.x, tm.y, t0.z);
+            childT1 = vec3(tm.x, t1.y, tm.z);
+            break;
+        }
+        case 3:{
+            childT0 = vec3(t0.x, tm.y, tm.z);
+            childT1 = vec3(tm.x, t1.y, t1.z);
+            break;
+        }
+        case 4:{
+            childT0 = vec3(tm.x, t0.y, t0.z);
+            childT1 = vec3(t1.x, tm.y, tm.z);
+            break;
+        }
+        case 5:{
+            childT0 = vec3(tm.x, t0.y, tm.z);
+            childT1 = vec3(t1.x, tm.y, t1.z);
+            break;
+        }
+        case 6:{
+            childT0 = vec3(tm.x, tm.y, t0.z);
+            childT1 = vec3(t1.x, t1.y, tm.z);
+            break;
+        }
+        case 7:{
+            childT0 = vec3(tm.x, tm.y, tm.z);
+            childT1 = vec3(t1.x, t1.y, t1.z);
+            break;
+        }
+    }
+}
+
+
+bool raycast(in Ray ray, inout Result result){
     vec3 treeMin = vec3(masterOctree.minX, masterOctree.minY, masterOctree.minZ);
     vec3 treeMax = treeMin + masterOctree.dimension;
 
@@ -328,17 +458,17 @@ bool raycast(Ray ray, out Result result){
     Ray originalRay = ray;
 
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
-    if(ray.direction.x < 0){
+    if (ray.direction.x < 0){
         ray.origin.x =  treeMin.x * 2 + masterOctree.dimension - ray.origin.x;
         ray.direction.x = -ray.direction.x;
         childIndexModifier |= 4;
     }
-    if(ray.direction.y < 0){
+    if (ray.direction.y < 0){
         ray.origin.y = treeMin.y * 2 + masterOctree.dimension - ray.origin.y;
         ray.direction.y = -ray.direction.y;
         childIndexModifier |= 2;
     }
-    if(ray.direction.z < 0){
+    if (ray.direction.z < 0){
         ray.origin.z = treeMin.z * 2 + masterOctree.dimension - ray.origin.z;
         ray.direction.z = -ray.direction.z;
         childIndexModifier |= 1;
@@ -348,9 +478,9 @@ bool raycast(Ray ray, out Result result){
 
     vec3 t0 = (treeMin - ray.origin) * dirInverse;
     vec3 t1 = (treeMax - ray.origin) * dirInverse;
-    
+
     //Early exit if the tree isnt hit
-    if(max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
+    if (max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
         return false;
     }
 
@@ -361,15 +491,24 @@ bool raycast(Ray ray, out Result result){
     struct StackEntry{
         uint nodeIndex;
         int lastChildIndex;
-        int tree;
         vec3 t0;
         vec3 t1;
     } stack[MaxDepth + 1];
 
     int stackIndex = 0;
-    stack[0] = StackEntry(0, -1, -1, t0, t1);
+    stack[0] = StackEntry(0, -1, t0, t1);
+    int counter = 0;
 
-    while(stackIndex >= 0){
+    while (stackIndex >= 0){
+        counter++;
+
+        if(counter > 1000){
+            //result.fail = true;
+            return false;
+        }
+
+        int currentDepth = stackIndex;
+
         StackEntry currentEntry = stack[stackIndex];
         stackIndex--;
 
@@ -378,75 +517,192 @@ bool raycast(Ray ray, out Result result){
 
         uint node = currentEntry.nodeIndex;
 
-        if(t1.x < 0 || t1.y < 0 || t1.z < 0){
+        if (t1.x < 0 || t1.y < 0 || t1.z < 0){
             continue;
         }
 
-        int currentDepth = stackIndex + 1;
         int masterOctreeTargetDepth = masterOctree.depth;
-        int tree = currentEntry.tree;
 
-        if( tree == -1 && currentDepth == masterOctreeTargetDepth){
-            tree = masterOctree.data[node];
-            currentEntry.tree = tree;
-            node = 0;
-            currentEntry.nodeIndex = 0;
-            if(tree == -1){
-                continue;
+        if (currentDepth == masterOctreeTargetDepth){
+            int tree = masterOctree.data[node];
+            
+            if(tree == -1) continue;
+
+            /*tMax = max(max(t0.x, t0.y), t0.z);
+            return true;*/
+            
+
+            //return raycastChunk(originalRay, tree, result);
+            if(raycastChunk(originalRay, tree, t0, t1, childIndexModifier, result)){
+                result.tree = tree;
+                return true;
             }
+            if(result.fail){
+                return false;
+            }
+
+            continue;
         }
-        
-        if(tree != -1 && NodeLeaf(tree, node) != 0){
+
+        vec3 tm = (t0 + t1) * 0.5;
+
+        int lastChildIndex = currentEntry.lastChildIndex;
+        int nextChildIndex = getNextChildIndex(lastChildIndex, t0, t1, tm);
+
+        if (nextChildIndex >= 8){
+            //The end is reached
+            continue;
+        }
+
+        //Get the parameters for the next child
+        vec3 childT0;
+        vec3 childT1;
+        getChildT(nextChildIndex, t0, t1, tm, childT0, childT1);
+
+        stackIndex++;
+        currentEntry.lastChildIndex = nextChildIndex;
+        stack[stackIndex] = currentEntry;
+
+        stackIndex++;
+
+        uint nodeChildren= node * 8 + (nextChildIndex ^ childIndexModifier);
+        stack[stackIndex] = StackEntry(nodeChildren, -1, childT0, childT1);
+    }
+    
+    return false;
+}
+
+bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier, inout Result result){
+    //printf("Tree min %f %f %f %d", treeMin.x, treeMin.y, treeMin.z, tree);
+    //tree = 0;
+    //return true;
+    
+    /*vec3 treeMin = vec3(trees[tree].minX, trees[tree].minY, trees[tree].minZ) * Dimensions;
+    vec3 treeMax = treeMin + Dimensions;
+    //printf("Tree min %f %f %f %d", treeMin.x, treeMin.y, treeMin.z, tree);
+    result.tree = tree;
+    //return true;
+
+
+    int childIndexModifier = 0;
+    ray.direction = normalize(ray.direction);
+    Ray originalRay = ray;
+
+    //This algorithm only works with positive direction values. Those adjustements fixes negative directions
+    if (ray.direction.x < 0){
+        ray.origin.x =  treeMin.x * 2 + Dimensions - ray.origin.x;
+        ray.direction.x = -ray.direction.x;
+        childIndexModifier |= 4;
+    }
+    if (ray.direction.y < 0){
+        ray.origin.y = treeMin.y * 2 + Dimensions - ray.origin.y;
+        ray.direction.y = -ray.direction.y;
+        childIndexModifier |= 2;
+    }
+    if (ray.direction.z < 0){
+        ray.origin.z = treeMin.z * 2 + Dimensions - ray.origin.z;
+        ray.direction.z = -ray.direction.z;
+        childIndexModifier |= 1;
+    }
+
+    vec3 dirInverse = 1 / ray.direction;
+
+    vec3 t0 = (treeMin - ray.origin) * dirInverse;
+    vec3 t1 = (treeMax - ray.origin) * dirInverse;*/
+
+    //Early exit if the tree isnt hit
+    if (max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
+        return false;
+    }
+
+    //Normally at this point a recursion is used to traverse the tree.
+    //But since this is glsl we can't use recursion.
+    //So we use a stack to store the nodes to traverse.
+
+    struct StackEntry{
+        uint nodeIndex;
+        int lastChildIndex;
+        vec3 t0;
+        vec3 t1;
+    } stack[MaxDepth + 1];
+
+    int stackIndex = 0;
+    stack[0] = StackEntry(0, -1, t0, t1);
+
+    int counter = 0;
+
+    while (stackIndex >= 0){
+
+        counter++;
+        if(counter > 1000){
+            result.tree = tree;
+            result.fail = true;
+            return false;
+        }
+
+        StackEntry currentEntry = stack[stackIndex];
+        stackIndex--;
+
+        t0 = currentEntry.t0;
+        t1 = currentEntry.t1;
+
+        uint node = currentEntry.nodeIndex;
+
+        if (t1.x < 0 || t1.y < 0 || t1.z < 0 || max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
+            continue;
+        }
+
+        if (NodeLeaf(tree, node) != 0){
             //We found a leaf.
-            if( NodeIsEmpty(tree, node) != 0){
+            if (NodeIsEmpty(tree, node) != 0){
                 continue;
             }
-            else{
+            else {
                 //TODO hit results
                 result.nodeIndex = node;
                 result.tree = tree;
-                
-                if(t0.x > t0.y && t0.x > t0.z){
-                   
+
+                if (t0.x > t0.y && t0.x > t0.z){
+
                     result.t = t0.x;
 
-                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
+                    vec3 hitPos = ray.origin + ray.direction * result.t;
                     result.uv = mod(vec2(hitPos.y, hitPos.z), 1);
 
-                    if(originalRay.direction.x > 0 ){
+                    if (ray.direction.x > 0){
                         result.normal = vec3(-1, 0, 0);
                     }
-                    else{
+                    else {
                         result.normal = vec3(1, 0, 0);
                     }
                 }
                 else if (t0.y > t0.x && t0.y > t0.z){
-                    
+
 
                     result.t = t0.y;
 
-                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
+                    vec3 hitPos = ray.origin + ray.direction * result.t;
                     result.uv = mod(vec2(hitPos.x, hitPos.z), 1);
 
-                    if(originalRay.direction.y > 0 ){
+                    if (ray.direction.y > 0){
                         result.normal = vec3(0, -1, 0);
                     }
-                    else{
+                    else {
                         result.normal = vec3(0, 1, 0);
                     }
                 }
                 else if (t0.z > t0.x && t0.z > t0.y){
-                    
+
 
                     result.t = t0.z;
 
-                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
+                    vec3 hitPos = ray.origin + ray.direction * result.t;
                     result.uv = mod(vec2(hitPos.x, hitPos.y), 1);
 
-                    if(originalRay.direction.z > 0 ){
+                    if (ray.direction.z > 0){
                         result.normal = vec3(0, 0, -1);
                     }
-                    else{
+                    else {
                         result.normal = vec3(0, 0, 1);
 
                         result.uv.r = abs(result.uv.r - 1);
@@ -460,48 +716,9 @@ bool raycast(Ray ray, out Result result){
         vec3 tm = (t0 + t1) * 0.5;
 
         int lastChildIndex = currentEntry.lastChildIndex;
-        int nextChildIndex;
-        //Get the next child index
-        switch(lastChildIndex){
-            case -1:{
-                nextChildIndex = getFirstNode(t0, tm);
-                break;
-            }
-            case 0:{
-                nextChildIndex = nextNode(vec3(tm.x, tm.y, tm.z), ivec3(4, 2, 1));
-                break;
-            }
-            case 1:{
-                nextChildIndex = nextNode(vec3(tm.x, tm.y, t1.z), ivec3(5, 3, 8));
-                break;
-            }
-            case 2:{
-                nextChildIndex = nextNode(vec3(tm.x, t1.y, tm.z), ivec3(6, 8, 3));
-                break;
-            }
-            case 3:{
-                nextChildIndex = nextNode(vec3(tm.x, t1.y, t1.z), ivec3(7, 8, 8));
-                break;
-            }
-            case 4:{
-                nextChildIndex = nextNode(vec3(t1.x, tm.y, tm.z), ivec3(8, 6, 5));
-                break;
-            }
-            case 5:{
-                nextChildIndex = nextNode(vec3(t1.x, tm.y, t1.z), ivec3(8, 7, 8));
-                break;
-            }
-            case 6:{
-                nextChildIndex = nextNode(vec3(t1.x, t1.y, tm.z), ivec3(8, 8, 7));
-                break;
-            }
-            case 7:{
-                nextChildIndex = 8;
-                break;
-            }
-        }
+        int nextChildIndex = getNextChildIndex(lastChildIndex, t0, t1, tm);
 
-        if(nextChildIndex >= 8){
+        if (nextChildIndex >= 8){
             //The end is reached
             continue;
         }
@@ -509,66 +726,17 @@ bool raycast(Ray ray, out Result result){
         //Get the parameters for the next child
         vec3 childT0;
         vec3 childT1;
-        switch(nextChildIndex){
-            case 0:{
-                childT0 = vec3(t0.x, t0.y, t0.z);
-                childT1 = vec3(tm.x, tm.y, tm.z);
-                break;
-            }
-            case 1:{
-                childT0 = vec3(t0.x, t0.y, tm.z);
-                childT1 = vec3(tm.x, tm.y, t1.z);
-                break;
-            }
-            case 2:{
-                childT0 = vec3(t0.x, tm.y, t0.z);
-                childT1 = vec3(tm.x, t1.y, tm.z);
-                break;
-            }
-            case 3:{
-                childT0 = vec3(t0.x, tm.y, tm.z);
-                childT1 = vec3(tm.x, t1.y, t1.z);
-                break;
-            }
-            case 4:{
-                childT0 = vec3(tm.x, t0.y, t0.z);
-                childT1 = vec3(t1.x, tm.y, tm.z);
-                break;
-            }
-            case 5:{
-                childT0 = vec3(tm.x, t0.y, tm.z);
-                childT1 = vec3(t1.x, tm.y, t1.z);
-                break;
-            }
-            case 6:{
-                childT0 = vec3(tm.x, tm.y, t0.z);
-                childT1 = vec3(t1.x, t1.y, tm.z);
-                break;
-            }
-            case 7:{
-                childT0 = vec3(tm.x, tm.y, tm.z);
-                childT1 = vec3(t1.x, t1.y, t1.z);
-                break;
-            }
-        }
+        getChildT(nextChildIndex, t0, t1, tm, childT0, childT1);
 
         stackIndex++;
         currentEntry.lastChildIndex = nextChildIndex;
         stack[stackIndex] = currentEntry;
-        
+
         stackIndex++;
 
-        uint nodeChildren;
-        if(tree == -1){
-            nodeChildren = node * 8 + (nextChildIndex ^ childIndexModifier);
-        }else{
-            nodeChildren = NodeChildren(tree, node, nextChildIndex ^ childIndexModifier);
-        }
-
-        stack[stackIndex] = StackEntry( nodeChildren, -1, tree, childT0, childT1);
+        uint nodeChildren = NodeChildren(tree, node, nextChildIndex ^ childIndexModifier);
+        stack[stackIndex] = StackEntry(nodeChildren, -1, childT0, childT1);
     }
-
-
 
     return false;
 }
