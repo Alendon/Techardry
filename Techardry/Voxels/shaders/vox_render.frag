@@ -74,55 +74,55 @@ layout(std430, set = 4, binding = 0) readonly buffer Octree
 
 #define Node_Children_Offset 0
 uint NodeChildren(uint tree, uint nodeIndex, uint childIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_Children_Offset + childIndex];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Children_Offset + childIndex];
 }
     #undef Node_Children_Offset
 
     #define Node_DataIndex_Offset 8
 uint NodeDataIndex(uint tree, uint nodeIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
 }
     #undef Node_DataIndex_Offset
 
     #define Node_Index_Offset 9
 uint NodeIndex(uint tree, uint nodeIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_Index_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Index_Offset];
 }
     #undef Node_Index_Offset
 
     #define Node_ParentIndex_Offset 10
 uint NodeParentIndex(uint tree, uint nodeIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
 }
     #undef Node_ParentIndex_Offset
 
     #define Node_ParentChildIndex_Offset 11
 uint NodeParentChildIndex(uint tree, uint nodeIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_ParentChildIndex_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ParentChildIndex_Offset];
 }
     #undef Node_ParentChildIndex_Offset
 
     #define Node_Leaf_Offset 12
 uint NodeLeaf(uint tree, uint nodeIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_Leaf_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Leaf_Offset];
 }
     #undef Node_Leaf_Offset
 
     #define Node_ShareData_Offset 13
 uint NodeShareData(uint tree, uint nodeIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_ShareData_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ShareData_Offset];
 }
     #undef Node_ShareData_Offset
 
     #define Node_Depth_Offset 14
 uint NodeDepth(uint tree, uint nodeIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_Depth_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Depth_Offset];
 }
     #undef Node_Depth_Offset
 
     #define Node_IsEmpty_Offset 15
 uint NodeIsEmpty(uint tree, uint nodeIndex){
-    return trees[tree].data[nodeIndex * NodeSize + Node_IsEmpty_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_IsEmpty_Offset];
 }
     #undef Node_IsEmpty_Offset
 
@@ -130,50 +130,50 @@ uint NodeIsEmpty(uint tree, uint nodeIndex){
 
     #define Voxel_Color_Offset 0
 uint VoxelColor(uint tree, uint voxelIndex){
-    uint nodeCount = trees[tree].nodeCount;
-    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
 }
     #undef Voxel_Color_Offset
 
     #define Voxel_NotEmpty_Offset 1
 uint VoxelNotEmpty(uint tree, uint voxelIndex){
-    uint nodeCount = trees[tree].nodeCount;
-    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_NotEmpty_Offset];
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_NotEmpty_Offset];
 }
     #undef Voxel_NotEmpty_Offset
 
     #define Voxel_TextureStartX_Offset 2
 uint VoxelTextureStartX(uint tree, uint voxelIndex){
-    uint nodeCount = trees[tree].nodeCount;
-    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
 }
     #undef Voxel_TextureStartX_Offset
 
     #define Voxel_TextureStartY_Offset 3
 uint VoxelTextureStartY(uint tree, uint voxelIndex){
-    uint nodeCount = trees[tree].nodeCount;
-    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
 }
     #undef Voxel_TextureStartY_Offset
 
     #define Voxel_ArrayIndex_Offset 4
 uint VoxelArrayIndex(uint tree, uint voxelIndex){
-    uint nodeCount = trees[tree].nodeCount;
-    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
 }
     #undef Voxel_ArrayIndex_Offset
 
     #define Voxel_TextureSizeX_Offset 5
 uint VoxelTextureSizeX(uint tree, uint voxelIndex){
-    uint nodeCount = trees[tree].nodeCount;
-    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
 }
     #undef Voxel_TextureSizeX_Offset
 
     #define Voxel_TextureSizeY_Offset 6
 uint VoxelTextureSizeY(uint tree, uint voxelIndex){
-    uint nodeCount = trees[tree].nodeCount;
-    return trees[tree].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];
 }
     #undef Voxel_TextureSizeY_Offset
 
