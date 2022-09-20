@@ -28,15 +28,15 @@ namespace Techardry.Systems.Client;
 [ExecuteAfter(typeof(RenderInstancedSystem))]
 public partial class VoxelRender : ARenderSystem
 {
-    [ComponentQuery] private ComponentQuery<object, (Camera, Position)> _cameraQuery = new();
+    [ComponentQuery] private readonly ComponentQuery<object, (Camera, Position)> _cameraQuery = new();
 
-    private Dictionary<Int3, MemoryBuffer> _chunkOctreeBuffers = new();
-    private Dictionary<Int3, int> _chunkDescriptorSetIndices = new();
+    private readonly Dictionary<Int3, MemoryBuffer> _chunkOctreeBuffers = new();
+    private readonly Dictionary<Int3, int> _chunkDescriptorSetIndices = new();
     private DescriptorSet _octreeDescriptorSet;
 
-    private DescriptorSet[] _inputAttachmentDescriptorSet = new DescriptorSet[VulkanEngine.SwapchainImageCount];
+    private readonly DescriptorSet[] _inputAttachmentDescriptorSet = new DescriptorSet[VulkanEngine.SwapchainImageCount];
 
-    private ImageView[] _lastColorImageView = new ImageView[VulkanEngine.SwapchainImageCount];
+    private readonly ImageView[] _lastColorImageView = new ImageView[VulkanEngine.SwapchainImageCount];
 
     private MemoryBuffer[] _cameraDataBuffers = Array.Empty<MemoryBuffer>();
     private MemoryBuffer _cameraDataStagingBuffer;
@@ -45,8 +45,8 @@ public partial class VoxelRender : ARenderSystem
     private MemoryBuffer _masterOctreeBuffer;
     private DescriptorSet _masterOctreeDescriptorSet;
 
-    private int _renderDiameterLog = 2;
-    private Int3 _centralChunk = new Int3(0, 0, 0);
+    private readonly int _renderDiameterLog = 2;
+    private readonly Int3 _centralChunk = new Int3(0, 0, 0);
 
     public override void Setup(SystemManager systemManager)
     {
@@ -58,7 +58,7 @@ public partial class VoxelRender : ARenderSystem
         });
     }
 
-    bool _firstFrame = true;
+    private bool _firstFrame = true;
 
     private void LateSetup()
     {
@@ -160,9 +160,6 @@ public partial class VoxelRender : ARenderSystem
 
         bufferInfosHandle.Free();
         descriptorWritesHandle.Free();
-
-        File.WriteAllText("indices.json",
-            JsonSerializer.Serialize(_chunkDescriptorSetIndices.OrderBy(pair => pair.Value).Select(x => x.Key)));
     }
 
     [StructLayout(LayoutKind.Explicit)]
@@ -236,9 +233,6 @@ public partial class VoxelRender : ARenderSystem
                 new Span<VoxelRenderData>((void*) (stagingBufferPtr + (int) headerSize + (int) (nodeCount * nodeSize)),
                     srcData.Length);
             srcData.CopyTo(dstData);
-
-            File.WriteAllBytes($"code_export_{chunkPos.X}_{chunkPos.Y}_{chunkPos.Z}.bin",
-                new Span<byte>((void*) stagingBufferPtr, (int) stagingBuffer.Size).ToArray());
 
             MemoryManager.UnMap(stagingBuffer.Memory);
 
@@ -404,8 +398,6 @@ public partial class VoxelRender : ARenderSystem
         var targetNodes = new Span<int>((void*) (pointer + Marshal.SizeOf<MasterOctreeHeader>()), chunkCount);
         targetNodes.Fill(-1);
 
-        int max = int.MinValue;
-
         for (var x = 0; x < chunkDiameter; x++)
         {
             for (var y = 0; y < chunkDiameter; y++)
@@ -525,7 +517,7 @@ public partial class VoxelRender : ARenderSystem
         vk.CmdSetScissor(CommandBuffer, 0, scissors);
 
         Logger.AssertAndThrow(
-            TextureAtlasHandler.TryGetAtlasDescriptorSet(Identifications.TextureAtlasIDs.BlockTexture,
+            TextureAtlasHandler.TryGetAtlasDescriptorSet(TextureAtlasIDs.BlockTexture,
                 out var atlasDescriptorSet), "Failed to get atlas descriptor set", "Techardry/Render");
 
         Span<DescriptorSet> descriptorSets = stackalloc DescriptorSet[]
