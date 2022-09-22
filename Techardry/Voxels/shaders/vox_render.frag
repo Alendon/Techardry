@@ -1,10 +1,8 @@
 ﻿#version 460
-#extension GL_EXT_debug_printf : enable
 #extension GL_EXT_nonuniform_qualifier : require
 
 #define Dimensions 16
 #define MaxDepth 10
-#define printf debugPrintfEXT
 
 layout (location = 0) in vec3 in_position;
 
@@ -49,17 +47,6 @@ layout(std430, set = 3, binding = 0) readonly buffer MasterOctree
     int depth;
     int data[];
 } masterOctree;
-
-/*struct MasterOctree{
-    int minX;
-    int minY;
-    int minZ;
-    int dimension;
-    int depth;
-    int data[8];
-};
-
-MasterOctree masterOctree = MasterOctree(-Dimensions, -Dimensions, -Dimensions, Dimensions * 2, 1, int[8](-1, -1, -1, -1, -1, -1, -1, -1));*/
 
 layout(std430, set = 4, binding = 0) readonly buffer Octree
 {
@@ -239,42 +226,9 @@ void main()
 
     Result result;
 
-    int tries = 0;
-    int tree;
-    float t = 1000000000;
-    
-
-    /*for(int tree = 0; tree < 16; tree++){
-        Result lastResult;
-        if(raycastChunk(ray, tree, lastResult)){
-            hit = true;
-            if(lastResult.t < result.t){
-                result = lastResult;
-            }
-        }
-        
-    }*/
-
-    /*while(raycast(ray, tree, t) && !hit && tries < 100){
-        tries++;
-        if(tree >= 0 && tree < 16)
-        {
-            if(raycastChunk(ray, tree, result))
-            {
-                hit = true;
-            }
-        }
-        if(!hit){
-            ray.origin += ray.direction * t;
-        }
-    }*/
-
-    //print hit, tree and t
-
     bool hit = raycast(ray, result);
 
     if(result.fail){
-        printf("Failed %d\n", result.tree);
         out_color = vec3(1,0,0);
         return;
     }
@@ -283,11 +237,6 @@ void main()
         out_color = oldColor;
         return;
     }
-    
-    
-    
-    //out_color = vec3(result.tree / 16.); return;
-
 
     float lDepth = linearDepth(depth);
 
@@ -481,6 +430,7 @@ bool raycast(in Ray ray, inout Result result){
 
     //Early exit if the tree isnt hit
     if (max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
+        result.fail = false;
         return false;
     }
 
@@ -503,7 +453,7 @@ bool raycast(in Ray ray, inout Result result){
         counter++;
 
         if(counter > 1000){
-            //result.fail = true;
+            result.fail = true;
             return false;
         }
 
@@ -573,43 +523,6 @@ bool raycast(in Ray ray, inout Result result){
 }
 
 bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier, inout Result result){
-    //printf("Tree min %f %f %f %d", treeMin.x, treeMin.y, treeMin.z, tree);
-    //tree = 0;
-    //return true;
-    
-    /*vec3 treeMin = vec3(trees[tree].minX, trees[tree].minY, trees[tree].minZ) * Dimensions;
-    vec3 treeMax = treeMin + Dimensions;
-    //printf("Tree min %f %f %f %d", treeMin.x, treeMin.y, treeMin.z, tree);
-    result.tree = tree;
-    //return true;
-
-
-    int childIndexModifier = 0;
-    ray.direction = normalize(ray.direction);
-    Ray originalRay = ray;
-
-    //This algorithm only works with positive direction values. Those adjustements fixes negative directions
-    if (ray.direction.x < 0){
-        ray.origin.x =  treeMin.x * 2 + Dimensions - ray.origin.x;
-        ray.direction.x = -ray.direction.x;
-        childIndexModifier |= 4;
-    }
-    if (ray.direction.y < 0){
-        ray.origin.y = treeMin.y * 2 + Dimensions - ray.origin.y;
-        ray.direction.y = -ray.direction.y;
-        childIndexModifier |= 2;
-    }
-    if (ray.direction.z < 0){
-        ray.origin.z = treeMin.z * 2 + Dimensions - ray.origin.z;
-        ray.direction.z = -ray.direction.z;
-        childIndexModifier |= 1;
-    }
-
-    vec3 dirInverse = 1 / ray.direction;
-
-    vec3 t0 = (treeMin - ray.origin) * dirInverse;
-    vec3 t1 = (treeMax - ray.origin) * dirInverse;*/
-
     //Early exit if the tree isnt hit
     if (max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
         return false;
