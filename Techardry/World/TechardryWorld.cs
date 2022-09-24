@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
+using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
 using BepuPhysics.CollisionDetection.CollisionTasks;
@@ -19,6 +20,8 @@ public class TechardryWorld : MintyCore.ECS.World
 {
     private ConcurrentDictionary<Int3, Chunk> _chunks = new();
 
+    private List<StaticHandle> _bodyHandles = new();
+
     internal void CreateChunk(Int3 chunkPos)
     {
         if (_chunks.ContainsKey(chunkPos))
@@ -28,6 +31,12 @@ public class TechardryWorld : MintyCore.ECS.World
 
         var chunk = new Chunk(chunkPos);
         _chunks.TryAdd(chunkPos, chunk);
+
+        var collider = new VoxelCollider(chunk.Octree);
+
+        _bodyHandles.Add(PhysicsWorld.Simulation.Statics.Add(
+            new StaticDescription(new Vector3(chunkPos.X, chunkPos.Y, chunkPos.Z) * VoxelOctree.Dimensions,
+                PhysicsWorld.Simulation.Shapes.Add(collider))));
     }
 
     public bool TryGetChunk(Int3 chunkPos, [MaybeNullWhen(false)] out Chunk chunk)
