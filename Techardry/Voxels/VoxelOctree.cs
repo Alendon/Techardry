@@ -185,12 +185,12 @@ public unsafe class VoxelOctree : IDisposable
 
         MergeDataUpwards(ref node);
 
-        if ((NodeCount) * 4 <= NodeCapacity && NodeCapacity > InitialNodeCapacity)
+        if (NodeCount * 4 <= NodeCapacity && NodeCapacity > InitialNodeCapacity)
         {
             NodeCapacity = NodeCount;
         }
 
-        if ((DataCount) * 4 <= DataCapacity && DataCapacity > InitialDataCapacity)
+        if (DataCount * 4 <= DataCapacity && DataCapacity > InitialDataCapacity)
         {
             DataCapacity = DataCount;
         }
@@ -853,7 +853,8 @@ public unsafe class VoxelOctree : IDisposable
                 Index = childIndex,
                 IsLeaf = true,
                 ParentIndex = parent.Index,
-                ParentChildIndex = i
+                ParentChildIndex = i,
+                IsEmpty = parent.IsEmpty
             };
 
             //The first children "inherit" the parents data.
