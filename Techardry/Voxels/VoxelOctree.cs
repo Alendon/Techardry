@@ -62,10 +62,10 @@ public unsafe class VoxelOctree : IDisposable
 
     internal Node[] Nodes;
 
-    private const int InitialNodeCapacity = 32;
-    private const int InitialDataCapacity = 32;
+    internal const int InitialNodeCapacity = 32;
+    internal const int InitialDataCapacity = 32;
 
-    private uint NodeCapacity
+    internal uint NodeCapacity
     {
         get => (uint) Nodes.Length;
         set
@@ -81,7 +81,7 @@ public unsafe class VoxelOctree : IDisposable
     internal ( uint[] ownerNodes, VoxelData[] voxels, VoxelPhysicsData[] physicsData,
         VoxelRenderData[] renderData) Data;
 
-    private uint DataCapacity
+    internal uint DataCapacity
     {
         get => (uint) Data.ownerNodes.Length;
         set
@@ -120,12 +120,12 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private static VoxelData GetDefaultVoxel()
+    internal static VoxelData GetDefaultVoxel()
     {
         return new VoxelData(BlockIDs.Air);
     }
 
-    private void ResizeNodes(int newCapacity)
+    internal void ResizeNodes(int newCapacity)
     {
         var oldNodes = Nodes;
 
@@ -133,7 +133,7 @@ public unsafe class VoxelOctree : IDisposable
         oldNodes.AsSpan(0, (int) NodeCount).CopyTo(Nodes);
     }
 
-    private void ResizeData(int newCapacity)
+    internal void ResizeData(int newCapacity)
     {
         var oldOwners = Data.ownerNodes;
         var oldVoxels = Data.voxels;
@@ -196,7 +196,7 @@ public unsafe class VoxelOctree : IDisposable
         }
     }
 
-    private void MergeDataUpwards(ref Node node)
+    internal void MergeDataUpwards(ref Node node)
     {
         if (node.Depth == RootNodeDepth)
         {
@@ -229,7 +229,7 @@ public unsafe class VoxelOctree : IDisposable
         MergeDataUpwards(ref parent);
     }
 
-    private void MergeLodUpwards(ref Node child)
+    internal void MergeLodUpwards(ref Node child)
     {
         if (child.Depth == RootNodeDepth)
             return;
@@ -284,7 +284,7 @@ public unsafe class VoxelOctree : IDisposable
         MergeLodUpwards(ref parent);
     }
 
-    private void UpdateShareWithParent(ref Node node, bool shareWithParent)
+    internal void UpdateShareWithParent(ref Node node, bool shareWithParent)
     {
         node.SharesDataWithParent = shareWithParent;
 
@@ -297,7 +297,7 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref Node GetChildNode(ref Node parent, uint childIndex)
+    internal ref Node GetChildNode(ref Node parent, uint childIndex)
     {
         return ref GetNode(parent.GetChildIndex(childIndex));
     }
@@ -307,7 +307,7 @@ public unsafe class VoxelOctree : IDisposable
     /// </summary>
     /// <param name="node"></param>
     /// <returns>Reference to the original node, as it may be moved in data</returns>
-    private ref Node DeleteChildren(ref Node node)
+    internal ref Node DeleteChildren(ref Node node)
     {
         if (node.IsLeaf)
         {
@@ -378,12 +378,12 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private void DeleteData(ref Node node)
+    internal void DeleteData(ref Node node)
     {
         DeleteData(node.DataIndex, node.Index);
     }
 
-    private void DeleteData(uint dataIndex, uint ownerIndex)
+    internal void DeleteData(uint dataIndex, uint ownerIndex)
     {
         var dataOwner = Data.ownerNodes[dataIndex];
 
@@ -414,7 +414,7 @@ public unsafe class VoxelOctree : IDisposable
         } while (informParent);
     }
 
-    private void DeleteNode(uint index, out (uint from, uint to) movedNode)
+    internal void DeleteNode(uint index, out (uint from, uint to) movedNode)
     {
         var newNodeCount = --NodeCount;
 
@@ -461,32 +461,32 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private bool HasChild(ref Node parent)
+    internal bool HasChild(ref Node parent)
     {
         return !parent.IsLeaf;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref Node GetChildNode(ref Node parent, Vector3 position)
+    internal ref Node GetChildNode(ref Node parent, Vector3 position)
     {
         var childIndex = GetChildIndex(position, parent.Depth);
         return ref GetNode(parent.GetChildIndex(childIndex));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref Node GetParentNode(ref Node child)
+    internal ref Node GetParentNode(ref Node child)
     {
         var parentIndex = child.ParentIndex;
         return ref GetNode(parentIndex);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref Node GetNode(uint index)
+    internal ref Node GetNode(uint index)
     {
         return ref Nodes[index];
     }
 
-    private void CreateChildren(ref Node parent)
+    internal void CreateChildren(ref Node parent)
     {
         byte childrenDepth = (byte) (parent.Depth + 1);
 
@@ -523,7 +523,7 @@ public unsafe class VoxelOctree : IDisposable
         }
     }
 
-    private uint CreateData(uint ownerIndex)
+    internal uint CreateData(uint ownerIndex)
     {
         if (DataCount >= DataCapacity)
         {
@@ -537,36 +537,36 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private void SetDataOwner(ref Node node)
+    internal void SetDataOwner(ref Node node)
     {
         SetDataOwner(node.DataIndex, node.Index);
     }
 
-    private void SetDataOwner(uint dataIndex, uint ownerIndex)
+    internal void SetDataOwner(uint dataIndex, uint ownerIndex)
     {
         Data.ownerNodes[dataIndex] = ownerIndex;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref readonly VoxelData GetVoxel(ref Node node)
+    internal ref readonly VoxelData GetVoxel(ref Node node)
     {
         return ref GetVoxel(node.DataIndex);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref readonly VoxelData GetVoxel(uint index)
+    internal ref readonly VoxelData GetVoxel(uint index)
     {
         return ref GetVoxelRef(index);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private void SetData(ref Node node, in VoxelData voxelData)
+    internal void SetData(ref Node node, in VoxelData voxelData)
     {
         SetData(node.DataIndex, voxelData);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private void SetData(uint index, in VoxelData voxelData)
+    internal void SetData(uint index, in VoxelData voxelData)
     {
         GetVoxelRef(index) = voxelData;
         GetVoxelPhysicsDataRef(index) = voxelData.GetPhysicsData();
@@ -589,7 +589,7 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref VoxelData GetVoxelRef(uint index)
+    internal ref VoxelData GetVoxelRef(uint index)
     {
         return ref Data.voxels[index];
     }
@@ -599,7 +599,7 @@ public unsafe class VoxelOctree : IDisposable
         return ref GetVoxelPhysicsDataRef(node.DataIndex);
     }
 
-    private ref VoxelPhysicsData GetVoxelPhysicsDataRef(uint index)
+    internal ref VoxelPhysicsData GetVoxelPhysicsDataRef(uint index)
     {
         return ref Data.physicsData[index];
     }
@@ -609,12 +609,12 @@ public unsafe class VoxelOctree : IDisposable
         return ref GetVoxelRenderDataRef(node.DataIndex);
     }
 
-    private ref VoxelRenderData GetVoxelRenderDataRef(uint index)
+    internal ref VoxelRenderData GetVoxelRenderDataRef(uint index)
     {
         return ref Data.renderData[index];
     }
 
-    private ref Node GetOrCreateChild(ref Node parent, Vector3 position)
+    internal ref Node GetOrCreateChild(ref Node parent, Vector3 position)
     {
         if (!HasChild(ref parent))
         {
@@ -633,12 +633,12 @@ public unsafe class VoxelOctree : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
-    private ref Node GetRootNode()
+    internal ref Node GetRootNode()
     {
         return ref Nodes[0];
     }
 
-    private static byte GetChildIndex(Vector3 position, int depth)
+    internal static byte GetChildIndex(Vector3 position, int depth)
     {
         float sizeCurrentLayer = Dimensions / MathF.Pow(2, depth);
         float halfSizeCurrentLayer = sizeCurrentLayer / 2;
@@ -657,18 +657,18 @@ public unsafe class VoxelOctree : IDisposable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     // ReSharper disable once UnusedMember.Local
-    private static Vector3 GetChildOffset(uint childIndex)
+    internal static Vector3 GetChildOffset(uint childIndex)
     {
         return childIndex switch
         {
-            0b0000 => new Vector3(-1, +1, -1),
-            0b0001 => new Vector3(-1, +1, +1),
-            0b0010 => new Vector3(-1, -1, -1),
-            0b0011 => new Vector3(-1, -1, +1),
-            0b0100 => new Vector3(+1, +1, -1),
-            0b0101 => new Vector3(+1, +1, +1),
-            0b0110 => new Vector3(+1, -1, -1),
-            0b0111 => new Vector3(+1, -1, +1),
+            0b0000 => new Vector3(-1, -1, -1),
+            0b0001 => new Vector3(-1, -1, +1),
+            0b0010 => new Vector3(-1, +1, -1),
+            0b0011 => new Vector3(-1, +1, +1),
+            0b0100 => new Vector3(+1, -1, -1),
+            0b0101 => new Vector3(+1, -1, +1),
+            0b0110 => new Vector3(+1, +1, -1),
+            0b0111 => new Vector3(+1, +1, +1),
             _ => throw new ArgumentOutOfRangeException(nameof(childIndex), childIndex, null)
         };
     }
@@ -679,7 +679,7 @@ public unsafe class VoxelOctree : IDisposable
         DisposeCore();
     }
 
-    private void DisposeCore()
+    internal void DisposeCore()
     {
     }
 
@@ -712,7 +712,7 @@ public unsafe class VoxelOctree : IDisposable
          *  Only use integer types to ensure alignment
          */
 
-        private fixed uint ChildIndices[8];
+        internal fixed uint ChildIndices[8];
 
         public uint DataIndex;
         public uint Index;
@@ -727,13 +727,13 @@ public unsafe class VoxelOctree : IDisposable
         //The fourth byte is the data share indicator
         //There is still empty space which can be utilised for other purposes
 
-        //private uint _data;
+        //internal uint _data;
 
-        private uint _parentChildIndex;
-        private uint _leaf;
-        private uint _shareData;
-        private uint _depth;
-        private uint _isEmpty;
+        internal uint _parentChildIndex;
+        internal uint _leaf;
+        internal uint _shareData;
+        internal uint _depth;
+        internal uint _isEmpty;
 
         public byte ParentChildIndex
         {
@@ -786,7 +786,7 @@ public unsafe class VoxelOctree : IDisposable
     public class OctreeDebugView
     {
         public NodeDebugView? RootNode { get; }
-        private VoxelOctree _octree;
+        internal VoxelOctree _octree;
 
         public OctreeDebugView(VoxelOctree octree)
         {
@@ -797,7 +797,7 @@ public unsafe class VoxelOctree : IDisposable
             FillNodeInfo(RootNode, ref root);
         }
 
-        private void FillNodeInfo(NodeDebugView target, ref Node node)
+        internal void FillNodeInfo(NodeDebugView target, ref Node node)
         {
             target.Depth = node.Depth;
             target.VoxelData = _octree.GetVoxel(ref node);
