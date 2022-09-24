@@ -1,23 +1,19 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Numerics;
 using MintyCore;
 using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Registries;
-using System.Numerics;
-using MintyCore.Components.Client;
-using MintyCore.Components.Common;
-using MintyCore.ECS;
-using MintyCore.Identifications;
-using MintyCore.Registries;
+using MintyCore.SystemGroups;
 using MintyCore.Utils;
-using Techardry.Identifications;
 using Silk.NET.Input;
 using SystemIDs = Techardry.Identifications.SystemIDs;
 
 namespace Techardry.Systems;
 
 [RegisterSystem("freecam")]
+[ExecuteInSystemGroup(typeof(InitializationSystemGroup))]
 public partial class Freecam : ASystem
 {
     [ComponentQuery] private readonly ComponentQuery<(Camera, Position)> _cameraQuery = new();
@@ -29,6 +25,8 @@ public partial class Freecam : ASystem
     private static float _pitch = 0f;
 
     private static readonly float mouseSensitiveity = 0.15f;
+    
+    private Stopwatch _stopwatch = new();
 
     public override void Setup(SystemManager systemManager)
     {
@@ -41,25 +39,27 @@ public partial class Freecam : ASystem
         {
             ref var pos = ref currentEntity.GetPosition();
             ref var cam = ref currentEntity.GetCamera();
-            
+
             var movement = Input;
-            
+
             var movementLength = movement.Length();
             if (movementLength > 1f)
                 movement /= movementLength;
-            
+
             movement *= Speed * Engine.DeltaTime;
 
             if (Engine.Window is {MouseLocked: true})
             {
-                _yaw += -InputHandler.MouseDelta.X * mouseSensitiveity * Engine.DeltaTime;
-                _pitch += -Math.Clamp(InputHandler.MouseDelta.Y * mouseSensitiveity * Engine.DeltaTime, -85f, 85);
+                float deltaTime = (float) _stopwatch.Elapsed.TotalSeconds;
+                _stopwatch.Restart();
+                _yaw += -InputHandler.MouseDelta.X * mouseSensitiveity * deltaTime;
+                _pitch += -Math.Clamp(InputHandler.MouseDelta.Y * mouseSensitiveity * deltaTime, -85f, 85);
             }
 
             var rotation = Quaternion.CreateFromYawPitchRoll(_yaw, _pitch, 0f);
             cam.Forward = Vector3.Transform(Vector3.UnitZ, rotation);
             cam.Upward = Vector3.Transform(-Vector3.UnitY, rotation);
-            
+
             pos.Value += Vector3.Transform(movement, rotation);
 
             cam.Dirty = true;
@@ -76,13 +76,11 @@ public partial class Freecam : ASystem
             if (state is KeyStatus.KeyDown)
             {
                 Input.Z = Math.Clamp(Input.Z + 1, -1, 1);
-                Logger.WriteLog("Started moving forward", LogImportance.Info, "Freecam");
             }
 
             if (state is KeyStatus.KeyUp)
             {
                 Input.Z = Math.Clamp(Input.Z - 1, -1, 1);
-                Logger.WriteLog("Stopped moving forward", LogImportance.Info, "Freecam");
             }
         }
     };
