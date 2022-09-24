@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection.CollisionTasks;
@@ -12,16 +13,18 @@ namespace Techardry.Voxels;
 
 public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 {
-    readonly VoxelOctree _octree;
+    GCHandle _octreeHandle;
+
+    VoxelOctree Octree => (VoxelOctree) _octreeHandle.Target!;
 
     public VoxelCollider(VoxelOctree octree)
     {
-        _octree = octree;
+        _octreeHandle = GCHandle.Alloc(octree, GCHandleType.Normal);
     }
 
     public ShapeBatch CreateShapeBatch(BufferPool pool, int initialCapacity, Shapes shapeBatches)
     {
-        throw new NotImplementedException();
+        return new HomogeneousCompoundShapeBatch<VoxelCollider, Box, BoxWide>(pool, initialCapacity);
     }
 
     public int TypeId => 12;
@@ -31,14 +34,59 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         ref TOverlaps overlaps) where TOverlaps : struct, ICollisionTaskOverlaps<TSubpairOverlaps>
         where TSubpairOverlaps : struct, ICollisionTaskSubpairOverlaps
     {
-        throw new NotImplementedException();
+        for (var i = 0; i < pairs.Length; i++)
+        {
+            ref var pair = ref pairs[i];
+
+            ref var collider = ref Unsafe.AsRef<VoxelCollider>(pair.Container);
+            ref var subPairOverlaps = ref overlaps.GetOverlapsForPair(i);
+
+            var octree = collider.Octree;
+
+            for (var j = 0; j < octree.DataCount; j++)
+            {
+                ref var owner = ref octree.GetNode(octree.Data.ownerNodes[j]);
+
+                if (owner.IsEmpty) continue;
+
+                collider.GetPosedLocalChild(j, out var childData, out var childPose);
+
+                var min = childPose.Position;
+                var max = min + new Vector3(childData.Width);
+
+                if (BoundingBox.Intersects(min, max, pair.Min, pair.Max))
+                {
+                    subPairOverlaps.Allocate(pool) = j;
+                }
+            }
+        }
     }
 
     public void FindLocalOverlaps<TOverlaps>(in Vector3 min, in Vector3 max, in Vector3 sweep, float maximumT,
         BufferPool pool,
         Shapes shapes, void* overlaps) where TOverlaps : ICollisionTaskSubpairOverlaps
     {
-        throw new NotImplementedException();
+        ref var overlapsRef = ref Unsafe.AsRef<TOverlaps>(overlaps);
+
+        var octree = Octree;
+
+        Tree.ConvertBoxToCentroidWithExtent(min, max, out var origin, out var expansion);
+        TreeRay.CreateFrom(origin, sweep, maximumT, out var ray);
+
+        for (var i = 0; i < octree.DataCount; i++)
+        {
+            ref var owner = ref octree.GetNode(octree.Data.ownerNodes[i]);
+            
+            if (owner.IsEmpty) continue;
+            
+            GetPosedLocalChild(i, out var childData, out var childPose);
+            
+            var voxelMin = childPose.Position - expansion;
+            var voxelMax = min + new Vector3(childData.Width) + expansion;
+            
+            if(Tree.Intersects(voxelMin, voxelMax, &ray, out _))
+                overlapsRef.Allocate(pool) = i;
+        }
     }
 
     public void ComputeBounds(in Quaternion orientation, out Vector3 min, out Vector3 max)
@@ -79,56 +127,72 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         return result;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int NextNode(Vector3 tm, (int X, int Y, int Z) c)
     {
-        if(tm.X < tm.Y)
+        if (tm.X < tm.Y)
         {
-            if(tm.X < tm.Z)
+            if (tm.X < tm.Z)
             {
                 return c.X;
             }
+
             return c.Z;
         }
-        if(tm.Y < tm.Z)
+
+        if (tm.Y < tm.Z)
         {
             return c.Y;
         }
+
         return c.Z;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GetNextChildIndex(int current, Vector3 t0, Vector3 t1, Vector3 tm)
     {
-        switch (current){
-            case -1:{
+        switch (current)
+        {
+            case -1:
+            {
                 return GetFirstNode(t0, tm);
             }
-            case 0:{
+            case 0:
+            {
                 return NextNode(new Vector3(tm.X, tm.Y, tm.Z), (4, 2, 1));
             }
-            case 1:{
+            case 1:
+            {
                 return NextNode(new Vector3(tm.X, tm.Y, t1.Z), (5, 3, 8));
             }
-            case 2:{
+            case 2:
+            {
                 return NextNode(new Vector3(tm.X, t1.Y, tm.Z), (6, 8, 3));
             }
-            case 3:{
+            case 3:
+            {
                 return NextNode(new Vector3(tm.X, t1.Y, t1.Z), (7, 8, 8));
             }
-            case 4:{
+            case 4:
+            {
                 return NextNode(new Vector3(t1.X, tm.Y, tm.Z), (8, 6, 5));
             }
-            case 5:{
+            case 5:
+            {
                 return NextNode(new Vector3(t1.X, tm.Y, t1.Z), (8, 7, 8));
             }
-            case 6:{
+            case 6:
+            {
                 return NextNode(new Vector3(t1.X, t1.Y, tm.Z), (8, 8, 7));
             }
-            default :{
+            default:
+            {
                 return 8;
             }
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void GetChildT(int childIndex, Vector3 t0, Vector3 t1, Vector3 tm, out Vector3 childT0,
         out Vector3 childT1)
     {
@@ -190,7 +254,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
             }
         }
     }
-    
+
     public void RayTest<TRayHitHandler>(in RigidPose pose, in RayData ray, ref float maximumT,
         ref TRayHitHandler hitHandler) where TRayHitHandler : struct, IShapeRayHitHandler
     {
@@ -248,6 +312,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
             T1 = t1
         };
 
+        var octree = Octree;
 
         while (stackIndex >= 0)
         {
@@ -257,7 +322,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
             t1 = currentEntry.T1;
 
             var nodeIndex = currentEntry.NodeIndex;
-            ref var node = ref _octree.GetNode(nodeIndex);
+            ref var node = ref octree.GetNode(nodeIndex);
 
             if (t1.X < 0 || t1.Y < 0 || t1.Z < 0
                 || (t0.X > maximumT && t0.Y > maximumT && t0.Z > maximumT))
@@ -312,8 +377,8 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 
             var lastChildIndex = currentEntry.LastChildIndex;
             var nextChildIndex = GetNextChildIndex(lastChildIndex, t0, t1, tm);
-            
-            if(nextChildIndex >= 8)
+
+            if (nextChildIndex >= 8)
                 continue;
 
             GetChildT(nextChildIndex, t0, t1, tm, out var childT0, out var childT1);
@@ -321,7 +386,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
             stackIndex++;
             currentEntry.LastChildIndex = nextChildIndex;
             stack[stackIndex++] = currentEntry;
-            
+
             var nodeChildren = node.GetChildIndex((uint) (nextChildIndex ^ childIndexModifier));
             stack[stackIndex] = new()
             {
@@ -353,14 +418,16 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 
     public void GetLocalChild(int childIndex, out Box childData)
     {
-        var node = _octree.GetNode(_octree.Data.ownerNodes[childIndex]);
+        var node = Octree.GetNode(Octree.Data.ownerNodes[childIndex]);
         var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth + 1));
         childData = new Box(halfSize, halfSize, halfSize);
     }
 
     public void GetPosedLocalChild(int childIndex, out Box childData, out RigidPose childPose)
     {
-        ref var node = ref _octree.GetNode(_octree.Data.ownerNodes[childIndex]);
+        var octree = Octree;
+
+        ref var node = ref octree.GetNode(octree.Data.ownerNodes[childIndex]);
         var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth + 1));
         childData = new Box(halfSize, halfSize, halfSize);
 
@@ -376,13 +443,14 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
             childPose.Position += offset;
 
             nodeSize *= 2;
-            node = ref _octree.GetParentNode(ref node);
+            node = ref octree.GetParentNode(ref node);
         }
     }
 
     public void GetLocalChild(int childIndex, ref BoxWide childData)
     {
-        var node = _octree.GetNode(_octree.Data.ownerNodes[childIndex]);
+        var octree = Octree;
+        var node = octree.GetNode(octree.Data.ownerNodes[childIndex]);
         var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth + 1));
         GatherScatter.GetFirst(ref childData.HalfHeight) = halfSize;
         GatherScatter.GetFirst(ref childData.HalfWidth) = halfSize;
@@ -391,7 +459,8 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 
     public void Dispose(BufferPool pool)
     {
+        _octreeHandle.Free();
     }
 
-    public int ChildCount => (int) _octree.DataCount;
+    public int ChildCount => (int) Octree.DataCount;
 }
