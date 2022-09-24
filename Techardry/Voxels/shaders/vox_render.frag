@@ -113,7 +113,7 @@ uint NodeIsEmpty(uint tree, uint nodeIndex){
 }
     #undef Node_IsEmpty_Offset
 
-    #define VoxelSize 7
+    #define VoxelSize 6
 
     #define Voxel_Color_Offset 0
 uint VoxelColor(uint tree, uint voxelIndex){
@@ -122,42 +122,35 @@ uint VoxelColor(uint tree, uint voxelIndex){
 }
     #undef Voxel_Color_Offset
 
-    #define Voxel_NotEmpty_Offset 1
-uint VoxelNotEmpty(uint tree, uint voxelIndex){
-    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
-    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_NotEmpty_Offset];
-}
-    #undef Voxel_NotEmpty_Offset
-
-    #define Voxel_TextureStartX_Offset 2
+    #define Voxel_TextureStartX_Offset 1
 uint VoxelTextureStartX(uint tree, uint voxelIndex){
     uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
     return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
 }
     #undef Voxel_TextureStartX_Offset
 
-    #define Voxel_TextureStartY_Offset 3
+    #define Voxel_TextureStartY_Offset 2
 uint VoxelTextureStartY(uint tree, uint voxelIndex){
     uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
     return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
 }
     #undef Voxel_TextureStartY_Offset
 
-    #define Voxel_ArrayIndex_Offset 4
+    #define Voxel_ArrayIndex_Offset 3
 uint VoxelArrayIndex(uint tree, uint voxelIndex){
     uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
     return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
 }
     #undef Voxel_ArrayIndex_Offset
 
-    #define Voxel_TextureSizeX_Offset 5
+    #define Voxel_TextureSizeX_Offset 4
 uint VoxelTextureSizeX(uint tree, uint voxelIndex){
     uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
     return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
 }
     #undef Voxel_TextureSizeX_Offset
 
-    #define Voxel_TextureSizeY_Offset 6
+    #define Voxel_TextureSizeY_Offset 5
 uint VoxelTextureSizeY(uint tree, uint voxelIndex){
     uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
     return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];

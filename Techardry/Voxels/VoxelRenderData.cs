@@ -10,12 +10,9 @@ public struct VoxelRenderData
     public uint Color;
 
     [FieldOffset(sizeof(int))]
-    public uint NotEmpty;
-
-    [FieldOffset(sizeof(int) * 2)]
     //Third component represents array index
     public Vector3D<uint> TextureStart;
     
-    [FieldOffset(sizeof(int) * 5)]
+    [FieldOffset(sizeof(int) * 4)]
     public Vector2D<uint> TextureSize;
 }
