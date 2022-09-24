@@ -28,8 +28,11 @@ public partial class RotateAroundOrigin : ASystem
             ref var cam = ref currentEntity.GetCamera();
 
             pos.Value = Vector3.Transform(pos.Value,
-                Quaternion.CreateFromAxisAngle(Vector3.UnitY, 0.25f * Engine.DeltaTimeF));
+                Quaternion.CreateFromAxisAngle(Vector3.UnitY, 0.25f * Engine.DeltaTime));
             cam.Forward = -Vector3.Normalize(pos.Value);
+
+            cam.Dirty = true;
+            pos.Dirty = true;
         }
     }
 
