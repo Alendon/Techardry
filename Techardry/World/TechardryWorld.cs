@@ -2,7 +2,6 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using MintyCore.Physics;
 using MintyCore.Utils;
 using Techardry.Identifications;
@@ -52,14 +51,14 @@ public class TechardryWorld : MintyCore.ECS.World
     private void CreateSomeChunks()
     {
 
-        Int3 ChunkRadius = new()
+        Int3 chunkRadius = new()
         {
             X = 2,
             Y = 1,
             Z = 2
         };
 
-        Int3 ChunkPos = default;
+        Int3 chunkPos = default;
         
         
         int seed = 5;
@@ -70,15 +69,15 @@ public class TechardryWorld : MintyCore.ECS.World
         
         Stopwatch sw = Stopwatch.StartNew();
         
-        for(ChunkPos.X = -ChunkRadius.X; ChunkPos.X < ChunkRadius.X; ChunkPos.X++)
+        for(chunkPos.X = -chunkRadius.X; chunkPos.X < chunkRadius.X; chunkPos.X++)
         {
-            for(ChunkPos.Y = 0; ChunkPos.Y < 1; ChunkPos.Y++)
+            for(chunkPos.Y = 0; chunkPos.Y < 1; chunkPos.Y++)
             {
-                for(ChunkPos.Z = -ChunkRadius.Z; ChunkPos.Z < ChunkRadius.Z; ChunkPos.Z++)
+                for(chunkPos.Z = -chunkRadius.Z; chunkPos.Z < chunkRadius.Z; chunkPos.Z++)
                 {
-                    CreateChunk(ChunkPos);
+                    CreateChunk(chunkPos);
 
-                    if (!TryGetChunk(ChunkPos, out var chunk))
+                    if (!TryGetChunk(chunkPos, out var chunk))
                     {
                         continue;
                     }

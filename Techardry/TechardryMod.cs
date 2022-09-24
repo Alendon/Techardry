@@ -14,7 +14,6 @@ using Silk.NET.Vulkan;
 using Techardry.Registries;
 using Techardry.World;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
-using InstancedRenderDataIDs = Techardry.Identifications.InstancedRenderDataIDs;
 using MaterialIDs = Techardry.Identifications.MaterialIDs;
 using PipelineIDs = Techardry.Identifications.PipelineIDs;
 using TextureIDs = Techardry.Identifications.TextureIDs;

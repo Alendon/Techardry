@@ -1,5 +1,4 @@
-﻿using System.Numerics;
-using JetBrains.Annotations;
+﻿using JetBrains.Annotations;
 using MintyCore.Identifications;
 using MintyCore.Render;
 using MintyCore.Utils;
