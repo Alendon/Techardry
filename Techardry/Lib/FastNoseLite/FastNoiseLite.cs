@@ -1,4 +1,5 @@
-﻿namespace Techardry.Lib.FastNoseLite;
+﻿// ReSharper disable All
+namespace Techardry.Lib.FastNoseLite;
 
 // MIT License
 //
