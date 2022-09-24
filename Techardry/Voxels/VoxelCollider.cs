@@ -27,7 +27,8 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         return new HomogeneousCompoundShapeBatch<VoxelCollider, Box, BoxWide>(pool, initialCapacity);
     }
 
-    public int TypeId => 12;
+    public int TypeId => Id;
+    public const int Id = 12;
 
     public void FindLocalOverlaps<TOverlaps, TSubpairOverlaps>(ref Buffer<OverlapQueryForPair> pairs, BufferPool pool,
         Shapes shapes,
