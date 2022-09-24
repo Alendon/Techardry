@@ -39,6 +39,8 @@ public partial class TechardryMod : IMod
 
     public void PreLoad()
     {
+        Engine.Timer.TargetTicksPerSecond = 60;
+        Engine.Timer.TargetFps = 60;
         Instance = this;
         VulkanEngine.AddDeviceExtension(ModName, "VK_KHR_shader_non_semantic_info", true);
         VulkanEngine.AddDeviceFeatureExension(new PhysicalDeviceVulkan12Features()

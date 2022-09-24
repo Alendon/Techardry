@@ -20,8 +20,7 @@ namespace Techardry.Systems;
 [RegisterSystem("freecam")]
 public partial class Freecam : ASystem
 {
-    [ComponentQuery] 
-    private readonly ComponentQuery<(Camera, Position)> _cameraQuery = new();
+    [ComponentQuery] private readonly ComponentQuery<(Camera, Position)> _cameraQuery = new();
 
     internal static Vector3 Input = Vector3.Zero;
     private static readonly float Speed = 10f;
@@ -29,7 +28,7 @@ public partial class Freecam : ASystem
     private static float _yaw = 0f;
     private static float _pitch = 0f;
 
-    private static readonly float mouseSensitiveity = 0.05f;
+    private static readonly float mouseSensitiveity = 0.15f;
 
     public override void Setup(SystemManager systemManager)
     {
@@ -42,22 +41,29 @@ public partial class Freecam : ASystem
         {
             ref var pos = ref currentEntity.GetPosition();
             ref var cam = ref currentEntity.GetCamera();
-
-            pos.Value += Input * Engine.DeltaTime * Speed;
-
-            _yaw -= (InputHandler.MouseDelta.X * mouseSensitiveity * Engine.DeltaTime);
-            _pitch += (InputHandler.MouseDelta.Y * mouseSensitiveity * Engine.DeltaTime);
-            if (_pitch < -90) _pitch = -90;
-            if (_pitch > 90) _pitch = 90;
-            Quaternion rotation = Quaternion.CreateFromYawPitchRoll(_yaw, _pitch, 0);
-
-            if (Input.Length() != 0)
-                Input = Vector3.Normalize(Input);
-            Input = Vector3.Transform(Input, rotation);
-            Input *= Speed;
             
-            cam.Forward = Vector3.Transform(Vector3.One, rotation);
+            var movement = Input;
             
+            var movementLength = movement.Length();
+            if (movementLength > 1f)
+                movement /= movementLength;
+            
+            movement *= Speed * Engine.DeltaTime;
+
+            if (Engine.Window is {MouseLocked: true})
+            {
+                _yaw += -InputHandler.MouseDelta.X * mouseSensitiveity * Engine.DeltaTime;
+                _pitch += -Math.Clamp(InputHandler.MouseDelta.Y * mouseSensitiveity * Engine.DeltaTime, -85f, 85);
+            }
+
+            var rotation = Quaternion.CreateFromYawPitchRoll(_yaw, _pitch, 0f);
+            cam.Forward = Vector3.Transform(Vector3.UnitZ, rotation);
+            cam.Upward = Vector3.Transform(-Vector3.UnitY, rotation);
+            
+            pos.Value += Vector3.Transform(movement, rotation);
+
+            cam.Dirty = true;
+            pos.Dirty = true;
         }
     }
 
@@ -69,12 +75,14 @@ public partial class Freecam : ASystem
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.Z += 1;
+                Input.Z = Math.Clamp(Input.Z + 1, -1, 1);
+                Logger.WriteLog("Started moving forward", LogImportance.Info, "Freecam");
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.Z -= 1;
+                Input.Z = Math.Clamp(Input.Z - 1, -1, 1);
+                Logger.WriteLog("Stopped moving forward", LogImportance.Info, "Freecam");
             }
         }
     };
@@ -87,12 +95,12 @@ public partial class Freecam : ASystem
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.Z -= 1;
+                Input.Z = Math.Clamp(Input.Z - 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.Z += 1;
+                Input.Z = Math.Clamp(Input.Z + 1, -1, 1);
             }
         }
     };
@@ -105,12 +113,12 @@ public partial class Freecam : ASystem
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.X -= 1;
+                Input.X = Math.Clamp(Input.X - 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.X += 1;
+                Input.X = Math.Clamp(Input.X + 1, -1, 1);
             }
         }
     };
@@ -123,12 +131,12 @@ public partial class Freecam : ASystem
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.X += 1;
+                Input.X = Math.Clamp(Input.X + 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.X -= 1;
+                Input.X = Math.Clamp(Input.X - 1, -1, 1);
             }
         }
     };
@@ -141,12 +149,12 @@ public partial class Freecam : ASystem
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.Y += 1;
+                Input.Y = Math.Clamp(Input.Y + 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.Y -= 1;
+                Input.Y = Math.Clamp(Input.Y - 1, -1, 1);
             }
         }
     };
@@ -159,12 +167,12 @@ public partial class Freecam : ASystem
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.Y -= 1;
+                Input.Y = Math.Clamp(Input.Y - 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.Y += 1;
+                Input.Y = Math.Clamp(Input.Y + 1, -1, 1);
             }
         }
     };

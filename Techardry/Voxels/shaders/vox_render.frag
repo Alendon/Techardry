@@ -195,7 +195,7 @@ void main()
 
     vec2 screenPos = vec2(in_position.xy);
 
-    vec3 forward = normalize(-camPos);
+    vec3 forward = vec3(camera.data.ForwardX, camera.data.ForwardY, camera.data.ForwardZ);
     vec3 upward = vec3(camera.data.UpwardX, camera.data.UpwardY, camera.data.UpwardZ);
     vec3 right = cross(forward, upward);
 
