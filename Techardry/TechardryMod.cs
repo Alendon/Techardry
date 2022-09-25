@@ -140,6 +140,23 @@ public partial class TechardryMod : IMod
         MouseButton = null
     };
 
+    public static int RenderMode = 3;
+    
+    [RegisterKeyAction("switch_render_mode")]
+    public static KeyActionInfo SwitchRenderMode => new()
+    {
+        Action = (state, _) =>
+        {
+            if (state is KeyStatus.KeyDown)
+            {
+                RenderMode %= 3;
+                RenderMode++;
+            }
+        },
+        Key = Key.K,
+        MouseButton = null
+    };
+
     public void Unload()
     {
         InternalUnregister();

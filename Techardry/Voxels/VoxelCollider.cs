@@ -52,7 +52,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 
                 collider.GetPosedLocalChild(j, out var childData, out var childPose);
 
-                var min = childPose.Position;
+                var min = childPose.Position - new Vector3(childData.HalfWidth);
                 var max = min + new Vector3(childData.Width);
 
                 if (BoundingBox.Intersects(min, max, pair.Min, pair.Max))
@@ -82,7 +82,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
             
             GetPosedLocalChild(i, out var childData, out var childPose);
             
-            var voxelMin = childPose.Position - expansion;
+            var voxelMin = childPose.Position - new Vector3(childData.HalfHeight) - expansion;
             var voxelMax = min + new Vector3(childData.Width) + expansion;
             
             if(Tree.Intersects(voxelMin, voxelMax, &ray, out _))
@@ -420,7 +420,14 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
     public void GetLocalChild(int childIndex, out Box childData)
     {
         var node = Octree.GetNode(Octree.Data.ownerNodes[childIndex]);
-        var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth + 1));
+
+        if (node.IsEmpty)
+        {
+            childData = default;
+            return;
+        }
+        
+        var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth));
         childData = new Box(halfSize, halfSize, halfSize);
     }
 
@@ -429,21 +436,29 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         var octree = Octree;
 
         ref var node = ref octree.GetNode(octree.Data.ownerNodes[childIndex]);
-        var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth + 1));
-        childData = new Box(halfSize, halfSize, halfSize);
+
+        if (node.IsEmpty)
+        {
+            childData = default;
+            childPose = RigidPose.Identity;
+        }
+        
+        var size = VoxelOctree.Dimensions / (float) (1 << node.Depth);
+        var halfSize = size * 0.5f;
+        childData = new Box(size, size, size);
 
         childPose.Orientation = Quaternion.Identity;
-        childPose.Position = Vector3.Zero;
+        childPose.Position = new Vector3(VoxelOctree.Dimensions / 2f);
 
-        Vector3 nodeSize = new Vector3(halfSize);
+        Vector3 nodeSize = new Vector3(size);
         while (node.Depth != 0)
         {
             var offset = VoxelOctree.GetChildOffset(node.ParentChildIndex);
-            offset += Vector3.One;
-            offset *= nodeSize;
+            offset *= halfSize;
             childPose.Position += offset;
 
             nodeSize *= 2;
+            halfSize *= 2;
             node = ref octree.GetParentNode(ref node);
         }
     }
@@ -452,7 +467,14 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
     {
         var octree = Octree;
         var node = octree.GetNode(octree.Data.ownerNodes[childIndex]);
-        var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth + 1));
+
+        if (node.IsEmpty)
+        {
+            childData = default;
+            return;
+        }
+        
+        var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth));
         GatherScatter.GetFirst(ref childData.HalfHeight) = halfSize;
         GatherScatter.GetFirst(ref childData.HalfWidth) = halfSize;
         GatherScatter.GetFirst(ref childData.HalfLength) = halfSize;

@@ -1,4 +1,5 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.Numerics;
+using System.Runtime.CompilerServices;
 using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
@@ -25,12 +26,15 @@ public unsafe struct ConvexVoxelsContinuations : IConvexCompoundContinuationHand
         where TCallbacks : struct, ICollisionCallbacks
     {
         ref var collider = ref Unsafe.AsRef<VoxelCollider>(pair.B);
-        collider.GetPosedLocalChild(childIndexB, out var childData, out childPoseB);
+        collider.GetPosedLocalChild(childIndexB, out var childData, out var localPosition);
 
-        QuaternionEx.TransformWithoutOverlap(childPoseB.Position, pair.OrientationB, out childPoseB.Position);
+        QuaternionEx.TransformWithoutOverlap(localPosition.Position, pair.OrientationB, out childPoseB.Position);
+        childPoseB.Orientation = Quaternion.Identity;
         childTypeB = Box.Id;
 
-        collisionBatcher.CacheShapeB(shapeTypeA, childTypeB, Unsafe.AsPointer(ref childData.HalfHeight),
+        Vector3 halfSize = new Vector3(childData.HalfWidth);
+
+        collisionBatcher.CacheShapeB(shapeTypeA, childTypeB, Unsafe.AsPointer(ref halfSize),
             VoxelCollider.Id, out childShapeDataB);
     }
 

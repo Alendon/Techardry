@@ -7,6 +7,9 @@ using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
 using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.CollisionDetection.SweepTasks;
+using MintyCore.Components.Client;
+using MintyCore.Components.Common;
+using MintyCore.ECS;
 using MintyCore.Physics;
 using MintyCore.Utils;
 using Techardry.Identifications;
@@ -37,6 +40,8 @@ public class TechardryWorld : MintyCore.ECS.World
         _bodyHandles.Add(PhysicsWorld.Simulation.Statics.Add(
             new StaticDescription(new Vector3(chunkPos.X, chunkPos.Y, chunkPos.Z) * VoxelOctree.Dimensions,
                 PhysicsWorld.Simulation.Shapes.Add(collider))));
+
+        
     }
 
     public bool TryGetChunk(Int3 chunkPos, [MaybeNullWhen(false)] out Chunk chunk)
@@ -148,7 +153,7 @@ public class TechardryWorld : MintyCore.ECS.World
 
         Stopwatch sw = Stopwatch.StartNew();
 
-        for (chunkPos.X = -chunkRadius.X; chunkPos.X < chunkRadius.X; chunkPos.X++)
+        /*for (chunkPos.X = -chunkRadius.X; chunkPos.X < chunkRadius.X; chunkPos.X++)
         {
             for (chunkPos.Y = 0; chunkPos.Y < 1; chunkPos.Y++)
             {
@@ -164,10 +169,48 @@ public class TechardryWorld : MintyCore.ECS.World
                     FillChunk(chunk, noise);
                 }
             }
-        }
+        }*/
+        
+        CreateChunk(chunkPos);
+        TryGetChunk(chunkPos, out var chunk);
+        FillChunk(chunk!, noise);
 
         sw.Stop();
         Logger.WriteLog($"Chunk gen took {sw.ElapsedMilliseconds}ms", LogImportance.Debug, "TechardryWorld");
+        
+        
+        
+        if (!IsServerWorld) return;
+
+        foreach (var staticHandle in _bodyHandles)
+        {
+            var staticReference = PhysicsWorld.Simulation.Statics.GetStaticReference(staticHandle);
+            var collider = PhysicsWorld.Simulation.Shapes.GetShape<VoxelCollider>(staticReference.Shape.Index);
+            
+            for (int i = 0; i < collider.ChildCount; i++)
+            {
+                collider.GetPosedLocalChild(i, out var data, out var pose);
+                collider.GetLocalChild(i, out data);
+
+                pose.Position += staticReference.Pose.Position;
+
+                var voxelEntity = EntityManager.CreateEntity(ArchetypeIDs.TestRender, null);
+                var render = EntityManager.GetComponent<InstancedRenderAble>(voxelEntity);
+            
+                render.MaterialMeshCombination = InstancedRenderDataIDs.DualBlock;
+                EntityManager.SetComponent(voxelEntity, render);
+            
+                var scale = EntityManager.GetComponent<Scale>(voxelEntity);
+                scale.Value = new Vector3(data.Width, data.Height, data.Length);
+                EntityManager.SetComponent(voxelEntity, scale);
+            
+                var position = EntityManager.GetComponent<Position>(voxelEntity);
+                position.Value = pose.Position;
+                EntityManager.SetComponent(voxelEntity, position);
+            }
+        }
+        
+        
     }
 
     void FillChunk(Chunk chunk, FastNoiseLite fastNoiseLite)
