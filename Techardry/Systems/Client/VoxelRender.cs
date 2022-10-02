@@ -569,16 +569,16 @@ public partial class VoxelRender : ARenderSystem
         base.Dispose();
     }
 
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Explicit, Size = 64)]
     struct CameraData
     {
-        [FieldOffset(0)] public float HFov;
-        [FieldOffset(4)] public float AspectRatio;
-        [FieldOffset(8)] public Vector3 Forward;
-        [FieldOffset(20)] public Vector3 Upward;
+        [FieldOffset(sizeof(float) * 0)] public float HFov;
+        [FieldOffset(sizeof(float) * 1)] public float AspectRatio;
+        [FieldOffset(sizeof(float) * 2)] public Vector3 Forward;
+        [FieldOffset(sizeof(float) * 5)] public Vector3 Upward;
 
-        [FieldOffset(32)] public Vector3 Position;
-        [FieldOffset(44)] public float Near;
-        [FieldOffset(48)] public float Far;
+        [FieldOffset(sizeof(float) * 8)] public Vector3 Position;
+        [FieldOffset(sizeof(float) * 11)] public float Near;
+        [FieldOffset(sizeof(float) * 12)] public float Far;
     }
 }

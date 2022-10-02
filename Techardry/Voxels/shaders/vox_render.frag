@@ -398,6 +398,8 @@ bool raycast(in Ray ray, inout Result result){
     int childIndexModifier = 0;
     ray.direction = normalize(ray.direction);
     Ray originalRay = ray;
+    
+    result.fail = false;
 
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
     if (ray.direction.x < 0){
