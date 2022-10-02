@@ -9,7 +9,6 @@ using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.CollisionDetection.SweepTasks;
 using MintyCore.Components.Client;
 using MintyCore.Components.Common;
-using MintyCore.ECS;
 using MintyCore.Physics;
 using MintyCore.Utils;
 using Techardry.Identifications;

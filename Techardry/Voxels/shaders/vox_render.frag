@@ -57,61 +57,52 @@ layout(std430, set = 4, binding = 0) readonly buffer Octree
     uint data[];
 } trees[];
 
-#define NodeSize 16
+#define NodeSize 6
 
 #define Node_Children_Offset 0
 uint NodeChildren(uint tree, uint nodeIndex, uint childIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Children_Offset + childIndex];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Children_Offset] + childIndex;
 }
     #undef Node_Children_Offset
 
-    #define Node_DataIndex_Offset 8
+    #define Node_DataIndex_Offset 1
 uint NodeDataIndex(uint tree, uint nodeIndex){
     return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
 }
     #undef Node_DataIndex_Offset
 
-    #define Node_Index_Offset 9
+    #define Node_Index_Offset 2
 uint NodeIndex(uint tree, uint nodeIndex){
     return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Index_Offset];
 }
     #undef Node_Index_Offset
 
-    #define Node_ParentIndex_Offset 10
+    #define Node_ParentIndex_Offset 3
 uint NodeParentIndex(uint tree, uint nodeIndex){
     return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
 }
     #undef Node_ParentIndex_Offset
 
-    #define Node_ParentChildIndex_Offset 11
+    #define Node_AdditionalData_Offset 4
+
 uint NodeParentChildIndex(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ParentChildIndex_Offset];
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0x7;
 }
-    #undef Node_ParentChildIndex_Offset
 
-    #define Node_Leaf_Offset 12
-uint NodeLeaf(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Leaf_Offset];
+
+bool NodeLeaf(uint tree, uint nodeIndex){
+    return NodeChildren(tree, nodeIndex, 0) == 0xFFFFFFFF;
 }
-    #undef Node_Leaf_Offset
 
-    #define Node_ShareData_Offset 13
-uint NodeShareData(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ShareData_Offset];
-}
-    #undef Node_ShareData_Offset
-
-    #define Node_Depth_Offset 14
 uint NodeDepth(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Depth_Offset];
+    return (trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0xF0 ) >> 4;
 }
-    #undef Node_Depth_Offset
 
-    #define Node_IsEmpty_Offset 15
-uint NodeIsEmpty(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_IsEmpty_Offset];
+bool NodeIsEmpty(uint tree, uint nodeIndex){
+    return NodeDataIndex(tree, nodeIndex) == 0xFFFFFFFF;
 }
-    #undef Node_IsEmpty_Offset
+    #undef Node_AdditionalData_Offset
+
 
     #define VoxelSize 6
 
@@ -558,9 +549,9 @@ bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier
             continue;
         }
 
-        if (NodeLeaf(tree, node) != 0){
+        if (NodeLeaf(tree, node)){
             //We found a leaf.
-            if (NodeIsEmpty(tree, node) != 0){
+            if (NodeIsEmpty(tree, node)){
                 continue;
             }
             else {

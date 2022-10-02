@@ -77,15 +77,15 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         for (var i = 0; i < octree.DataCount; i++)
         {
             ref var owner = ref octree.GetNode(octree.Data.ownerNodes[i]);
-            
+
             if (owner.IsEmpty) continue;
-            
+
             GetPosedLocalChild(i, out var childData, out var childPose);
-            
+
             var voxelMin = childPose.Position - new Vector3(childData.HalfHeight) - expansion;
             var voxelMax = min + new Vector3(childData.Width) + expansion;
-            
-            if(Tree.Intersects(voxelMin, voxelMax, &ray, out _))
+
+            if (Tree.Intersects(voxelMin, voxelMax, &ray, out _))
                 overlapsRef.Allocate(pool) = i;
         }
     }
@@ -426,9 +426,9 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
             childData = default;
             return;
         }
-        
-        var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth));
-        childData = new Box(halfSize, halfSize, halfSize);
+
+        var size = node.GetSize();
+        childData = new Box(size, size, size);
     }
 
     public void GetPosedLocalChild(int childIndex, out Box childData, out RigidPose childPose)
@@ -436,31 +436,16 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         var octree = Octree;
 
         ref var node = ref octree.GetNode(octree.Data.ownerNodes[childIndex]);
+        childPose = RigidPose.Identity;
+        childData = default;
 
         if (node.IsEmpty)
         {
-            childData = default;
-            childPose = RigidPose.Identity;
+            return;
         }
-        
-        var size = VoxelOctree.Dimensions / (float) (1 << node.Depth);
-        var halfSize = size * 0.5f;
+
+        node.GetLocationData(out childPose.Position, out var size);
         childData = new Box(size, size, size);
-
-        childPose.Orientation = Quaternion.Identity;
-        childPose.Position = new Vector3(VoxelOctree.Dimensions / 2f);
-
-        Vector3 nodeSize = new Vector3(size);
-        while (node.Depth != 0)
-        {
-            var offset = VoxelOctree.GetChildOffset(node.ParentChildIndex);
-            offset *= halfSize;
-            childPose.Position += offset;
-
-            nodeSize *= 2;
-            halfSize *= 2;
-            node = ref octree.GetParentNode(ref node);
-        }
     }
 
     public void GetLocalChild(int childIndex, ref BoxWide childData)
@@ -473,8 +458,8 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
             childData = default;
             return;
         }
-        
-        var halfSize = VoxelOctree.Dimensions / (float) (1 << (node.Depth));
+
+        var halfSize = node.GetSize() * 0.5f;
         GatherScatter.GetFirst(ref childData.HalfHeight) = halfSize;
         GatherScatter.GetFirst(ref childData.HalfWidth) = halfSize;
         GatherScatter.GetFirst(ref childData.HalfLength) = halfSize;
