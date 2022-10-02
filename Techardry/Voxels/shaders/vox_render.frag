@@ -217,7 +217,7 @@ void main()
     float depth = subpassLoad(inDepth).r;
     vec3 oldColor = subpassLoad(inColor).rgb;
 
-    Result result;
+    Result result = Result(0, vec3(0, 0, 0), vec2(0, 0), 0, -1, false);
 
     bool hit = raycast(ray, result);
 
@@ -399,8 +399,6 @@ bool raycast(in Ray ray, inout Result result){
     ray.direction = normalize(ray.direction);
     Ray originalRay = ray;
     
-    result.fail = false;
-
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
     if (ray.direction.x < 0){
         ray.origin.x =  treeMin.x * 2 + masterOctree.dimension - ray.origin.x;
