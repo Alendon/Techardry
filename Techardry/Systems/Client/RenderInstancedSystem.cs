@@ -37,6 +37,8 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
     /// <inheritdoc />
     protected override void Execute()
     {
+        if((TechardryMod.RenderMode & 2) == 0) return;
+        
         //Iterate over each entity and write the current transform to the corresponding staging buffer
         _drawCount.Clear();
         foreach (var entity in _componentQuery)

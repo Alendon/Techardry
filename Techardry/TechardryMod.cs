@@ -10,7 +10,9 @@ using MintyCore.Modding.Attributes;
 using MintyCore.Registries;
 using MintyCore.Render;
 using MintyCore.Utils;
+using Silk.NET.Input;
 using Silk.NET.Vulkan;
+using Techardry.Entities;
 using Techardry.Registries;
 using Techardry.World;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
@@ -28,10 +30,10 @@ public partial class TechardryMod : IMod
     public string StringIdentifier => "techardry";
     public string ModDescription => "Techardry mod";
     public string ModName => "Techardry";
-    public ModVersion ModVersion => new(0,0,1);
+    public ModVersion ModVersion => new(0, 0, 1);
     public ModDependency[] ModDependencies => Array.Empty<ModDependency>();
     public GameType ExecutionSide => GameType.Local;
-    
+
     public void Dispose()
     {
         Logger.WriteLog("Disposing TechardryMod", LogImportance.Info, "Techardry");
@@ -50,7 +52,6 @@ public partial class TechardryMod : IMod
             DescriptorBindingPartiallyBound = true,
             ShaderStorageBufferArrayNonUniformIndexing = true,
             DescriptorBindingVariableDescriptorCount = true,
-            
         });
     }
 
@@ -88,11 +89,11 @@ public partial class TechardryMod : IMod
     }
 
     [RegisterTextureAtlas("block_texture")]
-    public static TextureAtlasInfo BlockTextureAtlas => new (new[]
+    public static TextureAtlasInfo BlockTextureAtlas => new(new[]
     {
-         TextureIDs.Dirt, TextureIDs.Stone
+        TextureIDs.Dirt, TextureIDs.Stone
     });
-    
+
     [OverrideWorld("default", "minty_core")]
     public static WorldInfo TechardryWorldInfo => new()
     {
@@ -119,11 +120,47 @@ public partial class TechardryMod : IMod
         }
     };
 
+    [RegisterKeyAction("spawn_test_cube")]
+    public static KeyActionInfo SpawnTestCube => new KeyActionInfo()
+    {
+        Action = (state, _) =>
+        {
+            if (state != KeyStatus.KeyDown) return;
+
+            if (!WorldHandler.TryGetWorld(GameType.Server, WorldIDs.Default, out var world)) return;
+
+            world.EntityManager.CreateEntity(ArchetypeIDs.PhysicBox, null, new Archetypes.PhysicBoxSetup()
+            {
+                Mass = 10,
+                Position = new Vector3(Random.Shared.NextSingle() * 16, 32, Random.Shared.NextSingle() * 16),
+                Scale = new Vector3(1, 1, 1),
+            });
+        },
+        Key = Key.H,
+        MouseButton = null
+    };
+
+    public static int RenderMode = 3;
+    
+    [RegisterKeyAction("switch_render_mode")]
+    public static KeyActionInfo SwitchRenderMode => new()
+    {
+        Action = (state, _) =>
+        {
+            if (state is KeyStatus.KeyDown)
+            {
+                RenderMode %= 3;
+                RenderMode++;
+            }
+        },
+        Key = Key.K,
+        MouseButton = null
+    };
+
     public void Unload()
     {
         InternalUnregister();
     }
 
     public static TechardryMod? Instance { get; private set; }
-    
 }

@@ -463,6 +463,8 @@ public partial class VoxelRender : ARenderSystem
     protected override unsafe void Execute()
     {
         if (World is null) return;
+        
+        if((TechardryMod.RenderMode & 1) == 0) return;
 
         var cameraEntity = _cameraQuery.FirstOrDefault();
 
