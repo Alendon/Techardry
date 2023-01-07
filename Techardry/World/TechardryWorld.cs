@@ -181,7 +181,7 @@ public class TechardryWorld : MintyCore.ECS.World
         
         if (!IsServerWorld) return;
 
-        foreach (var staticHandle in _bodyHandles)
+        /*foreach (var staticHandle in _bodyHandles)
         {
             var staticReference = PhysicsWorld.Simulation.Statics.GetStaticReference(staticHandle);
             var collider = PhysicsWorld.Simulation.Shapes.GetShape<VoxelCollider>(staticReference.Shape.Index);
@@ -207,7 +207,7 @@ public class TechardryWorld : MintyCore.ECS.World
                 position.Value = pose.Position;
                 EntityManager.SetComponent(voxelEntity, position);
             }
-        }
+        }*/
         
         
     }

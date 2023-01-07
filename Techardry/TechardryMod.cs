@@ -132,7 +132,7 @@ public partial class TechardryMod : IMod
             world.EntityManager.CreateEntity(ArchetypeIDs.PhysicBox, null, new Archetypes.PhysicBoxSetup()
             {
                 Mass = 10,
-                Position = new Vector3(Random.Shared.NextSingle() * 10 - 28, 32, Random.Shared.NextSingle() * 10 - 28),
+                Position = new Vector3(Random.Shared.NextSingle() * 16, 32, Random.Shared.NextSingle() * 16),
                 Scale = new Vector3(1, 1, 1),
             });
         },

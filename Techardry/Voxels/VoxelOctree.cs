@@ -145,6 +145,7 @@ public class VoxelOctree
             ParentIndex = InvalidIndex,
         };
         Nodes[0].SetChildIndex(InvalidIndex);
+        Nodes[0].SetLocationData(Vector3.Zero);
     }
 
     public void Insert(VoxelData data, Vector3 position, int depth)
@@ -166,16 +167,12 @@ public class VoxelOctree
 
         ValidateTree();
 
-        if (position == new Vector3(1, 7, 13))
-        {
-        }
-
         MergeUpwards(ref node);
 
         ValidateTree();
     }
 
-    [Conditional("DEBUG")]
+    [Conditional("DEBUG_OCTREE")]
     private void ValidateTree()
     {
         ValidateTreeInner(ref GetRootNode());
@@ -199,7 +196,7 @@ public class VoxelOctree
         }
     }
 
-    [Conditional("DEBUG")]
+    [Conditional("DEBUG_OCTREE")]
     private void ValidateTreeInner(ref Node parentNode)
     {
         // check if the parent node is a not a leaf and has data
