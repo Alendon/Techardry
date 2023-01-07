@@ -445,6 +445,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         }
 
         node.GetLocationData(out childPose.Position, out var size);
+        //childPose.Position += new Vector3(size * 0.5f);
         childData = new Box(size, size, size);
     }
 

@@ -57,7 +57,7 @@ if (exitCode != 0)
 var buildFolder = projectFolder.EnumerateDirectories("bin", SearchOption.TopDirectoryOnly).FirstOrDefault();
 buildFolder = buildFolder.EnumerateDirectories(debug ? "Debug" : "Release", SearchOption.TopDirectoryOnly)
     .FirstOrDefault();
-var modFolder = buildFolder.EnumerateDirectories("net6.0", SearchOption.TopDirectoryOnly).FirstOrDefault();
+var modFolder = buildFolder.EnumerateDirectories("net7.0", SearchOption.TopDirectoryOnly).FirstOrDefault();
 
 Console.Clear();
 
