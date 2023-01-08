@@ -9,6 +9,8 @@ debug = true;
 
 var processFile = new FileInfo(Environment.ProcessPath!);
 
+var dotnetVersion = $"net{Environment.Version.Major}.{Environment.Version.Minor}";
+
 var solutionFolder = processFile.Directory.Parent.Parent.Parent.Parent;
 var projectFolder = solutionFolder.EnumerateDirectories("Techardry", SearchOption.TopDirectoryOnly).FirstOrDefault();
 
@@ -57,7 +59,7 @@ if (exitCode != 0)
 var buildFolder = projectFolder.EnumerateDirectories("bin", SearchOption.TopDirectoryOnly).FirstOrDefault();
 buildFolder = buildFolder.EnumerateDirectories(debug ? "Debug" : "Release", SearchOption.TopDirectoryOnly)
     .FirstOrDefault();
-var modFolder = buildFolder.EnumerateDirectories("net7.0", SearchOption.TopDirectoryOnly).FirstOrDefault();
+var modFolder = buildFolder.EnumerateDirectories(dotnetVersion, SearchOption.TopDirectoryOnly).FirstOrDefault();
 
 Console.Clear();
 
