@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="MintyCore" Version="0.0.8.6" />
+      <PackageReference Include="MintyCore" Version="0.0.9" />
       <PackageReference Include="ShaderCompiler" Version="0.0.2" />
     </ItemGroup>
 

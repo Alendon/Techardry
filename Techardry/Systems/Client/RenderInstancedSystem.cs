@@ -15,7 +15,7 @@ namespace Techardry.Systems.Client;
 ///     System to instanced render entities
 /// </summary>
 [RegisterSystem("render_instanced")]
-[ExecuteInSystemGroup(typeof(DualRenderSystemGroup))]
+[ExecuteInSystemGroup<DualRenderSystemGroup>]
 [ExecutionSide(GameType.Client)]
 public unsafe partial class RenderInstancedSystem : ARenderSystem
 {

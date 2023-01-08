@@ -21,8 +21,8 @@ using SystemIDs = Techardry.Identifications.SystemIDs;
 namespace Techardry.Systems.Client;
 
 [RegisterSystem("voxel_render")]
-[ExecuteInSystemGroup(typeof(DualRenderSystemGroup))]
-[ExecuteAfter(typeof(RenderInstancedSystem))]
+[ExecuteInSystemGroup<DualRenderSystemGroup>]
+[ExecuteAfter<RenderInstancedSystem>]
 public partial class VoxelRender : ARenderSystem
 {
     [ComponentQuery] private readonly ComponentQuery<object, (Camera, Position)> _cameraQuery = new();

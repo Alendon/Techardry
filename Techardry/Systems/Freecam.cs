@@ -13,7 +13,7 @@ using SystemIDs = Techardry.Identifications.SystemIDs;
 namespace Techardry.Systems;
 
 [RegisterSystem("freecam")]
-[ExecuteInSystemGroup(typeof(InitializationSystemGroup))]
+[ExecuteInSystemGroup<InitializationSystemGroup>]
 public partial class Freecam : ASystem
 {
     [ComponentQuery] private readonly ComponentQuery<(Camera, Position)> _cameraQuery = new();

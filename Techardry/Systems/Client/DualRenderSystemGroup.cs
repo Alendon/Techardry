@@ -11,8 +11,8 @@ using Techardry.Identifications;
 namespace Techardry.Systems.Client;
 
 [RegisterSystem("dual_render")]
-[ExecuteAfter(typeof(ApplyGpuCameraBufferSystem))]
-[ExecuteInSystemGroup(typeof(PresentationSystemGroup))]
+[ExecuteAfter<ApplyGpuCameraBufferSystem>]
+[ExecuteInSystemGroup<PresentationSystemGroup>]
 public class DualRenderSystemGroup : ARenderSystemGroup
 {
     public override Identification Identification => SystemIDs.DualRender;
