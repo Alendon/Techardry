@@ -27,12 +27,7 @@ namespace Techardry;
 public partial class TechardryMod : IMod
 {
     public ushort ModId { get; set; }
-    public string StringIdentifier => "techardry";
-    public string ModDescription => "Techardry mod";
     public string ModName => "Techardry";
-    public ModVersion ModVersion => new(0, 0, 1);
-    public ModDependency[] ModDependencies => Array.Empty<ModDependency>();
-    public GameType ExecutionSide => GameType.Local;
 
     public void Dispose()
     {

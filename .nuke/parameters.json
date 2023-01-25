@@ -1,0 +1,14 @@
+{
+  "$schema": "./build.schema.json",
+  "Solution": "Techardry.sln",
+  "ModProject": "Techardry",
+  "Configuration": "Debug",
+  "ShaderInputFolders": [
+    "Voxels/shaders"
+  ],
+  "ShaderOutputFolders": [
+    "shaders/voxels"
+  ],
+  "ShaderDebugging": false,
+  "ResourceFolder": "Resources"
+}

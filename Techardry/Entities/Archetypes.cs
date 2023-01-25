@@ -21,10 +21,6 @@ public static class Archetypes
         {
             ComponentIDs.Camera,
             ComponentIDs.Position
-        },
-        AdditionalDlls = new[]
-        {
-            typeof(Silk.NET.Vulkan.DescriptorSet).Assembly.Location
         }
     };
 
@@ -34,9 +30,6 @@ public static class Archetypes
         ComponentIDs.Position, ComponentIDs.Rotation,
         ComponentIDs.Scale, ComponentIDs.Transform, ComponentIDs.Mass, ComponentIDs.Collider,
         ComponentIDs.InstancedRenderAble
-    }, new PhysicBoxSetup(), new[]
-    {
-        typeof(BodyHandle).Assembly.Location
     });
 
     internal class PhysicBoxSetup : IEntitySetup
