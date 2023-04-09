@@ -1,23 +1,21 @@
-﻿using System.Numerics;
+﻿using System.IO.Compression;
+using System.Numerics;
 using JetBrains.Annotations;
 using MintyCore;
-using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
-using MintyCore.Identifications;
 using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
-using MintyCore.Registries;
+using MintyCore.Network;
 using MintyCore.Render;
+using MintyCore.UI;
 using MintyCore.Utils;
-using Silk.NET.Input;
+using MintyCore.Utils.Maths;
 using Silk.NET.Vulkan;
-using Techardry.Entities;
+using Techardry.Components.Client;
+using Techardry.Identifications;
 using Techardry.Registries;
-using Techardry.World;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
-using MaterialIDs = Techardry.Identifications.MaterialIDs;
-using PipelineIDs = Techardry.Identifications.PipelineIDs;
 using TextureIDs = Techardry.Identifications.TextureIDs;
 
 namespace Techardry;
@@ -48,6 +46,9 @@ public partial class TechardryMod : IMod
             ShaderStorageBufferArrayNonUniformIndexing = true,
             DescriptorBindingVariableDescriptorCount = true,
         });
+        
+        Engine.RunMainMenu = RunMainMenu;
+        Engine.RunHeadless = RunHeadless;
     }
 
     public void Load()
@@ -79,6 +80,117 @@ public partial class TechardryMod : IMod
         };
     }
 
+    private static void RunMainMenu()
+    {
+        Engine.Timer.Reset();
+        while (Engine.Window is not null && Engine.Window.Exists)
+        {
+            Engine.Timer.Tick();
+
+            Engine.Window.DoEvents();
+
+            if (Engine.MainMenu is null)
+            {
+                Engine.MainMenu = UiHandler.GetRootElement(UiIDs.MainMenu);
+                Engine.MainMenu.Initialize();
+                Engine.MainMenu.IsActive = true;
+                MainUiRenderer.SetMainUiContext(Engine.MainMenu);
+            }
+
+            if (Engine.Timer.GameUpdate(out var deltaTime))
+            {
+                Engine.DeltaTime = deltaTime;
+                UiHandler.Update();
+            }
+
+            if (!Engine.Timer.RenderUpdate(out _) || !VulkanEngine.PrepareDraw()) continue;
+
+            MainUiRenderer.DrawMainUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
+
+            VulkanEngine.EndDraw();
+        }
+
+        MainUiRenderer.SetMainUiContext(null);
+        Engine.MainMenu = null;
+    }
+
+    private static void RunHeadless()
+    {
+        Engine.SetGameType(GameType.Server);
+        Engine.LoadMods(ModManager.GetAvailableMods(true));
+        WorldHandler.CreateWorlds(GameType.Server);
+        Engine.CreateServer(Engine.HeadlessPort);
+
+        Engine.Timer.Reset();
+        while (Engine.Stop == false)
+        {
+            Engine.Timer.Tick();
+
+            var simulationEnable = Engine.Timer.GameUpdate(out var deltaTime);
+
+            Engine.DeltaTime = deltaTime;
+            WorldHandler.UpdateWorlds(GameType.Server, simulationEnable, false);
+
+
+            WorldHandler.SendEntityUpdates();
+
+            NetworkHandler.Update();
+
+            Logger.AppendLogToFile();
+            if (simulationEnable)
+                Engine.Tick++;
+        }
+
+        Engine.CleanupGame();
+    }
+    
+    /// <summary>
+    ///     The main game loop
+    /// </summary>
+    public static void GameLoop()
+    {
+        //If this is a client game (client or local) wait until the player is connected
+        while (MathHelper.IsBitSet((int) Engine.GameType, (int) GameType.Client) &&
+               PlayerHandler.LocalPlayerGameId == Constants.InvalidId)
+            NetworkHandler.Update();
+
+        Engine.DeltaTime = 0;
+        Engine.Timer.Reset();
+        while (Engine.Stop == false)
+        {
+            Engine.Timer.Tick();
+            Engine.Window!.DoEvents();
+
+            var drawingEnable = Engine.Timer.RenderUpdate(out var renderDeltaTime) && VulkanEngine.PrepareDraw();
+
+            var simulationEnable = Engine.Timer.GameUpdate(out var deltaTime);
+
+
+            Engine.DeltaTime = deltaTime;
+            Engine.RenderDeltaTime = renderDeltaTime;
+
+            WorldHandler.UpdateWorlds(GameType.Local, simulationEnable, drawingEnable);
+
+
+            if (drawingEnable)
+            {
+                MainUiRenderer.DrawMainUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
+                VulkanEngine.EndDraw();
+            }
+
+            WorldHandler.SendEntityUpdates();
+
+            NetworkHandler.Update();
+
+
+            Logger.AppendLogToFile();
+            if (simulationEnable)
+                Engine.Tick++;
+        }
+
+        Engine.CleanupGame();
+    }
+
     public void PostLoad()
     {
     }
@@ -88,69 +200,6 @@ public partial class TechardryMod : IMod
     {
         TextureIDs.Dirt, TextureIDs.Stone
     });
-
-    [OverrideWorld("default", "minty_core")]
-    public static WorldInfo TechardryWorldInfo => new()
-    {
-        WorldCreateFunction = serverWorld => new TechardryWorld(serverWorld),
-    };
-
-    [RegisterMaterial("dual_block")]
-    public static MaterialInfo DualBlock => new()
-    {
-        DescriptorSets = new[]
-        {
-            (TextureIDs.Dirt, 1u)
-        },
-        PipelineId = PipelineIDs.DualTexture
-    };
-
-    [RegisterInstancedRenderData("dual_block")]
-    public static InstancedRenderDataInfo DualBlockRenderData => new()
-    {
-        MeshId = MeshIDs.Cube,
-        MaterialIds = new[]
-        {
-            MaterialIDs.DualBlock
-        }
-    };
-
-    [RegisterKeyAction("spawn_test_cube")]
-    public static KeyActionInfo SpawnTestCube => new KeyActionInfo()
-    {
-        Action = (state, _) =>
-        {
-            if (state != KeyStatus.KeyDown) return;
-
-            if (!WorldHandler.TryGetWorld(GameType.Server, WorldIDs.Default, out var world)) return;
-
-            world.EntityManager.CreateEntity(ArchetypeIDs.PhysicBox, null, new Archetypes.PhysicBoxSetup()
-            {
-                Mass = 10,
-                Position = new Vector3(Random.Shared.NextSingle() * 16, 32, Random.Shared.NextSingle() * 16),
-                Scale = new Vector3(1, 1, 1),
-            });
-        },
-        Key = Key.H,
-        MouseButton = null
-    };
-
-    public static int RenderMode = 3;
-    
-    [RegisterKeyAction("switch_render_mode")]
-    public static KeyActionInfo SwitchRenderMode => new()
-    {
-        Action = (state, _) =>
-        {
-            if (state is KeyStatus.KeyDown)
-            {
-                RenderMode %= 3;
-                RenderMode++;
-            }
-        },
-        Key = Key.K,
-        MouseButton = null
-    };
 
     public void Unload()
     {

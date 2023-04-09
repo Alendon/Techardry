@@ -2,11 +2,13 @@
 using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
-using MintyCore.Identifications;
 using MintyCore.Registries;
 using MintyCore.Render;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
+using Techardry.Components.Client;
+using Techardry.Identifications;
+using Techardry.Utils;
 using Buffer = System.Buffer;
 
 namespace Techardry.Systems.Client;
@@ -37,7 +39,7 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
     /// <inheritdoc />
     protected override void Execute()
     {
-        if((TechardryMod.RenderMode & 2) == 0) return;
+        if((KeyActions.RenderMode & 2) == 0) return;
         
         //Iterate over each entity and write the current transform to the corresponding staging buffer
         _drawCount.Clear();

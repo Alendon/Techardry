@@ -13,8 +13,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="mintycore.shadercompiler" Version="0.2.0" />
     <PackageReference Include="Nuke.Common" Version="6.3.0" />
-    <PackageReference Include="ShaderCompiler" Version="0.0.2" />
   </ItemGroup>
 
 </Project>

@@ -43,6 +43,23 @@ public readonly struct VoxelData : IEquatable<VoxelData>
         return renderData;
     }
 
+    public void Serialize(DataWriter writer)
+    {
+        Id.Serialize(writer);
+    }
+    
+    public static bool Deserialize(DataReader reader, out VoxelData data)
+    {
+        if (Identification.Deserialize(reader, out var id))
+        {
+            data = new VoxelData(id);
+            return true;
+        }
+        
+        data = default;
+        return false;
+    }
+
     public bool Equals(VoxelData other)
     {
         return Id == other.Id;

@@ -1,4 +1,7 @@
-﻿using System.Diagnostics;
+﻿using System.Collections;
+using System.Linq;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -10,7 +13,7 @@ using TechardryMath = Techardry.Utils.MathHelper;
 namespace Techardry.Voxels;
 
 [DebuggerTypeProxy(typeof(OctreeDebugView))]
-public class VoxelOctree
+public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 {
     /// <summary>
     /// The maximum dimension of the tree in element it can store.
@@ -39,7 +42,7 @@ public class VoxelOctree
     /// <summary>
     /// Depth where the size of one voxel is 1.
     /// </summary>
-    public static readonly int SizeOneDepth = (int) Math.Log2(Dimensions);
+    public static readonly int SizeOneDepth = (int)Math.Log2(Dimensions);
 
     /// <summary>
     /// How often a single voxel can be subdivided.
@@ -67,10 +70,10 @@ public class VoxelOctree
 
     internal uint NodeCapacity
     {
-        get => (uint) Nodes.Length;
+        get => (uint)Nodes.Length;
         set
         {
-            var alignedSize = MathHelper.CeilPower2((int) Math.Max(value, InitialNodeCapacity));
+            var alignedSize = MathHelper.CeilPower2((int)Math.Max(value, InitialNodeCapacity));
             ResizeNodes(alignedSize);
         }
     }
@@ -100,10 +103,10 @@ public class VoxelOctree
 
     internal uint DataCapacity
     {
-        get => (uint) Data.ownerNodes.Length;
+        get => (uint)Data.ownerNodes.Length;
         set
         {
-            var alignedSize = MathHelper.CeilPower2((int) Math.Max(value, InitialDataCapacity));
+            var alignedSize = MathHelper.CeilPower2((int)Math.Max(value, InitialDataCapacity));
             ResizeData(alignedSize);
         }
     }
@@ -172,16 +175,68 @@ public class VoxelOctree
         ValidateTree();
     }
 
+
+    public void Serialize(DataWriter writer)
+    {
+        //writer.EnterRegion("octree");
+
+        DataWriter.ValueRef<int> count = writer.AddValueRef<int>();
+        int countValue = 0;
+        
+        foreach (var leafNode in this)
+        {
+            
+            writer.Put(leafNode.Depth);
+            writer.Put(leafNode.Position);
+            
+            leafNode.Data.Serialize(writer);
+            countValue++;
+        }
+
+        count.SetValue(countValue);
+        
+        //writer.ExitRegion();
+    }
+
+    public static bool TryDeserialize(DataReader reader, [NotNullWhen(true)] out VoxelOctree? octree)
+    {
+        //reader.EnterRegion();
+
+        if (!reader.TryGetInt(out int count))
+        {
+            octree = null;
+            return false;
+        }
+
+        octree = new VoxelOctree();
+        
+        for (int i = 0; i < count; i++)
+        {
+            if (!reader.TryGetByte(out var depth)
+                || !reader.TryGetVector3(out var position)
+                || !VoxelData.Deserialize(reader, out var data))
+            {
+                octree = null;
+                return false;
+            }
+
+            octree.Insert(data, position, depth);
+        }
+
+        //reader.ExitRegion();
+        return true;
+    }
+
     [Conditional("DEBUG_OCTREE")]
     private void ValidateTree()
     {
         ValidateTreeInner(ref GetRootNode());
-        
+
         for (var i = NodeCount; i < Nodes.Length; i++)
         {
-            Logger.AssertAndThrow(Nodes[i] == (Node) default, "Node array not cleared", "VoxelOctree");
+            Logger.AssertAndThrow(Nodes[i] == (Node)default, "Node array not cleared", "VoxelOctree");
         }
-        
+
         for (var i = 0; i < NodeCount; i++)
         {
             ref var node = ref Nodes[i];
@@ -331,7 +386,7 @@ public class VoxelOctree
             NodeCount -= ChildCount;
             node.SetChildIndex(InvalidIndex);
 
-            Nodes.AsSpan((int) NodeCount, ChildCount).Clear();
+            Nodes.AsSpan((int)NodeCount, ChildCount).Clear();
 
             //array could be resized here
             return ref Nodes[node.Index];
@@ -377,8 +432,8 @@ public class VoxelOctree
         replaceParent.SetChildIndex(toReplaceIndex);
 
         NodeCount -= ChildCount;
-        Nodes.AsSpan((int) NodeCount, ChildCount).Clear();
-        
+        Nodes.AsSpan((int)NodeCount, ChildCount).Clear();
+
         //array could be resized here
         return ref Nodes[node.Index];
     }
@@ -443,11 +498,11 @@ public class VoxelOctree
 
         node.SetChildIndex(firstChildIndex);
         NodeCount += ChildCount;
-        
+
         //array could be resized here
         node = ref Nodes[node.Index];
 
-        var childDepth = (byte) (node.Depth + 1);
+        var childDepth = (byte)(node.Depth + 1);
 
         node.GetLocationData(out var location, out var size);
         var halfSize = size / 2;
@@ -531,7 +586,7 @@ public class VoxelOctree
         var oldNodes = Nodes;
 
         Nodes = new Node[newCapacity];
-        oldNodes.AsSpan(0, (int) NodeCount).CopyTo(Nodes);
+        oldNodes.AsSpan(0, (int)NodeCount).CopyTo(Nodes);
     }
 
     internal void ResizeData(int newCapacity)
@@ -545,10 +600,10 @@ public class VoxelOctree
             new uint[newCapacity], new VoxelData[newCapacity], new VoxelPhysicsData[newCapacity],
             new VoxelRenderData[newCapacity]);
 
-        oldOwners.AsSpan(0, (int) DataCount).CopyTo(Data.ownerNodes.AsSpan());
-        oldVoxels.AsSpan(0, (int) DataCount).CopyTo(Data.voxels.AsSpan());
-        oldPhysicsData.AsSpan(0, (int) DataCount).CopyTo(Data.physicsData.AsSpan());
-        oldRenderData.AsSpan(0, (int) DataCount).CopyTo(Data.renderData.AsSpan());
+        oldOwners.AsSpan(0, (int)DataCount).CopyTo(Data.ownerNodes.AsSpan());
+        oldVoxels.AsSpan(0, (int)DataCount).CopyTo(Data.voxels.AsSpan());
+        oldPhysicsData.AsSpan(0, (int)DataCount).CopyTo(Data.physicsData.AsSpan());
+        oldRenderData.AsSpan(0, (int)DataCount).CopyTo(Data.renderData.AsSpan());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
@@ -578,7 +633,7 @@ public class VoxelOctree
         var adjustedZ = position.Z % sizeCurrentLayer;
         var lowerZ = adjustedZ < halfSizeCurrentLayer;
 
-        return (byte) ((lowerX ? 0 : 4) + (lowerY ? 0 : 2) + (lowerZ ? 0 : 1));
+        return (byte)((lowerX ? 0 : 4) + (lowerY ? 0 : 2) + (lowerZ ? 0 : 1));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
@@ -620,9 +675,9 @@ public class VoxelOctree
         {
             var localDimensions = LocalDimensions();
 
-            size = Dimensions / (float) localDimensions;
+            size = Dimensions / (float)localDimensions;
 
-            var location = (int) Location;
+            var location = (int)Location;
 
             var x = location % localDimensions;
             var y = location / localDimensions % localDimensions;
@@ -636,18 +691,18 @@ public class VoxelOctree
         public void SetLocationData(Vector3 position)
         {
             var localDimensions = LocalDimensions();
-            var size = Dimensions / (float) localDimensions;
+            var size = Dimensions / (float)localDimensions;
 
-            var x = (int) (position.X / size);
-            var y = (int) (position.Y / size);
-            var z = (int) (position.Z / size);
+            var x = (int)(position.X / size);
+            var y = (int)(position.Y / size);
+            var z = (int)(position.Z / size);
 
-            Location = (uint) (x + y * localDimensions + z * localDimensions * localDimensions);
+            Location = (uint)(x + y * localDimensions + z * localDimensions * localDimensions);
         }
 
         public float GetSize()
         {
-            return Dimensions / (float) LocalDimensions();
+            return Dimensions / (float)LocalDimensions();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
@@ -661,7 +716,7 @@ public class VoxelOctree
 
         public byte ParentChildIndex
         {
-            get => (byte) (AdditionalData & ParentChildIndexMask);
+            get => (byte)(AdditionalData & ParentChildIndexMask);
             set => AdditionalData = (AdditionalData & ~ParentChildIndexMask) | value;
         }
 
@@ -669,8 +724,8 @@ public class VoxelOctree
 
         public byte Depth
         {
-            get => (byte) ((AdditionalData & DepthMask) >> 4);
-            set => AdditionalData = (AdditionalData & ~DepthMask) | ((uint) value << 4);
+            get => (byte)((AdditionalData & DepthMask) >> 4);
+            set => AdditionalData = (AdditionalData & ~DepthMask) | ((uint)value << 4);
         }
 
         public bool IsEmpty => DataIndex == InvalidIndex;
@@ -755,5 +810,41 @@ public class VoxelOctree
 
             public VoxelData VoxelData;
         }
+    }
+
+    public struct VoxelLeafNode
+    {
+        public Vector3 Position;
+        public float Size;
+        public VoxelData Data;
+        public VoxelRenderData RenderData;
+        public VoxelPhysicsData PhysicsData;
+        public byte Depth;
+    }
+
+    public IEnumerator<VoxelLeafNode> GetEnumerator()
+    {
+        //select all nodes inside the length of the octree
+        var nodes = from node in Nodes[0..(int)NodeCount]
+            where node is { IsLeaf: true, IsEmpty: false }
+            select node;
+        
+        foreach (var node in nodes)
+        {
+            var leafNode = new VoxelLeafNode();
+
+            node.GetLocationData(out leafNode.Position, out leafNode.Size);
+            leafNode.Data = Data.voxels[node.DataIndex];
+            leafNode.RenderData = Data.renderData[node.DataIndex];
+            leafNode.PhysicsData = Data.physicsData[node.DataIndex];
+            leafNode.Depth = node.Depth;
+
+            yield return leafNode;
+        }
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
     }
 }

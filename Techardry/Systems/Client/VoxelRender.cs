@@ -2,13 +2,13 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using JetBrains.Annotations;
-using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Registries;
 using MintyCore.Render;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
+using Techardry.Components.Client;
 using Techardry.Identifications;
 using Techardry.Render;
 using Techardry.Utils;
@@ -464,7 +464,7 @@ public partial class VoxelRender : ARenderSystem
     {
         if (World is null) return;
         
-        if((TechardryMod.RenderMode & 1) == 0) return;
+        if((KeyActions.RenderMode & 1) == 0) return;
 
         var cameraEntity = _cameraQuery.FirstOrDefault();
 

@@ -7,22 +7,55 @@ using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
 using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.CollisionDetection.SweepTasks;
-using MintyCore.Components.Client;
-using MintyCore.Components.Common;
+using BepuPhysics.Constraints;
+using BepuUtilities;
+using MintyCore.ECS;
 using MintyCore.Physics;
 using MintyCore.Utils;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
-using Techardry.Utils;
 using Techardry.Voxels;
+using Int3 = Techardry.Utils.Int3;
+using MathHelper = Techardry.Utils.MathHelper;
 
 namespace Techardry.World;
 
-public class TechardryWorld : MintyCore.ECS.World
+public class TechardryWorld : IWorld
 {
+    private SystemManager? _systemManager;
+    private EntityManager? _entityManager;
+    private PhysicsWorld? _physicsWorld;
+    
+    /// <summary>
+    ///     Whether or not the systems are executing now
+    /// </summary>
+    public bool IsExecuting { get; private set; }
+
+    /// <summary>
+    ///     The SystemManager of the <see cref="World" />
+    /// </summary>
+    public SystemManager SystemManager => _systemManager ?? throw new Exception("Object is Disposed");
+
+    /// <summary>
+    ///     The EntityManager of the <see cref="World" />
+    /// </summary>
+    public EntityManager EntityManager => _entityManager ?? throw new Exception("Object is Disposed");
+
+    /// <summary>
+    ///     The <see cref="PhysicsWorld" /> of the <see cref="World" />
+    /// </summary>
+    public PhysicsWorld PhysicsWorld => _physicsWorld ?? throw new Exception("Object is Disposed");
+    
+    public Identification Identification => WorldIDs.Default;
+
     private ConcurrentDictionary<Int3, Chunk> _chunks = new();
 
     private List<StaticHandle> _bodyHandles = new();
+    
+    /// <summary>
+    ///     Whether or not this world is a server world.
+    /// </summary>
+    public bool IsServerWorld { get; }
 
     internal void CreateChunk(Int3 chunkPos)
     {
@@ -53,16 +86,32 @@ public class TechardryWorld : MintyCore.ECS.World
         return _chunks.Keys;
     }
 
-    public TechardryWorld(bool isServerWorld) : base(isServerWorld)
+    public TechardryWorld(bool isServerWorld)
     {
-        SystemManager.SetSystemActive(MintyCore.Identifications.SystemIDs.RenderInstanced, false);
+        IsServerWorld = isServerWorld;
+        _entityManager = new EntityManager(this);
+        _systemManager = new SystemManager(this);
+
+        var narrowPhase = new MintyNarrowPhaseCallback(new SpringSettings(30f, 1f), 1f, 2f);
+        
+        var poseIntegrator = new MintyPoseIntegratorCallback(new Vector3(0, -10, 0), 0.03f, 0.03f);
+        var solveDescription = new SolveDescription(8, 8);
+
+        _physicsWorld = PhysicsWorld.Create(narrowPhase, poseIntegrator, solveDescription);
+        
+        SystemManager.SetSystemActive(SystemIDs.RenderInstanced, false);
         RegisterPhysicsExtensions();
         CreateSomeChunks();
     }
 
-    public TechardryWorld(bool isServerWorld, PhysicsWorld physicsWorld) : base(isServerWorld, physicsWorld)
+    public TechardryWorld(bool isServerWorld, PhysicsWorld physicsWorld)
     {
-        SystemManager.SetSystemActive(MintyCore.Identifications.SystemIDs.RenderInstanced, false);
+        IsServerWorld = isServerWorld;
+        _entityManager = new EntityManager(this);
+        _systemManager = new SystemManager(this);
+        _physicsWorld = physicsWorld;
+        
+        SystemManager.SetSystemActive(SystemIDs.RenderInstanced, false);
         RegisterPhysicsExtensions();
         CreateSomeChunks();
     }
@@ -176,8 +225,52 @@ public class TechardryWorld : MintyCore.ECS.World
 
         sw.Stop();
         Logger.WriteLog($"Chunk gen took {sw.ElapsedMilliseconds}ms", LogImportance.Debug, "TechardryWorld");
+
+        var octree = chunk!.Octree;
+
+        for (int i = 0; i < 10000; i++)
+        {
+            DataWriter warmUp = new();
+            octree.Serialize(warmUp);
+            warmUp.Dispose();
+        }
         
+        DataWriter writer = new();
         
+        Stopwatch sw2 = Stopwatch.StartNew();
+        octree.Serialize(writer);
+        sw2.Stop();
+
+        var source = writer.ConstructBuffer().ToArray();
+        
+        for (int i = 0; i < 10000; i++)
+        {
+            DataReader warmUp = new(source);
+            VoxelOctree.TryDeserialize(warmUp, out _);
+            warmUp.Dispose();
+        }
+        
+        DataReader reader = new(source);
+
+        Stopwatch sw3 = Stopwatch.StartNew();
+        bool success = VoxelOctree.TryDeserialize(reader, out var copy);
+        sw3.Stop();
+
+        if (success && octree.Count() == copy!.Count())
+        {
+            
+            var first = octree.ToArray();
+            var second = copy!.ToArray();
+
+            foreach (var entry in first)
+            {
+                //check if in the second array a value with the same position id and depth exists
+                if (!second.Any(x => x.Position == entry.Position && x.Data.Id == entry.Data.Id && x.Depth == entry.Depth))
+                    throw new Exception("Serialization failed");
+            }
+
+            Logger.WriteLog($"Serialization successful Serialization took {sw2.Elapsed}ms Deserialization took {sw3.Elapsed}ms", LogImportance.Debug, "TechardryWorld");
+        }
         
         if (!IsServerWorld) return;
 
@@ -243,5 +336,131 @@ public class TechardryWorld : MintyCore.ECS.World
                 }
             }
         }
+    }
+    
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        EntityManager.Dispose();
+        SystemManager.Dispose();
+        PhysicsWorld.Dispose();
+
+        _entityManager = null;
+        _physicsWorld = null;
+        _systemManager = null;
+    }
+
+    /// <summary>
+    ///     Simulate one <see cref="World" /> tick
+    /// </summary>
+    public void Tick()
+    {
+        IsExecuting = true;
+        SystemManager.Execute();
+        IsExecuting = false;
+    }
+
+    
+}
+
+internal struct MintyPoseIntegratorCallback : IPoseIntegratorCallbacks
+{
+    private Vector<float> _dtAngularDamping;
+
+    private Vector3Wide _dtGravity;
+    private Vector<float> _dtLinearDamping;
+    private readonly float _angularDamping;
+    private readonly Vector3 _gravity;
+    private readonly float _linearDamping;
+
+    public MintyPoseIntegratorCallback(Vector3 gravity, float angularDamping, float linearDamping)
+    {
+        AngularIntegrationMode = AngularIntegrationMode.Nonconserving;
+        IntegrateVelocityForKinematics = false;
+        AllowSubstepsForUnconstrainedBodies = false;
+
+        _gravity = gravity;
+        _angularDamping = angularDamping;
+        _linearDamping = linearDamping;
+
+        _dtGravity = default;
+        _dtAngularDamping = default;
+        _dtLinearDamping = default;
+    }
+
+
+    public void Initialize(Simulation simulation)
+    {
+    }
+
+    public void PrepareForIntegration(float dt)
+    {
+        _dtGravity = Vector3Wide.Broadcast(_gravity * dt);
+        _dtLinearDamping = new Vector<float>(MathF.Pow( BepuUtilities.MathHelper.Clamp(1 - _linearDamping, 0, 1), dt));
+        _dtAngularDamping = new Vector<float>(MathF.Pow(BepuUtilities.MathHelper.Clamp(1 - _angularDamping, 0, 1), dt));
+    }
+
+    public void IntegrateVelocity(Vector<int> bodyIndices, Vector3Wide position, QuaternionWide orientation,
+        BodyInertiaWide localInertia, Vector<int> integrationMask, int workerIndex, Vector<float> dt,
+        ref BodyVelocityWide velocity)
+    {
+        velocity.Linear = (velocity.Linear + _dtGravity) * _dtLinearDamping;
+        velocity.Angular *= _dtAngularDamping;
+    }
+
+    public AngularIntegrationMode AngularIntegrationMode { get; }
+    public bool AllowSubstepsForUnconstrainedBodies { get; }
+    public bool IntegrateVelocityForKinematics { get; }
+}
+
+internal readonly struct MintyNarrowPhaseCallback : INarrowPhaseCallbacks
+{
+    private readonly SpringSettings _contactSpringiness;
+    private readonly float _frictionCoefficient;
+    private readonly float _maximumRecoveryVelocity;
+
+    public MintyNarrowPhaseCallback(SpringSettings contactSpringiness, float frictionCoefficient,
+        float maximumRecoveryVelocity)
+    {
+        _contactSpringiness = contactSpringiness;
+        _frictionCoefficient = frictionCoefficient;
+        _maximumRecoveryVelocity = maximumRecoveryVelocity;
+    }
+
+    public void Initialize(Simulation simulation)
+    {
+    }
+
+    public bool AllowContactGeneration(int workerIndex, CollidableReference a, CollidableReference b,
+        ref float speculativeMargin)
+    {
+        return a.Mobility == CollidableMobility.Dynamic || b.Mobility == CollidableMobility.Dynamic;
+    }
+
+    public bool ConfigureContactManifold<TManifold>(int workerIndex, CollidablePair pair,
+        ref TManifold manifold,
+        out PairMaterialProperties pairMaterial) where TManifold : unmanaged, IContactManifold<TManifold>
+    {
+        pairMaterial.FrictionCoefficient = _frictionCoefficient;
+        pairMaterial.MaximumRecoveryVelocity = _maximumRecoveryVelocity;
+        pairMaterial.SpringSettings = _contactSpringiness;
+        return true;
+    }
+
+
+    public bool AllowContactGeneration(int workerIndex, CollidablePair pair, int childIndexA, int childIndexB)
+    {
+        return true;
+    }
+
+    public bool ConfigureContactManifold(int workerIndex, CollidablePair pair, int childIndexA, int childIndexB,
+        ref ConvexContactManifold manifold)
+    {
+        return true;
+    }
+
+    public void Dispose()
+    {
     }
 }

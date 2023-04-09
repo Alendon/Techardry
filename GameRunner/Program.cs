@@ -9,25 +9,22 @@ debug = true;
 
 var processFile = new FileInfo(Environment.ProcessPath!);
 
-var dotnetVersion = $"net{Environment.Version.Major}.{Environment.Version.Minor}";
-
 var solutionFolder = processFile.Directory.Parent.Parent.Parent.Parent;
-var projectFolder = solutionFolder.EnumerateDirectories("Techardry", SearchOption.TopDirectoryOnly).FirstOrDefault();
 
-ShaderCompiler.Program.CompileShaders(new DirectoryInfo($"{projectFolder.FullName}/Voxels/shaders"),
-    new DirectoryInfo($"{projectFolder.FullName}/Resources/shaders/voxels"));
 
 //Compile the project
 var compileProcess = new Process
 {
     StartInfo = new ProcessStartInfo
     {
-        FileName = "dotnet",
-        Arguments = $"build {projectFolder.FullName} -c {(debug ? "Debug" : "Release")}",
-        UseShellExecute = false,
+        FileName = "nuke",
+        Arguments = $"--configuration {(debug ? "Debug" : "Release")}",
         RedirectStandardOutput = true,
         RedirectStandardError = true,
         CreateNoWindow = false,
+        WorkingDirectory = solutionFolder.FullName,
+        StandardOutputEncoding = Console.OutputEncoding,
+        StandardErrorEncoding = Console.OutputEncoding
     }
 };
 compileProcess.ErrorDataReceived += (sender, e) =>
@@ -56,11 +53,11 @@ if (exitCode != 0)
     Environment.Exit(exitCode);
 }
 
+var projectFolder = solutionFolder.EnumerateDirectories("Techardry", SearchOption.TopDirectoryOnly).FirstOrDefault();
 var buildFolder = projectFolder.EnumerateDirectories("bin", SearchOption.TopDirectoryOnly).FirstOrDefault();
 buildFolder = buildFolder.EnumerateDirectories(debug ? "Debug" : "Release", SearchOption.TopDirectoryOnly)
     .FirstOrDefault();
-var modFolder = buildFolder.EnumerateDirectories(dotnetVersion, SearchOption.TopDirectoryOnly).FirstOrDefault();
 
-Console.Clear();
+//Console.Clear();
 
-Engine.Main(new[] {$"-addModDir={modFolder.FullName}"});
+Engine.Main(new[] {$"-addModDir={buildFolder.FullName}"});

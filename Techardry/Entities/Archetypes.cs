@@ -19,7 +19,7 @@ public static class Archetypes
     {
         ComponentIDs = new[]
         {
-            ComponentIDs.Camera,
+            Identifications.ComponentIDs.Camera,
             ComponentIDs.Position
         }
     };

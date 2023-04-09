@@ -3,7 +3,6 @@ using MintyCore.ECS;
 using MintyCore.Registries;
 using MintyCore.Render;
 using MintyCore.SystemGroups;
-using MintyCore.Systems.Client;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;

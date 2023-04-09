@@ -360,14 +360,14 @@ public static class RenderObjects
             {
                 Shaders = new[]
                 {
-                    MintyCore.Identifications.ShaderIDs.TriangleVert,
-                    MintyCore.Identifications.ShaderIDs.TextureFrag
+                    ShaderIDs.TriangleVert,
+                    ShaderIDs.TextureFrag
                 },
                 Scissors = new[] {scissor},
                 Viewports = new[] {viewport},
                 DescriptorSets = new[]
                 {
-                    DescriptorSetIDs.CameraBuffer, 
+                    Identifications.DescriptorSetIDs.CameraBuffer, 
                     DescriptorSetIDs.SampledTexture
                 },
                 Flags = 0,

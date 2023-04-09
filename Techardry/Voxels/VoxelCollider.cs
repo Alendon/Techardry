@@ -7,7 +7,6 @@ using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.Trees;
 using BepuUtilities;
 using BepuUtilities.Memory;
-using Silk.NET.Maths;
 
 namespace Techardry.Voxels;
 
