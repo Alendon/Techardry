@@ -100,7 +100,7 @@ public static class RenderObjects
             {
                 Flags = 0,
                 Format = VulkanEngine.SwapchainImageFormat,
-                Samples = SampleCountFlags.SampleCount1Bit,
+                Samples = SampleCountFlags.Count1Bit,
                 InitialLayout = ImageLayout.PresentSrcKhr,
                 FinalLayout = ImageLayout.PresentSrcKhr,
                 LoadOp = AttachmentLoadOp.Load,
@@ -113,7 +113,7 @@ public static class RenderObjects
             {
                 Flags = 0,
                 Format = Format.D32Sfloat,
-                Samples = SampleCountFlags.SampleCount1Bit,
+                Samples = SampleCountFlags.Count1Bit,
                 InitialLayout = ImageLayout.DepthStencilAttachmentOptimal,
                 FinalLayout = ImageLayout.DepthStencilAttachmentOptimal,
                 LoadOp = AttachmentLoadOp.Load,
@@ -187,20 +187,20 @@ public static class RenderObjects
                 DependencyFlags = 0,
                 SrcSubpass = Vk.SubpassExternal,
                 DstSubpass = 0,
-                SrcAccessMask = AccessFlags.AccessNoneKhr,
-                DstAccessMask = AccessFlags.AccessColorAttachmentWriteBit | AccessFlags.AccessColorAttachmentReadBit,
-                SrcStageMask = PipelineStageFlags.PipelineStageColorAttachmentOutputBit,
-                DstStageMask = PipelineStageFlags.PipelineStageColorAttachmentOutputBit
+                SrcAccessMask = AccessFlags.NoneKhr,
+                DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.ColorAttachmentReadBit,
+                SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+                DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit
             },
             new SubpassDependency()
             {
-                DependencyFlags = DependencyFlags.DependencyByRegionBit,
+                DependencyFlags = DependencyFlags.ByRegionBit,
                 SrcSubpass = 0,
                 DstSubpass = 1,
-                SrcAccessMask = AccessFlags.AccessNoneKhr,
-                DstAccessMask = AccessFlags.AccessColorAttachmentWriteBit | AccessFlags.AccessColorAttachmentReadBit,
-                SrcStageMask = PipelineStageFlags.PipelineStageColorAttachmentOutputBit,
-                DstStageMask = PipelineStageFlags.PipelineStageColorAttachmentOutputBit,
+                SrcAccessMask = AccessFlags.NoneKhr,
+                DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.ColorAttachmentReadBit,
+                SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+                DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
             }
         },
         0);

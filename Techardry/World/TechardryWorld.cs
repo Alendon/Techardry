@@ -9,14 +9,18 @@ using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.CollisionDetection.SweepTasks;
 using BepuPhysics.Constraints;
 using BepuUtilities;
+using MintyCore;
+using MintyCore.Components.Client;
+using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.Network;
 using MintyCore.Physics;
 using MintyCore.Utils;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
+using Techardry.Networking;
 using Techardry.Voxels;
 using Int3 = Techardry.Utils.Int3;
-using MathHelper = Techardry.Utils.MathHelper;
 
 namespace Techardry.World;
 
@@ -185,96 +189,46 @@ public class TechardryWorld : IWorld
     {
         Int3 chunkRadius = new()
         {
-            X = 2,
+            X = 5,
             Y = 1,
-            Z = 2
+            Z = 5
         };
 
         Int3 chunkPos = default;
-
-
+        
         int seed = 5;
 
         var noise = new FastNoiseLite(seed);
         noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         noise.SetFrequency(0.02f);
-
+        
         Stopwatch sw = Stopwatch.StartNew();
 
-        /*for (chunkPos.X = -chunkRadius.X; chunkPos.X < chunkRadius.X; chunkPos.X++)
+        for (int x = -chunkRadius.X; x < chunkRadius.X; x++)
         {
-            for (chunkPos.Y = 0; chunkPos.Y < 1; chunkPos.Y++)
             {
-                for (chunkPos.Z = -chunkRadius.Z; chunkPos.Z < chunkRadius.Z; chunkPos.Z++)
+                for (int z = -chunkRadius.Z; z < chunkRadius.Z; z++)
                 {
+                    chunkPos.X = x;
+                    chunkPos.Y = 0;
+                    chunkPos.Z = z;
+
+
+
+
                     CreateChunk(chunkPos);
-
-                    if (!TryGetChunk(chunkPos, out var chunk))
-                    {
-                        continue;
-                    }
-
-                    FillChunk(chunk, noise);
+                    TryGetChunk(chunkPos, out var chunk);
+                    FillChunk(chunk!, noise);
                 }
             }
-        }*/
-        
-        CreateChunk(chunkPos);
-        TryGetChunk(chunkPos, out var chunk);
-        FillChunk(chunk!, noise);
+        }
 
         sw.Stop();
         Logger.WriteLog($"Chunk gen took {sw.ElapsedMilliseconds}ms", LogImportance.Debug, "TechardryWorld");
 
-        var octree = chunk!.Octree;
-
-        for (int i = 0; i < 10000; i++)
-        {
-            DataWriter warmUp = new();
-            octree.Serialize(warmUp);
-            warmUp.Dispose();
-        }
-        
-        DataWriter writer = new();
-        
-        Stopwatch sw2 = Stopwatch.StartNew();
-        octree.Serialize(writer);
-        sw2.Stop();
-
-        var source = writer.ConstructBuffer().ToArray();
-        
-        for (int i = 0; i < 10000; i++)
-        {
-            DataReader warmUp = new(source);
-            VoxelOctree.TryDeserialize(warmUp, out _);
-            warmUp.Dispose();
-        }
-        
-        DataReader reader = new(source);
-
-        Stopwatch sw3 = Stopwatch.StartNew();
-        bool success = VoxelOctree.TryDeserialize(reader, out var copy);
-        sw3.Stop();
-
-        if (success && octree.Count() == copy!.Count())
-        {
-            
-            var first = octree.ToArray();
-            var second = copy!.ToArray();
-
-            foreach (var entry in first)
-            {
-                //check if in the second array a value with the same position id and depth exists
-                if (!second.Any(x => x.Position == entry.Position && x.Data.Id == entry.Data.Id && x.Depth == entry.Depth))
-                    throw new Exception("Serialization failed");
-            }
-
-            Logger.WriteLog($"Serialization successful Serialization took {sw2.Elapsed}ms Deserialization took {sw3.Elapsed}ms", LogImportance.Debug, "TechardryWorld");
-        }
-        
         if (!IsServerWorld) return;
 
-        /*foreach (var staticHandle in _bodyHandles)
+        foreach (var staticHandle in _bodyHandles)
         {
             var staticReference = PhysicsWorld.Simulation.Statics.GetStaticReference(staticHandle);
             var collider = PhysicsWorld.Simulation.Shapes.GetShape<VoxelCollider>(staticReference.Shape.Index);
@@ -300,7 +254,7 @@ public class TechardryWorld : IWorld
                 position.Value = pose.Position;
                 EntityManager.SetComponent(voxelEntity, position);
             }
-        }*/
+        }
         
         
     }
@@ -359,6 +313,26 @@ public class TechardryWorld : IWorld
         IsExecuting = true;
         SystemManager.Execute();
         IsExecuting = false;
+
+       /* if (IsServerWorld)
+        {
+            foreach (var (pos, chunk) in _chunks)
+            {
+                if (chunk.Version != chunk.LastSyncedVersion)
+                {
+                    var message = new ChunkDataMessage()
+                    {
+                        Octree = chunk.Octree,
+                        ChunkPosition = pos,
+                        WorldId = Identification
+                    };
+                    
+                    message.Send(PlayerHandler.GetConnectedPlayers());
+                    
+                    chunk.LastSyncedVersion = chunk.Version;
+                }
+            }
+        }*/
     }
 
     

@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using JetBrains.Annotations;
+using MintyCore.Utils;
 
 namespace Techardry.Utils;
 
@@ -23,6 +24,23 @@ public struct Int3 : IEquatable<Int3>
         X = v;
         Y = v;
         Z = v;
+    }
+    
+    public void Serialize(DataWriter writer)
+    {
+        writer.Put(X);
+        writer.Put(Y);
+        writer.Put(Z);
+    }
+    
+    public static bool TryDeserialize(DataReader reader, out Int3 result)
+    {
+        result = default;
+        if (!reader.TryGetInt(out var x)) return false;
+        if (!reader.TryGetInt(out var y)) return false;
+        if (!reader.TryGetInt(out var z)) return false;
+        result = new Int3(x, y, z);
+        return true;
     }
     
     public static bool operator ==(Int3 left, Int3 right)

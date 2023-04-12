@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using MintyCore;
 using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
@@ -40,6 +41,7 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
     protected override void Execute()
     {
         if((KeyActions.RenderMode & 2) == 0) return;
+        if (World is null) return;
         
         //Iterate over each entity and write the current transform to the corresponding staging buffer
         _drawCount.Clear();
@@ -52,8 +54,7 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
 
             WriteToBuffer(renderAble.MaterialMeshCombination, transform.Value);
 
-            if (!_drawCount.ContainsKey(renderAble.MaterialMeshCombination))
-                _drawCount.Add(renderAble.MaterialMeshCombination, 0);
+            _drawCount.TryAdd(renderAble.MaterialMeshCombination, 0);
             _drawCount[renderAble.MaterialMeshCombination] += 1;
         }
 
@@ -64,6 +65,11 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
         foreach (var cameraEntity in _cameraComponentQuery)
         {
             var camera = cameraEntity.GetCamera();
+            
+            //Without this check, the camera will be rendered for every player
+            //TODO build a system to allow multiple cameras
+            if (World.EntityManager.GetEntityOwner(cameraEntity.Entity) != PlayerHandler.LocalPlayerGameId) continue;
+            
             foreach (var (id, drawCount) in _drawCount)
             {
                 var (mesh, material) = InstancedRenderDataHandler.GetMeshMaterial(id);
@@ -109,9 +115,9 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
                 for (var i = 0; i < VulkanEngine.SwapchainImageCount; i++)
                 {
                     instanceBuffer = MemoryBuffer.Create(
-                        BufferUsageFlags.BufferUsageTransferDstBit | BufferUsageFlags.BufferUsageVertexBufferBit,
+                        BufferUsageFlags.TransferDstBit | BufferUsageFlags.VertexBufferBit,
                         buffer.Size, SharingMode.Exclusive, queueFamilies,
-                        MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
+                        MemoryPropertyFlags.DeviceLocalBit, false);
                     _instanceBuffers[id][i] = instanceBuffer;
                 }
             }
@@ -122,9 +128,9 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
                 instanceBuffer.Dispose();
 
                 instanceBuffer = MemoryBuffer.Create(
-                    BufferUsageFlags.BufferUsageTransferDstBit | BufferUsageFlags.BufferUsageVertexBufferBit,
+                    BufferUsageFlags.TransferDstBit | BufferUsageFlags.VertexBufferBit,
                     buffer.Size, SharingMode.Exclusive, queueFamilies,
-                    MemoryPropertyFlags.MemoryPropertyDeviceLocalBit, false);
+                    MemoryPropertyFlags.DeviceLocalBit, false);
                 _instanceBuffers[id][VulkanEngine.ImageIndex] = instanceBuffer;
             }
 
@@ -147,10 +153,10 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
         Span<uint> queueFamilies = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.PresentFamily!.Value};
         if (!_stagingBuffers.ContainsKey(materialMesh))
         {
-            var memoryBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit,
+            var memoryBuffer = MemoryBuffer.Create(BufferUsageFlags.TransferSrcBit,
                 (ulong) (sizeof(Matrix4x4) * InitialSize), SharingMode.Exclusive, queueFamilies,
-                MemoryPropertyFlags.MemoryPropertyHostVisibleBit |
-                MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
+                MemoryPropertyFlags.HostVisibleBit |
+                MemoryPropertyFlags.HostCoherentBit, true);
 
             _stagingBuffers.Add(materialMesh, (memoryBuffer, MemoryManager.Map(memoryBuffer.Memory), InitialSize, 0));
         }
@@ -161,10 +167,10 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
 
         if (capacity <= index)
         {
-            var memoryBuffer = MemoryBuffer.Create(BufferUsageFlags.BufferUsageTransferSrcBit,
+            var memoryBuffer = MemoryBuffer.Create(BufferUsageFlags.TransferSrcBit,
                 (ulong) (sizeof(Matrix4x4) * capacity * 2), SharingMode.Exclusive, queueFamilies,
-                MemoryPropertyFlags.MemoryPropertyHostVisibleBit |
-                MemoryPropertyFlags.MemoryPropertyHostCoherentBit, true);
+                MemoryPropertyFlags.HostVisibleBit |
+                MemoryPropertyFlags.HostCoherentBit, true);
 
             var oldData = (Transform*) data;
             var newData = (Transform*) MemoryManager.Map(memoryBuffer.Memory);

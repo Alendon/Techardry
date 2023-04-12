@@ -8,8 +8,12 @@ namespace Techardry.World;
 
 public class Chunk
 {
+    public const int Size = VoxelOctree.Dimensions;
+    
     public Int3 Position { get; }
-    internal VoxelOctree Octree { get; }
+    internal VoxelOctree Octree { get; set; }
+    public uint Version { get; set; }
+    public uint LastSyncedVersion { get; set; }
 
     public Chunk(Int3 chunkPos)
     {
