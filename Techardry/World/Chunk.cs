@@ -37,6 +37,8 @@ public class Chunk
             "Invalid block placement rotation", "World");
         
         Octree.Insert(new VoxelData(blockId), blockPos, depth);
+        
+        Version++;
     }
 }
 

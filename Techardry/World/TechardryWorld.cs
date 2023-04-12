@@ -305,6 +305,9 @@ public class TechardryWorld : IWorld
         _systemManager = null;
     }
 
+    private Stopwatch _lastChange = Stopwatch.StartNew();
+    private bool dirt;
+
     /// <summary>
     ///     Simulate one <see cref="World" /> tick
     /// </summary>
@@ -313,6 +316,16 @@ public class TechardryWorld : IWorld
         IsExecuting = true;
         SystemManager.Execute();
         IsExecuting = false;
+        
+        if(_lastChange.ElapsedMilliseconds > 1000)
+        {
+            _lastChange.Restart();
+            if (_chunks.TryGetValue(new Int3(0, 0, 0), out var chunk))
+            {
+                chunk.SetBlock(new Vector3(8,14,8), dirt ? BlockIDs.Stone : BlockIDs.Dirt);
+                dirt = !dirt;
+            }
+        }
 
        /* if (IsServerWorld)
         {
