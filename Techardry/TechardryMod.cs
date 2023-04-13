@@ -26,6 +26,8 @@ public partial class TechardryMod : IMod
 {
     public ushort ModId { get; set; }
     public string ModName => "Techardry";
+    
+    public int ServerRenderDistance { get; set; } = 8;
 
     public void Dispose()
     {

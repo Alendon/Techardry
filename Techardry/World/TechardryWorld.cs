@@ -68,7 +68,7 @@ public class TechardryWorld : IWorld
             return;
         }
 
-        var chunk = new Chunk(chunkPos);
+        var chunk = new Chunk(chunkPos, this);
         _chunks.TryAdd(chunkPos, chunk);
 
         var collider = new VoxelCollider(chunk.Octree);
@@ -295,6 +295,11 @@ public class TechardryWorld : IWorld
     /// <inheritdoc />
     public void Dispose()
     {
+        foreach (var chunk in _chunks.Values)
+        {
+            chunk.Dispose();
+        }
+        
         GC.SuppressFinalize(this);
         EntityManager.Dispose();
         SystemManager.Dispose();
@@ -327,25 +332,10 @@ public class TechardryWorld : IWorld
             }
         }
 
-       /* if (IsServerWorld)
+        foreach (var chunk in _chunks.Values)
         {
-            foreach (var (pos, chunk) in _chunks)
-            {
-                if (chunk.Version != chunk.LastSyncedVersion)
-                {
-                    var message = new ChunkDataMessage()
-                    {
-                        Octree = chunk.Octree,
-                        ChunkPosition = pos,
-                        WorldId = Identification
-                    };
-                    
-                    message.Send(PlayerHandler.GetConnectedPlayers());
-                    
-                    chunk.LastSyncedVersion = chunk.Version;
-                }
-            }
-        }*/
+            chunk.Update();
+        }
     }
 
     
@@ -449,5 +439,6 @@ internal readonly struct MintyNarrowPhaseCallback : INarrowPhaseCallbacks
 
     public void Dispose()
     {
+        
     }
 }
