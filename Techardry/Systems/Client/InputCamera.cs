@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Numerics;
+using BepuUtilities;
 using MintyCore;
 using MintyCore.ECS;
 using MintyCore.Registries;
@@ -19,12 +20,16 @@ public partial class InputCamera : ASystem
     [ComponentQuery] private ComponentQuery<(Camera, InputComponent)> _cameraQuery = new();
 
     private static Vector3 Input = Vector3.Zero;
-    private const float mouseSensitiveity = 0.5f;
+    private const float mouseSensitiveity = 0.0001f;
     private Stopwatch _stopwatch = Stopwatch.StartNew();
+    
+    private Vector2 _lastMousePosition = Vector2.Zero;
+    private Vector2 _mousePosition = Vector2.Zero;
 
     public override void Setup(SystemManager systemManager)
     {
         _cameraQuery.Setup(this);
+        InputHandler.Mouse!.MouseMove += OnMouseMove;
     }
 
     protected override void Execute()
@@ -33,6 +38,7 @@ public partial class InputCamera : ASystem
         
         if(_stopwatch.Elapsed.TotalSeconds > 1)
             _stopwatch.Restart();
+           
         
         foreach (var currentEntity in _cameraQuery)
         {
@@ -44,10 +50,16 @@ public partial class InputCamera : ASystem
             
             if (Engine.Window is {MouseLocked: true})
             {
+                var mouseDelta = _mousePosition - _lastMousePosition;
+            
                 float deltaTime = (float) _stopwatch.Elapsed.TotalSeconds;
                 _stopwatch.Restart();
-                camera.Yaw += -InputHandler.MouseDelta.X * mouseSensitiveity * deltaTime;
-                camera.Pitch += -Math.Clamp(InputHandler.MouseDelta.Y * mouseSensitiveity * deltaTime, -85f, 85);
+                camera.Yaw += mouseDelta.X * mouseSensitiveity * deltaTime;
+                camera.Pitch = Math.Clamp(camera.Pitch - mouseDelta.Y * mouseSensitiveity * deltaTime, MathHelper.ToRadians(-85), MathHelper.ToRadians(85));
+                if(mouseDelta != Vector2.Zero)
+                    Logger.WriteLog($"Last:{_lastMousePosition} Current: {_mousePosition} Delta: {mouseDelta}", LogImportance.Debug, "InputCamera");
+                    
+                _lastMousePosition = _mousePosition;
             }
 
             var rotation = Quaternion.CreateFromYawPitchRoll(camera.Yaw, camera.Pitch, 0f);
@@ -64,6 +76,11 @@ public partial class InputCamera : ASystem
             
             input.Movement = movement;
         }
+    }
+    
+    private void OnMouseMove(IMouse mouse, Vector2 position)
+    {
+        _mousePosition += position;
     }
 
     [RegisterKeyAction("Move_Forward")]

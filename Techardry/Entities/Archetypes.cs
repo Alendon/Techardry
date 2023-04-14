@@ -20,7 +20,8 @@ public static class Archetypes
         ComponentIDs = new[]
         {
             Identifications.ComponentIDs.Camera,
-            ComponentIDs.Position
+            ComponentIDs.Position,
+            Identifications.ComponentIDs.Input
         }
     };
 
