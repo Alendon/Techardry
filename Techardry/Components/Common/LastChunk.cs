@@ -17,11 +17,12 @@ public struct LastChunk : IComponent
 
     public void Serialize(DataWriter writer, IWorld world, Entity entity)
     {
+        Value.Serialize(writer);
     }
 
     public bool Deserialize(DataReader reader, IWorld world, Entity entity)
     {
-        return true;
+        return Int3.TryDeserialize(reader, out Value);
     }
 
     public void IncreaseRefCount()

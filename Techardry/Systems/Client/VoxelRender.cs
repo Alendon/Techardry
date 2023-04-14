@@ -550,7 +550,7 @@ public partial class VoxelRender : ARenderSystem
             yield break;
         }
 
-        foreach (var chunkPosition in world.GetLoadedChunks())
+        foreach (var chunkPosition in world.ChunkManager.GetLoadedChunks())
         {
             //Check for a cubical render distance instead of a spherical one
             //This is because of the technical implementation of the rendering
@@ -561,7 +561,7 @@ public partial class VoxelRender : ARenderSystem
                                     chunkPosition.Z <= currentChunk.Z + chunkRenderDistance &&
                                     chunkPosition.Z >= currentChunk.Z - chunkRenderDistance;
 
-            if (inRenderDistance && world.TryGetChunk(chunkPosition, out var chunk))
+            if (inRenderDistance && world.ChunkManager.TryGetChunk(chunkPosition, out var chunk))
                 yield return chunk;
         }
     }
