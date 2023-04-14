@@ -51,6 +51,10 @@ public struct Camera : IComponent
     /// </summary>
     public float FarPlane;
 
+    public float Yaw;
+    public float Pitch;
+
+
     /// <summary>
     ///     <see cref="Identification" /> of the <see cref="Camera" /> Component
     /// </summary>
@@ -66,13 +70,6 @@ public struct Camera : IComponent
     /// </summary>
     public UnmanagedArray<DescriptorSet> GpuTransformDescriptors;
 
-    /// <inheritdoc />
-    public bool Deserialize(DataReader reader, IWorld world, Entity entity)
-    {
-        if (!reader.TryGetFloat(out var fov)) return false;
-        Fov = fov;
-        return true;
-    }
 
     /// <inheritdoc />
     public void PopulateWithDefaultValues()
@@ -88,11 +85,11 @@ public struct Camera : IComponent
 
     private unsafe void CreateGpuData()
     {
-        if (!MathHelper.IsBitSet((int) Engine.GameType, (int) GameType.Client)) return;
+        if (!MathHelper.IsBitSet((int)Engine.GameType, (int)GameType.Client)) return;
 
         GpuTransformBuffers = new UnmanagedArray<MemoryBuffer>(VulkanEngine.SwapchainImageCount);
         GpuTransformDescriptors = new UnmanagedArray<DescriptorSet>(VulkanEngine.SwapchainImageCount);
-        uint[] queues = {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
+        uint[] queues = { VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value };
 
         for (var i = 0; i < VulkanEngine.SwapchainImageCount; i++)
         {
@@ -100,7 +97,7 @@ public struct Camera : IComponent
             ref var descriptor = ref GpuTransformDescriptors[i];
 
             buffer = MemoryBuffer.Create(BufferUsageFlags.UniformBufferBit,
-                (ulong) sizeof(Matrix4x4), SharingMode.Exclusive, queues.AsSpan(),
+                (ulong)sizeof(Matrix4x4), SharingMode.Exclusive, queues.AsSpan(),
                 MemoryPropertyFlags.HostCoherentBit |
                 MemoryPropertyFlags.HostVisibleBit, false);
 
@@ -110,7 +107,7 @@ public struct Camera : IComponent
             {
                 Buffer = buffer.Buffer,
                 Offset = 0,
-                Range = (ulong) sizeof(Matrix4x4)
+                Range = (ulong)sizeof(Matrix4x4)
             };
 
             WriteDescriptorSet write = new()
@@ -132,6 +129,25 @@ public struct Camera : IComponent
     public void Serialize(DataWriter writer, IWorld world, Entity entity)
     {
         writer.Put(Fov);
+        writer.Put(PositionOffset);
+        writer.Put(Forward);
+        writer.Put(Upward);
+        writer.Put(Yaw);
+        writer.Put(Pitch);
+    }
+
+    /// <inheritdoc />
+    public bool Deserialize(DataReader reader, IWorld world, Entity entity)
+    {
+        bool success = true;
+        success &= reader.TryGetFloat(out var Fov);
+        success &= reader.TryGetVector3(out var PositionOffset);
+        success &= reader.TryGetVector3(out var Forward);
+        success &= reader.TryGetVector3(out var Upward);
+        success &= reader.TryGetFloat(out var Yaw);
+        success &= reader.TryGetFloat(out var Pitch);
+        
+        return success;
     }
 
     /// <inheritdoc />
