@@ -10,7 +10,7 @@
 
     <ItemGroup>
       <PackageReference Include="DotNext" Version="4.12.0" />
-      <PackageReference Include="MintyCore" Version="0.2.3.7" />
+      <PackageReference Include="MintyCore" Version="0.2.3.9" />
     </ItemGroup>
 
 </Project>
