@@ -159,6 +159,7 @@ struct Result{
     float t;
     int tree;
     bool fail;
+    vec3 failColor;
 };
 
 
@@ -208,12 +209,12 @@ void main()
     float depth = subpassLoad(inDepth).r;
     vec3 oldColor = subpassLoad(inColor).rgb;
 
-    Result result = Result(0, vec3(0, 0, 0), vec2(0, 0), 0, -1, false);
+    Result result = Result(0, vec3(0, 0, 0), vec2(0, 0), 0, -1, false, vec3(0,0,1));
 
     bool hit = raycast(ray, result);
 
     if(result.fail){
-        out_color = vec3(1,0,0);
+        out_color = result.failColor;
         return;
     }
 
@@ -438,6 +439,7 @@ bool raycast(in Ray ray, inout Result result){
 
         if(counter > 1000){
             result.fail = true;
+            result.failColor = vec3(1,0,0);
             return false;
         }
 
@@ -534,6 +536,7 @@ bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier
         if(counter > 1000){
             result.tree = tree;
             result.fail = true;
+            result.failColor = vec3(0,1,0);
             return false;
         }
 

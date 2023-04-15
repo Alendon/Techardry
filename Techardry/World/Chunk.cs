@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using DotNext.Diagnostics;
+using DotNext.Threading;
 using MintyCore;
 using MintyCore.Utils;
 using Techardry.Blocks;
@@ -20,17 +21,19 @@ public class Chunk : IDisposable
     public Timestamp LastSyncedTime { get; set; }
 
     public TechardryWorld ParentWorld { get; }
-    
 
-    public Chunk(Int3 chunkPos, TechardryWorld parentWorld)
+
+    public Chunk(Int3 chunkPos, TechardryWorld parentWorld) : this(chunkPos, new VoxelOctree(), parentWorld)
     {
-        Position = chunkPos;
-        Octree = new VoxelOctree();
-        ParentWorld = parentWorld;
-        
     }
 
-   
+    internal Chunk(Int3 chunkPos, VoxelOctree octree, TechardryWorld parentWorld)
+    {
+        Position = chunkPos;
+        Octree = octree;
+        ParentWorld = parentWorld;
+    }
+
 
     public void Update()
     {
@@ -43,6 +46,14 @@ public class Chunk : IDisposable
     private void UpdateServer()
     {
         if (Version == LastSyncedVersion) return;
+
+        using var octreeLock = Octree.AcquireReadLock();
+        if (octreeLock.IsEmpty)
+        {
+            Logger.WriteLog($"Tried to update server chunk but failed to acquire read lock for chunk {Position}",
+                LogImportance.Error, "Chunk");
+            return;
+        }
 
         var chunkData = new ChunkDataMessage
         {
@@ -65,7 +76,8 @@ public class Chunk : IDisposable
 
         var requestData = new RequestChunkData()
         {
-            Position = Position
+            Position = Position,
+            WorldId = ParentWorld.Identification
         };
 
         requestData.SendToServer();
@@ -87,13 +99,31 @@ public class Chunk : IDisposable
         Logger.AssertAndThrow(rotation == BlockRotation.None || BlockHandler.IsBlockRotatable(blockId),
             "Invalid block placement rotation", "World");
 
+        using var octreeLock = Octree.AcquireWriteLock();
+
         Octree.Insert(new VoxelData(blockId), blockPos, depth);
 
         Version++;
     }
 
+
     public void Dispose()
     {
+    }
+
+    public void SetOctree(VoxelOctree octree)
+    {
+        using var octreeLock = Octree.AcquireWriteLock();
+        Octree = octree;
+
+        Version++;
+        LastSyncedVersion = Version;
+        LastSyncedTime = new Timestamp();
+    }
+
+    public VoxelCollider CreateCollider()
+    {
+        return new VoxelCollider(Octree);
     }
 }
 

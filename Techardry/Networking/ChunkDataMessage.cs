@@ -37,10 +37,7 @@ public partial class ChunkDataMessage : IMessage
         if(!WorldHandler.TryGetWorld(GameType.Client, WorldId, out var world) || world is not TechardryWorld techardryWorld)
             return false;
         
-        if(!techardryWorld.TryGetChunk(ChunkPosition, out var chunk))
-            return false;
-        
-        chunk.Octree = Octree;
+        techardryWorld.ChunkManager.UpdateChunk(ChunkPosition, Octree);
 
         return true;
     }
@@ -53,7 +50,7 @@ public partial class ChunkDataMessage : IMessage
     }
 
     public bool IsServer { get; set; }
-    public bool ReceiveMultiThreaded => false;
+    public bool ReceiveMultiThreaded => true;
     public Identification MessageId => MessageIDs.ChunkData;
     public DeliveryMethod DeliveryMethod => DeliveryMethod.Reliable;
     public ushort Sender { get; set; }

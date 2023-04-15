@@ -21,11 +21,11 @@ class DependencyResolver
     }
 
 
-    public List<ExternalDependency> GetDependencies()
+    public HashSet<ExternalDependency> GetDependencies()
     {
         var rootDependency = GetDependencyDetails(Mod);
         var toProcess = new Queue<string>();
-        var dependencies = new List<ExternalDependency>();
+        var dependencies = new HashSet<ExternalDependency>();
 
         AddDependenciesToProcess(rootDependency.dependencies);
 
@@ -97,14 +97,4 @@ class DependencyResolver
 }
 
 [PublicAPI]
-class ExternalDependency
-{
-    public string DependencyName { get; set; }
-    public string DllName { get; set; }
-
-    public ExternalDependency(string dependencyName, string dllName)
-    {
-        DependencyName = dependencyName;
-        DllName = dllName;
-    }
-}
+record struct ExternalDependency(string DependencyName, string DllName);

@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using DotNext.Runtime;
+using DotNext.Threading;
 using JetBrains.Annotations;
 using MintyCore;
 using MintyCore.Components.Common;
@@ -32,7 +33,7 @@ public partial class VoxelRender : ARenderSystem
     [ComponentQuery] private readonly ComponentQuery<object, (Camera, Position)> _cameraQuery = new();
 
     private RenderData[] _renderData = Array.Empty<RenderData>();
-    
+
     class RenderData
     {
         public readonly Dictionary<Int3, MemoryBuffer> ChunkOctreeBuffers = new();
@@ -116,10 +117,10 @@ public partial class VoxelRender : ARenderSystem
         var forward = cameraData.Forward;
         var up = cameraData.Upward;
 
-        var cameraGpuData = (CameraData*) data;
+        var cameraGpuData = (CameraData*)data;
         cameraGpuData->Forward = forward;
         cameraGpuData->Upward = up;
-        cameraGpuData->AspectRatio = VulkanEngine.SwapchainExtent.Width / (float) VulkanEngine.SwapchainExtent.Height;
+        cameraGpuData->AspectRatio = VulkanEngine.SwapchainExtent.Width / (float)VulkanEngine.SwapchainExtent.Height;
         cameraGpuData->HFov = cameraData.Fov;
         cameraGpuData->Position = positionData.Value;
         cameraGpuData->Near = cameraData.NearPlane;
@@ -159,8 +160,8 @@ public partial class VoxelRender : ARenderSystem
 
 
         vk.CmdBindDescriptorSets(CommandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0,
-            (uint) descriptorSets.Length,
-            descriptorSets, 0, (uint*) null);
+            (uint)descriptorSets.Length,
+            descriptorSets, 0, (uint*)null);
 
         vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
     }
@@ -210,8 +211,8 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe bool ChunkCombinationChanged(Int3[] chunkList)
     {
-        var newHash = Intrinsics.GetHashCode64(Unsafe.AsPointer(ref chunkList[0]),
-            (nuint) (chunkList.Length * Marshal.SizeOf<Int3>()), false);
+        var newHash = chunkList.Length != 0 ? Intrinsics.GetHashCode64(Unsafe.AsPointer(ref chunkList[0]),
+            (nuint)(chunkList.Length * Marshal.SizeOf<Int3>()), false) : 0;
         if (CurrentRenderData.ChunkHash == newHash)
         {
             return false;
@@ -248,18 +249,18 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe void CreateMasterOctreeBuffer(Int3 centralChunk, int renderDistanceLog)
     {
-        var chunkDiameter = (int) Math.Pow(2, renderDistanceLog);
+        var chunkDiameter = (int)Math.Pow(2, renderDistanceLog);
         var chunkRadius = chunkDiameter / 2;
         var chunkMin = centralChunk - new Int3(chunkRadius, chunkRadius, chunkRadius);
         var chunkCount = chunkDiameter * chunkDiameter * chunkDiameter;
 
         var headerSize = Marshal.SizeOf<MasterOctreeHeader>();
 
-        Span<uint> queues = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
+        Span<uint> queues = stackalloc uint[] { VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value };
 
         var stagingBuffer = MemoryBuffer.Create(
             BufferUsageFlags.TransferSrcBit,
-            (ulong) (headerSize + sizeof(int) * chunkCount),
+            (ulong)(headerSize + sizeof(int) * chunkCount),
             SharingMode.Exclusive,
             queues,
             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
@@ -355,8 +356,8 @@ public partial class VoxelRender : ARenderSystem
                 DescriptorType = DescriptorType.StorageBuffer,
                 DstBinding = 0,
                 DstSet = CurrentRenderData.OctreeDescriptorSet,
-                DstArrayElement = (uint) currentChunk,
-                PBufferInfo = (DescriptorBufferInfo*) Unsafe.AsPointer(ref bufferInfos[currentChunk])
+                DstArrayElement = (uint)currentChunk,
+                PBufferInfo = (DescriptorBufferInfo*)Unsafe.AsPointer(ref bufferInfos[currentChunk])
             };
 
             CurrentRenderData.ChunkDescriptorSetIndices[chunk] = currentChunk;
@@ -401,20 +402,24 @@ public partial class VoxelRender : ARenderSystem
         if (CurrentRenderData.ChunkCurrentVersion.TryGetValue(chunk.Position, out var chunkVersion)
             && chunkVersion == chunk.Version) return;
 
-        CalculateOctreeBufferSize(chunk.Octree, out var bufferSize);
-        bufferSize = (uint) MathHelper.CeilPower2(checked((int) bufferSize));
+
+        uint bufferSize;
+        using (chunk.Octree.AcquireReadLock())
+            CalculateOctreeBufferSize(chunk.Octree, out bufferSize);
+
+        bufferSize = (uint)MathHelper.CeilPower2(checked((int)bufferSize));
 
         var oldBufferSize = CurrentRenderData.ChunkOctreeBuffers.TryGetValue(chunk.Position, out var oldBuffer)
             ? oldBuffer.Size
             : 0;
 
-        if ((uint) oldBufferSize < bufferSize)
+        if ((uint)oldBufferSize < bufferSize)
         {
             bufferAllocated = true;
         }
 
         //shrink the buffer to save memory usage
-        if ((uint) oldBufferSize > bufferSize * 4)
+        if ((uint)oldBufferSize > bufferSize * 4)
         {
             bufferSize /= 2;
             bufferAllocated = true;
@@ -424,12 +429,10 @@ public partial class VoxelRender : ARenderSystem
         {
             DestroyOctreeBuffer(chunk.Position);
             CreateOctreeBuffer(chunk.Position, bufferSize);
-
-            Logger.WriteLog($"Allocated new octree buffer for chunk {chunk.Position} with size {bufferSize} bytes",
-                LogImportance.Debug, "VoxelRenderer");
         }
 
-        FillOctreeBuffer(chunk.Position, chunk.Octree);
+        using (chunk.Octree.AcquireReadLock())
+            FillOctreeBuffer(chunk.Position, chunk.Octree);
 
         CurrentRenderData.ChunkCurrentVersion[chunk.Position] = chunk.Version;
     }
@@ -451,7 +454,7 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe void CreateOctreeBuffer(Int3 position, ulong bufferSize)
     {
-        Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
+        Span<uint> queue = stackalloc uint[] { VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value };
 
         var buffer = MemoryBuffer.Create(
             BufferUsageFlags.StorageBufferBit | BufferUsageFlags.TransferDstBit,
@@ -467,9 +470,9 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe void FillOctreeBuffer(Int3 position, VoxelOctree octree)
     {
-        Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
-        var headerSize = (uint) Marshal.SizeOf<OctreeHeader>();
-        var nodeSize = (uint) Marshal.SizeOf<VoxelOctree.Node>();
+        Span<uint> queue = stackalloc uint[] { VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value };
+        var headerSize = (uint)Marshal.SizeOf<OctreeHeader>();
+        var nodeSize = (uint)Marshal.SizeOf<VoxelOctree.Node>();
 
         var buffer = CurrentRenderData.ChunkOctreeBuffers[position];
 
@@ -492,13 +495,13 @@ public partial class VoxelRender : ARenderSystem
             treeMin = position
         };
 
-        var srcNodes = octree.Nodes.AsSpan(0, (int) octree.NodeCount);
-        var dstNodes = new Span<VoxelOctree.Node>((void*) (data + headerSize), srcNodes.Length);
+        var srcNodes = octree.Nodes.AsSpan(0, (int)octree.NodeCount);
+        var dstNodes = new Span<VoxelOctree.Node>((void*)(data + headerSize), srcNodes.Length);
         srcNodes.CopyTo(dstNodes);
 
-        var srcData = octree.Data.renderData.AsSpan(0, (int) octree.DataCount);
+        var srcData = octree.Data.renderData.AsSpan(0, (int)octree.DataCount);
         var dstData =
-            new Span<VoxelRenderData>((void*) (data + headerSize + nodeSize * octree.NodeCount), srcData.Length);
+            new Span<VoxelRenderData>((void*)(data + headerSize + nodeSize * octree.NodeCount), srcData.Length);
         srcData.CopyTo(dstData);
 
         MemoryManager.UnMap(stagingBuffer.Memory);
@@ -518,9 +521,9 @@ public partial class VoxelRender : ARenderSystem
 
     private static void CalculateOctreeBufferSize(VoxelOctree octree, out uint bufferSize)
     {
-        var headerSize = (uint) Marshal.SizeOf<OctreeHeader>();
-        var nodeSize = (uint) Marshal.SizeOf<VoxelOctree.Node>();
-        var dataSize = (uint) Marshal.SizeOf<VoxelRenderData>();
+        var headerSize = (uint)Marshal.SizeOf<OctreeHeader>();
+        var nodeSize = (uint)Marshal.SizeOf<VoxelOctree.Node>();
+        var dataSize = (uint)Marshal.SizeOf<VoxelRenderData>();
 
         bufferSize = headerSize + nodeSize * octree.NodeCount + dataSize * octree.DataCount;
     }
@@ -537,10 +540,10 @@ public partial class VoxelRender : ARenderSystem
     {
         var chunkFarPlane = cameraFarPlane / Chunk.Size;
         //1290 is the theoretical maximum render distance in chunks
-        renderDistance = chunkFarPlane < int.MaxValue ? (int) chunkFarPlane : 1290;
-        renderDistanceLog = (int) Math.Log2(MathHelper.CeilPower2(renderDistance));
-        chunkPosition = new Int3((int) (cameraPosition.X / Chunk.Size), (int) (cameraPosition.Y / Chunk.Size),
-            (int) (cameraPosition.Z / Chunk.Size));
+        renderDistance = chunkFarPlane < int.MaxValue ? (int)chunkFarPlane : 1290;
+        renderDistanceLog = (int)Math.Log2(MathHelper.CeilPower2(renderDistance));
+        chunkPosition = new Int3((int)(cameraPosition.X / Chunk.Size), (int)(cameraPosition.Y / Chunk.Size),
+            (int)(cameraPosition.Z / Chunk.Size));
     }
 
     private IEnumerable<Chunk> GetChunksToRender(Int3 currentChunk, int chunkRenderDistance)
@@ -594,7 +597,7 @@ public partial class VoxelRender : ARenderSystem
                 1, DescriptorType.InputAttachment, &colorImageInfo)
         };
 
-        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, (uint) writeDescriptorSets.Length,
+        VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, (uint)writeDescriptorSets.Length,
             writeDescriptorSets.GetPinnableReference(), 0, null);
 
         CurrentRenderData.LastColorImageView = VulkanEngine.SwapchainImageViews[index];
@@ -609,13 +612,13 @@ public partial class VoxelRender : ARenderSystem
 
     private unsafe void CreateCameraDataBuffers()
     {
-        Span<uint> queue = stackalloc uint[] {VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value};
+        Span<uint> queue = stackalloc uint[] { VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value };
 
         foreach (var renderData in _renderData)
         {
             renderData.CameraDataBuffer = MemoryBuffer.Create(
                 BufferUsageFlags.UniformBufferBit,
-                (ulong) Marshal.SizeOf<CameraData>(), SharingMode.Exclusive, queue,
+                (ulong)Marshal.SizeOf<CameraData>(), SharingMode.Exclusive, queue,
                 MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, false);
         }
     }
@@ -643,7 +646,7 @@ public partial class VoxelRender : ARenderSystem
             {
                 Buffer = _renderData[i].CameraDataBuffer.Buffer,
                 Offset = 0,
-                Range = (ulong) Marshal.SizeOf<CameraData>()
+                Range = (ulong)Marshal.SizeOf<CameraData>()
             };
 
 
@@ -660,7 +663,7 @@ public partial class VoxelRender : ARenderSystem
         {
             Buffer = CurrentRenderData.CameraDataBuffer.Buffer,
             Offset = 0,
-            Range = (ulong) Marshal.SizeOf<CameraData>()
+            Range = (ulong)Marshal.SizeOf<CameraData>()
         };
 
         var write = new WriteDescriptorSet()

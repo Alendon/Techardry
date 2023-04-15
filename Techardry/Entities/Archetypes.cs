@@ -20,9 +20,32 @@ public static class Archetypes
         ComponentIDs = new[]
         {
             Identifications.ComponentIDs.Camera,
-            ComponentIDs.Position
-        }
+            ComponentIDs.Position,
+            Identifications.ComponentIDs.LastChunk
+        },
+        EntitySetup = new PlayerSetup()
     };
+
+    internal class PlayerSetup : IEntitySetup
+    {
+        public void SetupEntity(IWorld world, Entity entity)
+        {
+            world.EntityManager.GetComponent<Position>(entity).Value = new Vector3(0,16,0);
+        }
+
+        public void GatherEntityData(IWorld world, Entity entity)
+        {
+        }
+
+        public void Serialize(DataWriter writer)
+        {
+        }
+
+        public bool Deserialize(DataReader reader)
+        {
+            return true;
+        }
+    }
 
     [RegisterArchetype("physic_box")]
     internal static ArchetypeInfo physicBox => new(new[]

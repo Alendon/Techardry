@@ -7,6 +7,7 @@ using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.Trees;
 using BepuUtilities;
 using BepuUtilities.Memory;
+using DotNext.Threading;
 
 namespace Techardry.Voxels;
 
@@ -34,6 +35,8 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         ref TOverlaps overlaps) where TOverlaps : struct, ICollisionTaskOverlaps<TSubpairOverlaps>
         where TSubpairOverlaps : struct, ICollisionTaskSubpairOverlaps
     {
+        using var octreeLock = Octree.AcquireReadLock();
+        
         for (var i = 0; i < pairs.Length; i++)
         {
             ref var pair = ref pairs[i];
@@ -66,6 +69,8 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         BufferPool pool,
         Shapes shapes, void* overlaps) where TOverlaps : ICollisionTaskSubpairOverlaps
     {
+        using var octreeLock = Octree.AcquireReadLock();
+        
         ref var overlapsRef = ref Unsafe.AsRef<TOverlaps>(overlaps);
 
         var octree = Octree;
@@ -262,6 +267,8 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         {
             throw new Exception("VoxelCollider does not support non-identity orientations.");
         }
+        
+        using var octreeLock = Octree.AcquireReadLock();
 
         var rayOrigin = ray.Origin - pose.Position;
         var rayDirection = ray.Direction;
@@ -409,6 +416,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
     public void RayTest<TRayHitHandler>(in RigidPose pose, ref RaySource rays, ref TRayHitHandler hitHandler)
         where TRayHitHandler : struct, IShapeRayHitHandler
     {
+        using var octreeLock = Octree.AcquireReadLock();
         for (int i = 0; i < rays.RayCount; i++)
         {
             rays.GetRay(i, out var ray, out var maximumT);
@@ -418,6 +426,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 
     public void GetLocalChild(int childIndex, out Box childData)
     {
+        using var octreeLock = Octree.AcquireReadLock();
         var node = Octree.GetNode(Octree.Data.ownerNodes[childIndex]);
 
         if (node.IsEmpty)
@@ -432,6 +441,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 
     public void GetPosedLocalChild(int childIndex, out Box childData, out RigidPose childPose)
     {
+        using var octreeLock = Octree.AcquireReadLock();
         var octree = Octree;
 
         ref var node = ref octree.GetNode(octree.Data.ownerNodes[childIndex]);
@@ -450,6 +460,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 
     public void GetLocalChild(int childIndex, ref BoxWide childData)
     {
+        using var octreeLock = Octree.AcquireReadLock();
         var octree = Octree;
         var node = octree.GetNode(octree.Data.ownerNodes[childIndex]);
 

@@ -13,6 +13,7 @@ using MintyCore.Utils;
 using MintyCore.Utils.Maths;
 using Silk.NET.Vulkan;
 using Techardry.Components.Client;
+using Techardry.Entities;
 using Techardry.Identifications;
 using Techardry.Registries;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
@@ -27,7 +28,7 @@ public partial class TechardryMod : IMod
     public ushort ModId { get; set; }
     public string ModName => "Techardry";
     
-    public int ServerRenderDistance { get; set; } = 8;
+    public int ServerRenderDistance { get; set; } = 1;
 
     public void Dispose()
     {
@@ -58,19 +59,12 @@ public partial class TechardryMod : IMod
         Logger.WriteLog("Loading TechardryMod", LogImportance.Info, "Techardry");
         InternalRegister();
 
-        PlayerHandler.OnPlayerConnected += (player, serverSide) =>
+        PlayerHandler.OnPlayerReady += (player, serverSide) =>
         {
             if (!serverSide) return;
             var found = WorldHandler.TryGetWorld(GameType.Server, WorldIDs.Default, out var world);
             if (!found) throw new Exception();
-            var entity = world!.EntityManager.CreateEntity(ArchetypeIDs.TestCamera, player);
-            var camera = world.EntityManager.GetComponent<Camera>(entity);
-            camera.Forward = Vector3.Normalize(new Vector3(0f, 0, 1));
-            world.EntityManager.SetComponent(entity, camera);
-
-            var position = world.EntityManager.GetComponent<Position>(entity);
-            position.Value = new Vector3(0, 32, -64);
-            world.EntityManager.SetComponent(entity, position);
+            world!.EntityManager.CreateEntity(ArchetypeIDs.TestCamera, player, new Archetypes.PlayerSetup());
 
             /*var box = world.EntityManager.CreateEntity(ArchetypeIDs.TestRender, null);
             var render = world.EntityManager.GetComponent<InstancedRenderAble>(box);
