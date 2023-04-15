@@ -65,6 +65,9 @@ public partial class InputCamera : ASystem
             movement = Vector3.Transform(movement, rotation);
             
             input.Movement = movement;
+
+            camera.Dirty = true;
+            input.Dirty = true;
         }
     }
 

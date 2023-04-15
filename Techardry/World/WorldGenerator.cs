@@ -25,8 +25,6 @@ public class WorldGenerator
         var realChunkPosition = new Vector3(chunkPosition.X * Chunk.Size, chunkPosition.Y * Chunk.Size,
             chunkPosition.Z * Chunk.Size);
         
-        chunk.SetBlock(realChunkPosition, BlockIDs.Dirt);
-
         for (int x = 0; x < Chunk.Size; x++)
         {
             for (int z = 0; z < Chunk.Size; z++)
@@ -39,17 +37,18 @@ public class WorldGenerator
 
                 for (int y = 0; y < Chunk.Size; y++)
                 {
-                    var pos = new Vector3(x, y, z) + realChunkPosition;
+                    var localPos = new Vector3(x, y, z);
+                    var pos = localPos + realChunkPosition;
 
                     if (pos.Y < 6)
                     {
-                        chunk.SetBlock(pos, BlockIDs.Stone);
+                        chunk.SetBlock(localPos, BlockIDs.Stone);
                         continue;
                     }
 
                     if (pos.Y < 7 + noiseValue)
                     {
-                        chunk.SetBlock(pos, BlockIDs.Dirt);
+                        chunk.SetBlock(localPos, BlockIDs.Dirt);
                         continue;
                     }
                     

@@ -12,7 +12,7 @@ using TechardryMath = Techardry.Utils.MathHelper;
 
 namespace Techardry.Voxels;
 
-[DebuggerTypeProxy(typeof(OctreeDebugView))]
+//[DebuggerTypeProxy(typeof(OctreeDebugView))]
 public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 {
     /// <summary>

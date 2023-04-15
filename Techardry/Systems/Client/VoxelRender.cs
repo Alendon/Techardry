@@ -166,15 +166,11 @@ public partial class VoxelRender : ARenderSystem
         vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
     }
 
-    public override void PostExecuteMainThread()
-    {
-        FreeUnusedBuffers();
-        base.PostExecuteMainThread();
-    }
-
     private bool UpdateVoxelData(Camera camera, Position position)
     {
         if (!TryEnterLock(TimeSpan.FromMilliseconds(100))) return false;
+        
+        FreeUnusedBuffers();
 
         CalculateChunkRenderInfo(position.Value, camera.FarPlane, out var renderDistanceLog, out var renderDistance,
             out var centralChunk);
@@ -330,12 +326,12 @@ public partial class VoxelRender : ARenderSystem
     private unsafe void CreateOctreeDescriptorSet(Int3[] chunksToRender)
     {
         CurrentRenderData.OctreeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree,
-            CurrentRenderData.ChunkOctreeBuffers.Count);
+            chunksToRender.Length);
 
         Span<DescriptorBufferInfo> bufferInfos =
-            stackalloc DescriptorBufferInfo[CurrentRenderData.ChunkOctreeBuffers.Count];
+            stackalloc DescriptorBufferInfo[chunksToRender.Length];
         Span<WriteDescriptorSet> writeDescriptorSets =
-            stackalloc WriteDescriptorSet[CurrentRenderData.ChunkOctreeBuffers.Count];
+            stackalloc WriteDescriptorSet[chunksToRender.Length];
 
         int currentChunk = 0;
         foreach (var chunk in chunksToRender)

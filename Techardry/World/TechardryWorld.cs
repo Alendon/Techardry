@@ -68,7 +68,6 @@ public class TechardryWorld : IWorld
         _physicsWorld = PhysicsWorld.Create(narrowPhase, poseIntegrator, solveDescription);
 
         ChunkManager = new ChunkManager(this);
-        SystemManager.SetSystemActive(SystemIDs.RenderInstanced, false);
         RegisterPhysicsExtensions();
     }
 

@@ -39,7 +39,7 @@ public static class RenderObjects
             new DescriptorSetLayoutBinding
             {
                 Binding = 0,
-                DescriptorCount = 100,
+                DescriptorCount = 1_000_000,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.ShaderStageFragmentBit
             }
@@ -384,7 +384,7 @@ public static class RenderObjects
                 VertexInputBindingDescriptions = vertexInputBindings,
                 RasterizationInfo =
                 {
-                    CullMode = CullModeFlags.CullModeNone,
+                    CullMode = CullModeFlags.BackBit,
                     FrontFace = FrontFace.Clockwise,
                     RasterizerDiscardEnable = false,
                     LineWidth = 1,

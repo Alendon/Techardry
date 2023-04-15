@@ -22,7 +22,9 @@ public static class Archetypes
             Identifications.ComponentIDs.Camera,
             ComponentIDs.Position,
             Identifications.ComponentIDs.LastChunk,
-            Identifications.ComponentIDs.Input
+            Identifications.ComponentIDs.Input,
+            ComponentIDs.Rotation, ComponentIDs.Transform, ComponentIDs.Scale,
+            ComponentIDs.InstancedRenderAble
         },
         EntitySetup = new PlayerSetup()
     };
@@ -31,7 +33,11 @@ public static class Archetypes
     {
         public void SetupEntity(IWorld world, Entity entity)
         {
-            world.EntityManager.GetComponent<Position>(entity).Value = new Vector3(0,16,0);
+            world.EntityManager.GetComponent<Position>(entity).Value = new Vector3(0,22,0);
+            world.EntityManager.GetComponent<InstancedRenderAble>(entity) = new InstancedRenderAble()
+            {
+                MaterialMeshCombination = InstancedRenderDataIDs.DualBlock
+            };
         }
 
         public void GatherEntityData(IWorld world, Entity entity)

@@ -34,6 +34,7 @@ public partial class MovementSystem : ASystem
                 movement = Vector3.Normalize(movement);
 
             pos.Value += movement * Speed * Engine.DeltaTime;
+            pos.Dirty = true;
         }
     }
 

@@ -20,14 +20,14 @@ namespace Techardry.World;
 public class ChunkManager : IDisposable
 {
     private readonly TechardryWorld _parentWorld;
-    private readonly Dictionary<Int3, ChunkEntry> _chunks = new();
-    private readonly Dictionary<Int3, HashSet<ushort>> _chunkPlayers = new();
+    private readonly ConcurrentDictionary<Int3, ChunkEntry> _chunks = new();
+    private readonly ConcurrentDictionary<Int3, ConcurrentDictionary<ushort, object?>> _chunkPlayers = new();
 
-    private readonly UniqueQueue<ChunkLoadEntry> ChunksToLoad = new();
-    private readonly UniqueQueue<Int3> _chunksToUnload = new();
-    private readonly Queue<(Int3, VoxelOctree)> _chunksToUpdate = new();
+    private readonly ConcurrentUniqueQueue<ChunkLoadEntry> _chunksToLoad = new();
+    private readonly ConcurrentUniqueQueue<Int3> _chunksToUnload = new();
+    private readonly ConcurrentQueue<(Int3, VoxelOctree)> _chunksToUpdate = new();
 
-    private readonly HashSet<Int3> _activeChunkCreations = new();
+    private readonly ConcurrentDictionary<Int3, object?> _activeChunkCreations = new();
 
     private readonly CancellationTokenSource _cancellationTokenSource = new();
 
@@ -36,7 +36,7 @@ public class ChunkManager : IDisposable
         _parentWorld = parentWorld;
 
         if (!_parentWorld.IsServerWorld) return;
-        
+
         EntityManager.PostEntityCreateEvent += OnEntityCreate;
         EntityManager.PreEntityDeleteEvent += OnEntityDelete;
     }
@@ -51,10 +51,12 @@ public class ChunkManager : IDisposable
 
     private void CreateChunk(Int3 chunkPosition)
     {
+        if (_chunks.ContainsKey(chunkPosition))
+            return;
+
         var chunk = _parentWorld.WorldGenerator.GenerateChunk(chunkPosition);
 
-        using var toLoadLock = ChunksToLoad.AcquireWriteLock();
-        ChunksToLoad.TryEnqueue(new ChunkLoadEntry { ChunkPosition = chunkPosition, Chunk = chunk });
+        _chunksToLoad.TryEnqueue(new ChunkLoadEntry { ChunkPosition = chunkPosition, Chunk = chunk });
     }
 
     private void ProcessPlayerChunkChanged(Int3? oldChunk, Int3? newChunk, ushort player)
@@ -86,76 +88,72 @@ public class ChunkManager : IDisposable
         List<Int3> toLoad = new();
         List<Int3> toUnload = new();
 
-        using (_chunkPlayers.AcquireWriteLock())
-        {
-            foreach (var chunk in chunksToLoad)
-            {
-                if (!_chunkPlayers.TryGetValue(chunk, out var players))
-                {
-                    players = new HashSet<ushort>();
-                    _chunkPlayers.Add(chunk, players);
 
+        foreach (var chunk in chunksToLoad)
+        {
+            _chunkPlayers.AddOrUpdate(chunk,
+                _ =>
+                {
+                    var dic = new ConcurrentDictionary<ushort, object?>();
+                    dic.TryAdd(player, null);
                     toLoad.Add(chunk);
+                    return dic;
                 }
-
-                players.Add(player);
-
-                var createMessage = new CreateChunk()
+                , (_, players) =>
                 {
-                    ChunkPosition = chunk,
-                    WorldId = _parentWorld.Identification
-                };
+                    players.TryAdd(player, null);
+                    return players;
+                });
 
-                createMessage.Send(player);
-            }
-
-            foreach (var chunk in chunksToUnload)
+            var createMessage = new CreateChunk()
             {
-                if (!_chunkPlayers.TryGetValue(chunk, out var players))
-                {
-                    Logger.WriteLog($"Player {player} tried to unload chunk {chunk} but it was not loaded",
-                        LogImportance.Error, "ChunkManager");
-                    continue;
-                }
+                ChunkPosition = chunk,
+                WorldId = _parentWorld.Identification
+            };
 
-                players.Remove(player);
-
-                var releaseMessage = new ReleaseChunk()
-                {
-                    ChunkPosition = chunk,
-                    WorldId = _parentWorld.Identification
-                };
-                releaseMessage.Send(player);
-
-                if (players.Count != 0) continue;
-
-                _chunkPlayers.Remove(chunk);
-                toUnload.Add(chunk);
-            }
+            createMessage.Send(player);
         }
 
-        using (_chunksToUnload.AcquireWriteLock())
+        foreach (var chunk in chunksToUnload)
         {
-            foreach (var chunk in toUnload)
+            if (!_chunkPlayers.TryGetValue(chunk, out var players))
             {
-                _chunksToUnload.TryEnqueue(chunk);
+                Logger.WriteLog($"Player {player} tried to unload chunk {chunk} but it was not loaded",
+                    LogImportance.Error, "ChunkManager");
+                continue;
             }
+
+            players.TryRemove(player, out _);
+
+            var releaseMessage = new ReleaseChunk()
+            {
+                ChunkPosition = chunk,
+                WorldId = _parentWorld.Identification
+            };
+            releaseMessage.Send(player);
+
+            if (players.Count != 0) continue;
+
+            _chunkPlayers.TryRemove(chunk, out _);
+            toUnload.Add(chunk);
         }
 
-        using (ChunksToLoad.AcquireWriteLock())
-        using (_activeChunkCreations.AcquireWriteLock())
-        using (_chunks.AcquireReadLock())
+
+        foreach (var chunk in toUnload)
         {
-            foreach (var chunk in toLoad)
-            {
-                if (_chunks.ContainsKey(chunk)) continue;
-
-                if (_activeChunkCreations.Contains(chunk)) continue;
-
-                _activeChunkCreations.Add(chunk);
-                Task.Run(() => CreateChunk(chunk), _cancellationTokenSource.Token);
-            }
+            _chunksToUnload.TryEnqueue(chunk);
         }
+
+
+        foreach (var chunk in toLoad)
+        {
+            if (_chunks.ContainsKey(chunk)) continue;
+
+            if (!_activeChunkCreations.TryAdd(chunk, null)) continue;
+
+            Task.Run(() => CreateChunk(chunk), _cancellationTokenSource.Token);
+        }
+
 
         IEnumerable<Int3> AreaAroundChunk(Int3 chunk)
         {
@@ -202,7 +200,7 @@ public class ChunkManager : IDisposable
         var position = _parentWorld.EntityManager.GetComponent<Position>(entity);
         var chunkPos = new Int3((int)position.Value.X / Chunk.Size, (int)position.Value.Y / Chunk.Size,
             (int)position.Value.Z / Chunk.Size);
-        
+
         _parentWorld.EntityManager.GetComponent<LastChunk>(entity).Value = chunkPos;
 
         PlayerChunkChanged(null, chunkPos, player);
@@ -215,74 +213,63 @@ public class ChunkManager : IDisposable
 
     public void Update()
     {
-        using var chunksLock = _chunks.AcquireWriteLock();
-
-        using (_chunksToUnload.AcquireWriteLock())
+        while (_chunksToUnload.TryDequeue(out var chunkToUnload))
         {
-            while (_chunksToUnload.TryDequeue(out var chunkToUnload))
-            {
-                if (!_chunks.Remove(chunkToUnload, out var chunkEntry)) continue;
+            if (!_chunks.Remove(chunkToUnload, out var chunkEntry)) continue;
 
-                _parentWorld.PhysicsWorld.Simulation.Statics.Remove(chunkEntry.StaticHandle);
-                chunkEntry.Chunk.Dispose();
-                _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
-
-                Logger.WriteLog($"Unloaded Chunk {chunkToUnload}", LogImportance.Info, "ChunkManager");
-            }
+            _parentWorld.PhysicsWorld.Simulation.Statics.Remove(chunkEntry.StaticHandle);
+            chunkEntry.Chunk.Dispose();
+            _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
         }
 
 
-        using (ChunksToLoad.AcquireWriteLock())
-        using (_activeChunkCreations.AcquireWriteLock())
-            while (ChunksToLoad.TryDequeue(out var toLoad))
+        while (_chunksToLoad.TryDequeue(out var toLoad))
+        {
+            var (chunkPosition, chunk) = toLoad;
+            VoxelCollider collider = chunk.CreateCollider();
+            var shape = _parentWorld.PhysicsWorld.Simulation.Shapes.Add(collider);
+            var bodyHandle = _parentWorld.PhysicsWorld.Simulation.Statics.Add(
+                new StaticDescription(
+                    new Vector3(chunkPosition.X, chunkPosition.Y, chunkPosition.Z) *
+                    Chunk.Size, shape));
+
+            _chunks.TryAdd(toLoad.ChunkPosition, new ChunkEntry(toLoad.Chunk, bodyHandle, shape));
+            _activeChunkCreations.TryRemove(toLoad.ChunkPosition, out _);
+        }
+
+        if (!_parentWorld.IsServerWorld)
+        {
+            while (_chunksToUpdate.TryDequeue(out var toUpdate))
             {
-                var (chunkPosition, chunk) = toLoad;
-                VoxelCollider collider = chunk.CreateCollider();
-                var shape = _parentWorld.PhysicsWorld.Simulation.Shapes.Add(collider);
-                var bodyHandle = _parentWorld.PhysicsWorld.Simulation.Statics.Add(
+                var (chunkPosition, octree) = toUpdate;
+                if (!_chunks.TryGetValue(chunkPosition, out var chunkEntry))
+                {
+
+                    Logger.WriteLog($"Chunk to update was not found: {chunkPosition}", LogImportance.Error,
+                        "ChunkManager");
+
+                    continue;
+                }
+
+                var (chunk, staticHandle, shape) = chunkEntry;
+
+                chunk.SetOctree(octree);
+
+                //destroy physics objects
+                _parentWorld.PhysicsWorld.Simulation.Statics.Remove(staticHandle);
+                _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(shape);
+
+                //create new physics objects
+                var collider = chunk.CreateCollider();
+                shape = _parentWorld.PhysicsWorld.Simulation.Shapes.Add(collider);
+                staticHandle = _parentWorld.PhysicsWorld.Simulation.Statics.Add(
                     new StaticDescription(
                         new Vector3(chunkPosition.X, chunkPosition.Y, chunkPosition.Z) *
                         Chunk.Size, shape));
 
-                _chunks.TryAdd(toLoad.ChunkPosition, new ChunkEntry(toLoad.Chunk, bodyHandle, shape));
-                _activeChunkCreations.Remove(toLoad.ChunkPosition);
-            }
-
-        if (!_parentWorld.IsServerWorld)
-        {
-            using (_chunksToUpdate.AcquireWriteLock())
-            {
-
-                foreach (var (chunkPosition, octree) in _chunksToUpdate)
-                {
-                    if (!_chunks.TryGetValue(chunkPosition, out var chunkEntry))
-                    {
-                        Logger.WriteLog($"Chunk to update was not found: {chunkPosition}", LogImportance.Error, "ChunkManager");
-                        continue;
-                    }
-
-                    var (chunk, staticHandle, shape) = chunkEntry;
-
-                    chunk.SetOctree(octree);
-
-                    //destroy physics objects
-                    _parentWorld.PhysicsWorld.Simulation.Statics.Remove(staticHandle);
-                    _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(shape);
-
-                    //create new physics objects
-                    var collider = chunk.CreateCollider();
-                    shape = _parentWorld.PhysicsWorld.Simulation.Shapes.Add(collider);
-                    staticHandle = _parentWorld.PhysicsWorld.Simulation.Statics.Add(
-                        new StaticDescription(
-                            new Vector3(chunkPosition.X, chunkPosition.Y, chunkPosition.Z) *
-                            Chunk.Size, shape));
-
-                    _chunks[chunkPosition] = new ChunkEntry(chunk, staticHandle, shape);
-                }
-                
+                _chunks[chunkPosition] = new ChunkEntry(chunk, staticHandle, shape);
             }
         }
-
 
         foreach (var (chunk, _, _) in _chunks.Values)
         {
@@ -294,15 +281,12 @@ public class ChunkManager : IDisposable
     {
         Logger.AssertAndThrow(!_parentWorld.IsServerWorld, "Client tried to update chunk on server", "ChunkManager");
 
-        using var lockHandle = _chunksToUpdate.AcquireWriteLock();
-        
         _chunksToUpdate.Enqueue((chunkPosition, octree));
     }
 
     public bool TryGetChunk(Int3 chunkPosition, [MaybeNullWhen(false)] out Chunk chunk)
     {
-        using var lockHandle = _chunks.AcquireReadLock();
-        if (!lockHandle.IsEmpty && _chunks.TryGetValue(chunkPosition, out var chunkEntry))
+        if (_chunks.TryGetValue(chunkPosition, out var chunkEntry))
         {
             chunk = chunkEntry.Chunk;
             return true;
@@ -352,14 +336,12 @@ public class ChunkManager : IDisposable
         Logger.AssertAndThrow(!_parentWorld.IsServerWorld, "Chunks can only be manually added to the client world",
             "ChunkManager");
 
-        using (ChunksToLoad.AcquireWriteLock())
+
+        _chunksToLoad.TryEnqueue(new ChunkLoadEntry()
         {
-            ChunksToLoad.TryEnqueue(new ChunkLoadEntry()
-            {
-                ChunkPosition = chunkPosition,
-                Chunk = new Chunk(chunkPosition, _parentWorld)
-            });
-        }
+            ChunkPosition = chunkPosition,
+            Chunk = new Chunk(chunkPosition, _parentWorld)
+        });
     }
 
     internal void RemoveChunk(Int3 chunkPosition)
@@ -367,9 +349,7 @@ public class ChunkManager : IDisposable
         Logger.AssertAndThrow(!_parentWorld.IsServerWorld, "Chunks can only be manually removed from the client world",
             "ChunkManager");
 
-        using (_chunksToUnload.AcquireWriteLock())
-        {
-            _chunksToUnload.TryEnqueue(chunkPosition);
-        }
+
+        _chunksToUnload.TryEnqueue(chunkPosition);
     }
 }

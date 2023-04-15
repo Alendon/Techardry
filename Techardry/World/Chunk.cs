@@ -16,7 +16,7 @@ public class Chunk : IDisposable
 
     public Int3 Position { get; }
     internal VoxelOctree Octree { get; set; }
-    public uint Version { get; set; }
+    public uint Version { get; set; } = 1;
     public uint LastSyncedVersion { get; set; }
     public Timestamp LastSyncedTime { get; set; }
 

@@ -6,6 +6,7 @@ using Techardry.Identifications;
 
 namespace Techardry.Components.Client;
 
+[PlayerControlled]
 [RegisterComponent("input")]
 public struct InputComponent : IComponent
 {
