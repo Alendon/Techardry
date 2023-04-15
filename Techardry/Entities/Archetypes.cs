@@ -21,7 +21,8 @@ public static class Archetypes
         {
             Identifications.ComponentIDs.Camera,
             ComponentIDs.Position,
-            Identifications.ComponentIDs.LastChunk
+            Identifications.ComponentIDs.LastChunk,
+            Identifications.ComponentIDs.Input
         },
         EntitySetup = new PlayerSetup()
     };
