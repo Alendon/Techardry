@@ -9,9 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="DotNext" Version="4.12.0" />
-      <PackageReference Include="DotNext.Threading" Version="4.12.0" />
-      <PackageReference Include="MintyCore" Version="0.2.4.1" />
+      <PackageReference Include="MintyCore" Version="0.2.5.9" />
     </ItemGroup>
 
 </Project>

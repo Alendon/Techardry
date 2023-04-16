@@ -28,7 +28,7 @@ public partial class RequestChunkData : IMessage
         if(!WorldHandler.TryGetWorld(GameType.Server, WorldId, out var world) || world is not TechardryWorld techardryWorld)
             return false;
 
-        if (!techardryWorld.ChunkManager.TryGetChunk(Position, out var chunk)) return false;
+        if (!techardryWorld.ChunkManager.TryGetChunk(Position, out var chunk)) return true;
 
         chunk.Octree.AcquireReadLock();
 

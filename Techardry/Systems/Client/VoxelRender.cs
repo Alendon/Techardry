@@ -260,7 +260,7 @@ public partial class VoxelRender : ARenderSystem
             SharingMode.Exclusive,
             queues,
             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
-            true
+            true, true
         );
 
         var data = MemoryManager.Map(stagingBuffer.Memory);
@@ -305,7 +305,7 @@ public partial class VoxelRender : ARenderSystem
             SharingMode.Exclusive,
             queues,
             MemoryPropertyFlags.DeviceLocalBit,
-            false
+            false, true
         );
 
         var cb = VulkanEngine.GetSingleTimeCommandBuffer();
@@ -328,24 +328,27 @@ public partial class VoxelRender : ARenderSystem
         CurrentRenderData.OctreeDescriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree,
             chunksToRender.Length);
 
-        Span<DescriptorBufferInfo> bufferInfos =
-            stackalloc DescriptorBufferInfo[chunksToRender.Length];
-        Span<WriteDescriptorSet> writeDescriptorSets =
-            stackalloc WriteDescriptorSet[chunksToRender.Length];
+        DescriptorBufferInfo[] bufferInfos = new DescriptorBufferInfo[chunksToRender.Length];
+        WriteDescriptorSet[] writeDescriptorSets = new WriteDescriptorSet[chunksToRender.Length];
+        Span<DescriptorBufferInfo> bufferInfosSpan = bufferInfos;
+        Span<WriteDescriptorSet> writeDescriptorSetsSpan = writeDescriptorSets;
+        GCHandle bufferInfoHandle = GCHandle.Alloc(bufferInfos, GCHandleType.Pinned);
+        GCHandle writeDescriptorSetHandle = GCHandle.Alloc(writeDescriptorSets, GCHandleType.Pinned);
+        
 
         int currentChunk = 0;
         foreach (var chunk in chunksToRender)
         {
             var buffer = CurrentRenderData.ChunkOctreeBuffers[chunk];
 
-            bufferInfos[currentChunk] = new DescriptorBufferInfo
+            bufferInfosSpan[currentChunk] = new DescriptorBufferInfo
             {
                 Buffer = buffer.Buffer,
                 Offset = 0,
                 Range = buffer.Size
             };
 
-            writeDescriptorSets[currentChunk] = new WriteDescriptorSet
+            writeDescriptorSetsSpan[currentChunk] = new WriteDescriptorSet
             {
                 SType = StructureType.WriteDescriptorSet,
                 DescriptorCount = 1,
@@ -361,6 +364,9 @@ public partial class VoxelRender : ARenderSystem
         }
 
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, writeDescriptorSets, 0, null);
+        
+        bufferInfoHandle.Free();
+        writeDescriptorSetHandle.Free();
     }
 
     private void DestroyMasterOctreeDescriptorSet()
@@ -480,7 +486,7 @@ public partial class VoxelRender : ARenderSystem
             SharingMode.Exclusive,
             queue,
             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
-            true
+            true, true
         );
 
         var data = MemoryManager.Map(stagingBuffer.Memory);
@@ -615,7 +621,7 @@ public partial class VoxelRender : ARenderSystem
             renderData.CameraDataBuffer = MemoryBuffer.Create(
                 BufferUsageFlags.UniformBufferBit,
                 (ulong)Marshal.SizeOf<CameraData>(), SharingMode.Exclusive, queue,
-                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, false);
+                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, false, true);
         }
     }
 
