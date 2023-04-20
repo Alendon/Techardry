@@ -52,7 +52,7 @@ public class BvhRenderer
                 var ray = new Ray(camPos, Vector3.Normalize(pixelPos - camPos));
 
                 if (UseBvh)
-                    _bvhTree.Intersect(ref ray, 0);
+                    _bvhTree.Intersect(ref ray);
                 else
                 {
                     for (var index = 0; index < _triangles.Length; index++)

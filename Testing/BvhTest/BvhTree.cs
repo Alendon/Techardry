@@ -106,21 +106,51 @@ public class BvhTree
         }
     }
 
-    public void Intersect(ref Ray ray, uint nodeIndex)
+    public void Intersect(ref Ray ray)
     {
-        ref var node = ref _nodes[nodeIndex];
-        if (!IntersectsBoundingBox(ref ray, ref node.Bounds)) return;
-        if (node.IsLeaf)
+        ref var node = ref _nodes[0];
+        var stack = (stackalloc uint[64]);
+        int stackIndex = 0;
+
+        while (true)
         {
-            for (var i = 0u; i < node.triangleCount; i++)
+            if (node.IsLeaf)
             {
-                IntersectTriangle(ref ray, ref _triangles[_triangleIndices[node.leftFirst + i]]);
+                for (int i = 0; i < node.triangleCount; i++)
+                {
+                    IntersectTriangle(ref ray, ref _triangles[_triangleIndices[node.leftFirst + i]]);
+                }
+
+                if (stackIndex == 0) break;
+                node = ref _nodes[stack[--stackIndex]];
+                continue;
             }
-        }
-        else
-        {
-            Intersect(ref ray, node.leftFirst);
-            Intersect(ref ray, node.leftFirst + 1);
+
+            var child1 = node.leftFirst;
+            var child2 = child1 + 1;
+
+            var dist1 = IntersectsBoundingBox(ray, ref _nodes[child1].Bounds);
+            var dist2 = IntersectsBoundingBox(ray, ref _nodes[child2].Bounds);
+
+            if (dist1 > dist2)
+            {
+                (child1, child2) = (child2, child1);
+                (dist1, dist2) = (dist2, dist1);
+            }
+
+            if (Math.Abs(dist1 - float.MaxValue) < FloatTolerance)
+            {
+                if (stackIndex == 0) break;
+                node = ref _nodes[stack[--stackIndex]];
+            }
+            else
+            {
+                node = ref _nodes[child1];
+                if (Math.Abs(dist2 - float.MaxValue) > FloatTolerance)
+                {
+                    stack[stackIndex++] = child2;
+                }
+            }
         }
     }
 
@@ -131,16 +161,16 @@ public class BvhTree
         var h = Vector3.Cross(ray.Direction, edge2);
         var a = Vector3.Dot(edge1, h);
         if (a > -FloatTolerance && a < FloatTolerance) return;
-        
+
         var f = 1 / a;
         var s = ray.Origin - triangle.V0;
         var u = f * Vector3.Dot(s, h);
         if (u < 0 || u > 1) return;
-        
+
         var q = Vector3.Cross(s, edge1);
         var v = f * Vector3.Dot(ray.Direction, q);
         if (v < 0 || u + v > 1) return;
-        
+
         var t = f * Vector3.Dot(edge2, q);
         if (t > FloatTolerance)
         {
@@ -148,7 +178,7 @@ public class BvhTree
         }
     }
 
-    private bool IntersectsBoundingBox(ref Ray ray, ref BoundingBox nodeBounds)
+    private float IntersectsBoundingBox(Ray ray, ref BoundingBox nodeBounds)
     {
         var tx1 = (nodeBounds.Min.X - ray.Origin.X) * ray.InverseDirection.X;
         var tx2 = (nodeBounds.Max.X - ray.Origin.X) * ray.InverseDirection.X;
@@ -165,7 +195,9 @@ public class BvhTree
         tmin = Math.Max(tmin, Math.Min(tz1, tz2));
         tmax = Math.Min(tmax, Math.Max(tz1, tz2));
 
-        return tmax >= tmin && tmin < ray.T && tmax > 0;
+        if (tmax >= tmin && tmin < ray.T && tmax > 0)
+            return tmin;
+        return float.MaxValue;
     }
 
     public struct Node
