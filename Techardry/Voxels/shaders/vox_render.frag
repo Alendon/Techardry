@@ -3,6 +3,8 @@
 
 #define Dimensions 16
 #define MaxDepth 10
+#define FloatMax 1e+30
+#define FloatTolerance 0.001
 
 layout (location = 0) in vec3 in_position;
 
@@ -38,15 +40,27 @@ layout(set = 1, binding = 0) uniform sampler2DArray tex;
 layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
 layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
 
-layout(std430, set = 3, binding = 0) readonly buffer MasterOctree
+struct BvhNode{
+    float minX;
+    float minY;
+    float minZ;
+
+    float maxX;
+    float maxY;
+    float maxZ;
+
+    uint leftFirst;
+    uint triangleCount;
+};
+
+bool bvhNode_IsLeaf(in BvhNode node){
+    return node.triangleCount > 0;
+}
+
+layout(std430, set = 3, binding = 0) readonly buffer MasterBvh
 {
-    int minX;
-    int minY;
-    int minZ;
-    int dimension;
-    int depth;
-    int data[];
-} masterOctree;
+    BvhNode nodes[];
+} masterBvh;
 
 layout(std430, set = 4, binding = 0) readonly buffer Octree
 {
@@ -163,8 +177,8 @@ struct Result{
 };
 
 
-bool raycast(in Ray ray, inout Result result);
-bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier, inout Result result);
+void raycast(in Ray ray, inout Result result);
+void raycastChunk(in Ray ray, int tree, inout Result result);
 
 
 float linearDepth(float depth)
@@ -209,9 +223,11 @@ void main()
     float depth = subpassLoad(inDepth).r;
     vec3 oldColor = subpassLoad(inColor).rgb;
 
-    Result result = Result(0, vec3(0, 0, 0), vec2(0, 0), 0, -1, false, vec3(0,0,1));
+    Result result = Result(0, vec3(0, 0, 0), vec2(0, 0), FloatMax, -1, false, vec3(0,0,1));
 
-    bool hit = raycast(ray, result);
+    raycast(ray, result);
+
+    bool hit = abs(result.t - FloatMax) > 0.0001;
 
     if(result.fail){
         out_color = result.failColor;
@@ -383,9 +399,15 @@ void getChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out 
 }
 
 
-bool raycast(in Ray ray, inout Result result){
-    vec3 treeMin = vec3(masterOctree.minX, masterOctree.minY, masterOctree.minZ);
-    vec3 treeMax = treeMin + masterOctree.dimension;
+void raycast(in Ray ray, inout Result result){
+    
+    
+}
+
+void raycastChunk(in Ray ray, int tree, inout Result result){
+
+    vec3 treeMin = vec3(trees[tree].minX, trees[tree].minY, trees[tree].minZ);
+    vec3 treeMax = treeMin + Dimensions;
 
     int childIndexModifier = 0;
     ray.direction = normalize(ray.direction);
@@ -393,17 +415,17 @@ bool raycast(in Ray ray, inout Result result){
     
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
     if (ray.direction.x < 0){
-        ray.origin.x =  treeMin.x * 2 + masterOctree.dimension - ray.origin.x;
+        ray.origin.x =  treeMin.x * 2 + Dimensions - ray.origin.x;
         ray.direction.x = -ray.direction.x;
         childIndexModifier |= 4;
     }
     if (ray.direction.y < 0){
-        ray.origin.y = treeMin.y * 2 + masterOctree.dimension - ray.origin.y;
+        ray.origin.y = treeMin.y * 2 + Dimensions - ray.origin.y;
         ray.direction.y = -ray.direction.y;
         childIndexModifier |= 2;
     }
     if (ray.direction.z < 0){
-        ray.origin.z = treeMin.z * 2 + masterOctree.dimension - ray.origin.z;
+        ray.origin.z = treeMin.z * 2 + Dimensions - ray.origin.z;
         ray.direction.z = -ray.direction.z;
         childIndexModifier |= 1;
     }
@@ -415,103 +437,7 @@ bool raycast(in Ray ray, inout Result result){
 
     //Early exit if the tree isnt hit
     if (max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
-        result.fail = false;
-        return false;
-    }
-
-    //Normally at this point a recursion is used to traverse the tree.
-    //But since this is glsl we can't use recursion.
-    //So we use a stack to store the nodes to traverse.
-
-    struct StackEntry{
-        uint nodeIndex;
-        int lastChildIndex;
-        vec3 t0;
-        vec3 t1;
-    } stack[MaxDepth + 1];
-
-    int stackIndex = 0;
-    stack[0] = StackEntry(0, -1, t0, t1);
-    int counter = 0;
-
-    while (stackIndex >= 0){
-        counter++;
-
-        if(counter > 1000){
-            result.fail = true;
-            result.failColor = vec3(1,0,0);
-            return false;
-        }
-
-        int currentDepth = stackIndex;
-
-        StackEntry currentEntry = stack[stackIndex];
-        stackIndex--;
-
-        t0 = currentEntry.t0;
-        t1 = currentEntry.t1;
-
-        uint node = currentEntry.nodeIndex;
-
-        if (t1.x < 0 || t1.y < 0 || t1.z < 0){
-            continue;
-        }
-
-        int masterOctreeTargetDepth = masterOctree.depth;
-
-        if (currentDepth == masterOctreeTargetDepth){
-            int tree = masterOctree.data[node];
-            
-            if(tree == -1) continue;
-
-            /*tMax = max(max(t0.x, t0.y), t0.z);
-            return true;*/
-            
-
-            //return raycastChunk(originalRay, tree, result);
-            if(raycastChunk(originalRay, tree, t0, t1, childIndexModifier, result)){
-                result.tree = tree;
-                return true;
-            }
-            if(result.fail){
-                return false;
-            }
-
-            continue;
-        }
-
-        vec3 tm = (t0 + t1) * 0.5;
-
-        int lastChildIndex = currentEntry.lastChildIndex;
-        int nextChildIndex = getNextChildIndex(lastChildIndex, t0, t1, tm);
-
-        if (nextChildIndex >= 8){
-            //The end is reached
-            continue;
-        }
-
-        //Get the parameters for the next child
-        vec3 childT0;
-        vec3 childT1;
-        getChildT(nextChildIndex, t0, t1, tm, childT0, childT1);
-
-        stackIndex++;
-        currentEntry.lastChildIndex = nextChildIndex;
-        stack[stackIndex] = currentEntry;
-
-        stackIndex++;
-
-        uint nodeChildren= node * 8 + (nextChildIndex ^ childIndexModifier);
-        stack[stackIndex] = StackEntry(nodeChildren, -1, childT0, childT1);
-    }
-    
-    return false;
-}
-
-bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier, inout Result result){
-    //Early exit if the tree isnt hit
-    if (max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
-        return false;
+        return;
     }
 
     //Normally at this point a recursion is used to traverse the tree.
@@ -537,7 +463,7 @@ bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier
             result.tree = tree;
             result.fail = true;
             result.failColor = vec3(0,1,0);
-            return false;
+            return;
         }
 
         StackEntry currentEntry = stack[stackIndex];
@@ -562,7 +488,7 @@ bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier
                 result.nodeIndex = node;
                 result.tree = tree;
 
-                if (t0.x > t0.y && t0.x > t0.z){
+                if (t0.x > t0.y && t0.x > t0.z && t0.x < result.t){
 
                     result.t = t0.x;
 
@@ -576,8 +502,7 @@ bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier
                         result.normal = vec3(1, 0, 0);
                     }
                 }
-                else if (t0.y > t0.x && t0.y > t0.z){
-
+                else if (t0.y > t0.x && t0.y > t0.z && t0.y < result.t){
 
                     result.t = t0.y;
 
@@ -591,8 +516,7 @@ bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier
                         result.normal = vec3(0, 1, 0);
                     }
                 }
-                else if (t0.z > t0.x && t0.z > t0.y){
-
+                else if (t0.z > t0.x && t0.z > t0.y && t0.z < result.t){
 
                     result.t = t0.z;
 
@@ -609,7 +533,7 @@ bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier
                     }
                 }
 
-                return true;
+                return;
             }
         }
 
@@ -637,6 +561,4 @@ bool raycastChunk(in Ray ray, int tree, vec3 t0, vec3 t1, int childIndexModifier
         uint nodeChildren = NodeChildren(tree, node, nextChildIndex ^ childIndexModifier);
         stack[stackIndex] = StackEntry(nodeChildren, -1, childT0, childT1);
     }
-
-    return false;
 }
