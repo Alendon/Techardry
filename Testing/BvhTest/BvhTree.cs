@@ -38,10 +38,10 @@ public class BvhTree
     private void Subdivide(uint nodeIndex)
     {
         ref var node = ref _nodes[nodeIndex];
-        
+
         var splitCost = FindBestSplitPlane(ref node, out var axis, out var splitPosition);
         var noSplitCost = CalculateNodeCost(ref node);
-        if(splitCost >= noSplitCost)
+        if (splitCost >= noSplitCost)
             return;
 
         var i = node.leftFirst;
@@ -109,7 +109,7 @@ public class BvhTree
     {
         axis = -1;
         splitPosition = float.NaN;
-        
+
         float bestCost = float.MaxValue;
 
         var bins = (stackalloc Bin[BinCount]);
@@ -131,48 +131,50 @@ public class BvhTree
                 boundsMin = float.Min(boundsMin, triangle.Center[a]);
                 boundsMax = float.Max(boundsMax, triangle.Center[a]);
             }
-            if(Math.Abs(boundsMin - boundsMax) < FloatTolerance) continue;
-            
+
+            if (Math.Abs(boundsMin - boundsMax) < FloatTolerance) continue;
+
             bins.Clear();
-            
+
             var scale = BinCount / (boundsMax - boundsMin);
             for (int i = 0; i < node.triangleCount; i++)
             {
                 ref var triangle = ref _triangles[_triangleIndices[node.leftFirst + i]];
                 var binIndex = int.Min(BinCount - 1, (int)((triangle.Center[a] - boundsMin) * scale));
                 bins[binIndex].Count++;
-                
+
                 triangleVertices[0] = triangle.V0;
                 triangleVertices[1] = triangle.V1;
                 triangleVertices[2] = triangle.V2;
-                
-                BoundingBox.CreateMerged(BoundingBox.CreateFromPoints(triangleVertices), bins[binIndex].Bounds, out bins[binIndex].Bounds);
+
+                BoundingBox.CreateMerged(BoundingBox.CreateFromPoints(triangleVertices), bins[binIndex].Bounds,
+                    out bins[binIndex].Bounds);
             }
-            
+
             leftArea.Clear();
             rightArea.Clear();
             leftCount.Clear();
             rightCount.Clear();
-            
+
             BoundingBox leftBounds = default;
             BoundingBox rightBounds = default;
             int leftSum = 0, rightSum = 0;
 
-            for (int i = 0; i < BinCount -1; i++)
+            for (int i = 0; i < BinCount - 1; i++)
             {
                 leftSum += bins[i].Count;
                 leftCount[i] = leftSum;
                 BoundingBox.CreateMerged(bins[i].Bounds, leftBounds, out leftBounds);
                 leftArea[i] = GetArea(leftBounds);
-                
+
                 rightSum += bins[BinCount - 1 - i].Count;
                 rightCount[BinCount - 2 - i] = rightSum;
                 BoundingBox.CreateMerged(bins[BinCount - 1 - i].Bounds, rightBounds, out rightBounds);
                 rightArea[BinCount - 2 - i] = GetArea(rightBounds);
             }
-            
+
             scale = (boundsMax - boundsMin) / BinCount;
-            for (int i = 0; i < BinCount -1; i++)
+            for (int i = 0; i < BinCount - 1; i++)
             {
                 float planeCost = leftCount[i] * leftArea[i] + rightCount[i] * rightArea[i];
                 if (planeCost < bestCost)
@@ -181,9 +183,7 @@ public class BvhTree
                     splitPosition = boundsMin + (i + 1) * scale;
                     bestCost = planeCost;
                 }
-
             }
-
         }
 
         return bestCost;
@@ -203,25 +203,25 @@ public class BvhTree
 
     public void Intersect(ref Ray ray)
     {
-        ref var node = ref _nodes[0];
+        uint nodeIndex = 0;
         var stack = (stackalloc uint[64]);
         int stackIndex = 0;
 
         while (true)
         {
-            if (node.IsLeaf)
+            if (_nodes[nodeIndex].IsLeaf)
             {
-                for (int i = 0; i < node.triangleCount; i++)
+                for (int i = 0; i < _nodes[nodeIndex].triangleCount; i++)
                 {
-                    IntersectTriangle(ref ray, ref _triangles[_triangleIndices[node.leftFirst + i]]);
+                    IntersectTriangle(ref ray, ref _triangles[_triangleIndices[_nodes[nodeIndex].leftFirst + i]]);
                 }
 
                 if (stackIndex == 0) break;
-                node = ref _nodes[stack[--stackIndex]];
+                nodeIndex = stack[--stackIndex];
                 continue;
             }
 
-            var child1 = node.leftFirst;
+            var child1 = _nodes[nodeIndex].leftFirst;
             var child2 = child1 + 1;
 
             var dist1 = IntersectsBoundingBox(ray, ref _nodes[child1].Bounds);
@@ -236,11 +236,11 @@ public class BvhTree
             if (Math.Abs(dist1 - float.MaxValue) < FloatTolerance)
             {
                 if (stackIndex == 0) break;
-                node = ref _nodes[stack[--stackIndex]];
+                nodeIndex = stack[--stackIndex];
             }
             else
             {
-                node = ref _nodes[child1];
+                nodeIndex = child1;
                 if (Math.Abs(dist2 - float.MaxValue) > FloatTolerance)
                 {
                     stack[stackIndex++] = child2;
