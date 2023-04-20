@@ -5,6 +5,7 @@
 #define MaxDepth 10
 #define FloatMax 1e+30
 #define FloatTolerance 0.001
+#define BvhStackSize 64
 
 layout (location = 0) in vec3 in_position;
 
@@ -49,18 +50,27 @@ struct BvhNode{
     float maxY;
     float maxZ;
 
-    uint leftFirst;
-    uint triangleCount;
+    int leftFirst;
+    int count;
 };
 
-bool bvhNode_IsLeaf(in BvhNode node){
-    return node.triangleCount > 0;
-}
+struct AABB{
+    vec3 min;
+    vec3 max;
+};
 
 layout(std430, set = 3, binding = 0) readonly buffer MasterBvh
 {
     BvhNode nodes[];
 } masterBvh;
+
+bool bvhNode_IsLeaf(in BvhNode node){
+    return node.count > 0;
+}
+
+AABB bvhNode_GetAABB(in BvhNode node){
+    return AABB(vec3(node.minX, node.minY, node.minZ), vec3(node.maxX, node.maxY, node.maxZ));
+}
 
 layout(std430, set = 4, binding = 0) readonly buffer Octree
 {
@@ -398,9 +408,74 @@ void getChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out 
     }
 }
 
+float intersectBoundingBox(in Ray ray, in AABB aabb, in Result result){
+    float tx1 = (aabb.min.x - ray.origin.x) * ray.inverseDirection.x;
+    float tx2 = (aabb.max.x - ray.origin.x) * ray.inverseDirection.x;
+    float tmin = min(tx1, tx2);
+    float tmax = max(tx1, tx2);
+
+    float ty1 = (aabb.min.y - ray.origin.y) * ray.inverseDirection.y;
+    float ty2 = (aabb.max.y - ray.origin.y) * ray.inverseDirection.y;
+    tmin = max(tmin, min(ty1, ty2));
+    tmax = min(tmax, max(ty1, ty2));
+
+    float tz1 = (aabb.min.z - ray.origin.z) * ray.inverseDirection.z;
+    float tz2 = (aabb.max.z - ray.origin.z) * ray.inverseDirection.z;
+    tmin = max(tmin, min(tz1, tz2));
+    tmax = min(tmax, max(tz1, tz2));
+
+    if(tmax >= tmin && tmin < result.t && tmax > 0){
+        return tmin;
+    }
+    return FloatMax;
+}
 
 void raycast(in Ray ray, inout Result result){
     
+    int nodeIndex = 0;
+    int stack[BvhStackSize];
+    int stackIndex = 0;
+        
+    while(true)
+    {
+        if(bvhNode_IsLeaf(masterBvh.nodes[nodeIndex])){
+            for(int i = 0; i < masterBvh.nodes[nodeIndex].count; i++){
+                int tree = int(masterBvh.nodes[nodeIndex].leftFirst + i);
+                raycastChunk(ray, tree, result);
+            }
+
+            if(stackIndex == 0) break;
+            nodeIndex = stack[--stackIndex];
+            continue;
+        }
+
+        int child1 = masterBvh.nodes[nodeIndex].leftFirst;
+        int child2 = child1 + 1;
+
+        float dist1 = intersectBoundingBox(ray, bvhNode_GetAABB(masterBvh.nodes[child1]), result);
+        float dist2 = intersectBoundingBox(ray, bvhNode_GetAABB(masterBvh.nodes[child2]), result);
+
+        if(dist1 > dist2){
+            int tempChild = child1;
+            child1 = child2;
+            child2 = tempChild;
+
+            float tempDist = dist1;
+            dist1 = dist2;
+            dist2 = tempDist;
+        }
+
+        if(abs(dist1 - FloatMax) < FloatTolerance){
+            if(stackIndex == 0) break;
+            nodeIndex = stack[--stackIndex];
+        }
+        else{
+            nodeIndex = child1;
+            if(abs(dist2 - FloatMax) > FloatTolerance){
+                stack[stackIndex++] = child2;
+            }
+        }
+    }
     
 }
 
