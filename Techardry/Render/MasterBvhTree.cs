@@ -1,39 +1,41 @@
-﻿using System.Numerics;
+﻿using System.Runtime.InteropServices;
 using BepuUtilities;
+using Silk.NET.Vulkan;
 
-namespace Testing.BvhTest;
+namespace Techardry.Render;
 
-public class BvhTree
+public class MasterBvhTree
 {
     private Node[] _nodes;
-    private Triangle[] _triangles;
-    private uint[] _triangleIndices;
-    private uint nodesUsed = 2;
-
+    private BoundingBox[] _localTrees;
+    private int[] _treeIndices;
+    private int nodesUsed = 2;
+    
+    
     private const float FloatTolerance = 0.0001f;
     private const int BinCount = 32;
-
-    public BvhTree(Triangle[] triangles)
+    
+    public MasterBvhTree(BoundingBox[] localTrees)
     {
-        var size = triangles.Length * 2 - 1;
-        _nodes = new Node[size];
-        _triangles = triangles;
-        _triangleIndices = new uint[triangles.Length];
-
-        for (var i = 0u; i < triangles.Length; i++)
+        _localTrees = localTrees;
+        _nodes = new Node[localTrees.Length * 2 - 1];
+        _treeIndices = new int[localTrees.Length];
+        
+        for (var i = 0; i < localTrees.Length; i++)
         {
-            _triangleIndices[i] = i;
+            _treeIndices[i] = i;
         }
 
-        ref var root = ref _nodes[0];
+        _nodes[0] = new Node
+        {
+            treeCount = localTrees.Length,
+            leftFirst = 0
+        };
 
-        root.leftFirst = 0;
-        root.triangleCount = (uint)triangles.Length;
-
-        UpdateBounds(0u);
-        Subdivide(0u);
+        UpdateBounds(0);
+        Subdivide(0);
     }
-
+    
     private void Subdivide(uint nodeIndex)
     {
         ref var node = ref _nodes[nodeIndex];
@@ -199,112 +201,18 @@ public class BvhTree
         var e = rightBounds.Max - rightBounds.Min;
         return 2 * (e.X * e.Y + e.X * e.Z + e.Y * e.Z);
     }
-
-    public void Intersect(ref Ray ray)
-    {
-        uint nodeIndex = 0;
-        var stack = (stackalloc uint[64]);
-        int stackIndex = 0;
-
-        while (true)
-        {
-            if (_nodes[nodeIndex].IsLeaf)
-            {
-                for (int i = 0; i < _nodes[nodeIndex].triangleCount; i++)
-                {
-                    IntersectTriangle(ref ray, ref _triangles[_triangleIndices[_nodes[nodeIndex].leftFirst + i]]);
-                }
-
-                if (stackIndex == 0) break;
-                nodeIndex = stack[--stackIndex];
-                continue;
-            }
-
-            var child1 = _nodes[nodeIndex].leftFirst;
-            var child2 = child1 + 1;
-
-            var dist1 = IntersectsBoundingBox(ray, ref _nodes[child1].Bounds);
-            var dist2 = IntersectsBoundingBox(ray, ref _nodes[child2].Bounds);
-
-            if (dist1 > dist2)
-            {
-                (child1, child2) = (child2, child1);
-                (dist1, dist2) = (dist2, dist1);
-            }
-
-            if (Math.Abs(dist1 - float.MaxValue) < FloatTolerance)
-            {
-                if (stackIndex == 0) break;
-                nodeIndex = stack[--stackIndex];
-            }
-            else
-            {
-                nodeIndex = child1;
-                if (Math.Abs(dist2 - float.MaxValue) > FloatTolerance)
-                {
-                    stack[stackIndex++] = child2;
-                }
-            }
-        }
-    }
-
-    public static void IntersectTriangle(ref Ray ray, ref Triangle triangle)
-    {
-        var edge1 = triangle.V1 - triangle.V0;
-        var edge2 = triangle.V2 - triangle.V0;
-        var h = Vector3.Cross(ray.Direction, edge2);
-        var a = Vector3.Dot(edge1, h);
-        if (a > -FloatTolerance && a < FloatTolerance) return;
-
-        var f = 1 / a;
-        var s = ray.Origin - triangle.V0;
-        var u = f * Vector3.Dot(s, h);
-        if (u < 0 || u > 1) return;
-
-        var q = Vector3.Cross(s, edge1);
-        var v = f * Vector3.Dot(ray.Direction, q);
-        if (v < 0 || u + v > 1) return;
-
-        var t = f * Vector3.Dot(edge2, q);
-        if (t > FloatTolerance)
-        {
-            ray.T = Math.Min(ray.T, t);
-        }
-    }
-
-    private float IntersectsBoundingBox(Ray ray, ref BoundingBox nodeBounds)
-    {
-        var tx1 = (nodeBounds.Min.X - ray.Origin.X) * ray.InverseDirection.X;
-        var tx2 = (nodeBounds.Max.X - ray.Origin.X) * ray.InverseDirection.X;
-        var tmin = Math.Min(tx1, tx2);
-        var tmax = Math.Max(tx1, tx2);
-
-        var ty1 = (nodeBounds.Min.Y - ray.Origin.Y) * ray.InverseDirection.Y;
-        var ty2 = (nodeBounds.Max.Y - ray.Origin.Y) * ray.InverseDirection.Y;
-        tmin = Math.Max(tmin, Math.Min(ty1, ty2));
-        tmax = Math.Min(tmax, Math.Max(ty1, ty2));
-
-        var tz1 = (nodeBounds.Min.Z - ray.Origin.Z) * ray.InverseDirection.Z;
-        var tz2 = (nodeBounds.Max.Z - ray.Origin.Z) * ray.InverseDirection.Z;
-        tmin = Math.Max(tmin, Math.Min(tz1, tz2));
-        tmax = Math.Min(tmax, Math.Max(tz1, tz2));
-
-        if (tmax >= tmin && tmin < ray.T && tmax > 0)
-            return tmin;
-        return float.MaxValue;
-    }
-
+    
+    [StructLayout(LayoutKind.Explicit)]
     public struct Node
     {
+        [FieldOffset(0)]
         public BoundingBox Bounds;
-        public uint leftFirst;
-        public uint triangleCount;
-        public bool IsLeaf => triangleCount > 0;
-    }
-
-    struct Bin
-    {
-        public BoundingBox Bounds;
-        public int Count;
+        
+        [FieldOffset(sizeof(float) * 3 * 2)]
+        public int leftFirst;
+        
+        [FieldOffset(sizeof(float) * 3 * 2 + sizeof(int))]
+        public int treeCount;
+        public bool IsLeaf => treeCount > 0;
     }
 }

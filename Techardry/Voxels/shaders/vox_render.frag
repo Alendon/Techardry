@@ -64,6 +64,11 @@ layout(std430, set = 3, binding = 0) readonly buffer MasterBvh
     BvhNode nodes[];
 } masterBvh;
 
+layout(std430, set = 3, binding = 1) readonly buffer MasterBvhIndices
+{
+    int indices[];
+} masterBvhIndices;
+
 bool bvhNode_IsLeaf(in BvhNode node){
     return node.count > 0;
 }
@@ -440,7 +445,7 @@ void raycast(in Ray ray, inout Result result){
     {
         if(bvhNode_IsLeaf(masterBvh.nodes[nodeIndex])){
             for(int i = 0; i < masterBvh.nodes[nodeIndex].count; i++){
-                int tree = int(masterBvh.nodes[nodeIndex].leftFirst + i);
+                int tree = masterBvhIndices.indices[masterBvh.nodes[nodeIndex].leftFirst + i];
                 raycastChunk(ray, tree, result);
             }
 
