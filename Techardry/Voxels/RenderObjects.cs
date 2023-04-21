@@ -10,27 +10,36 @@ namespace Techardry.Voxels;
 
 public static class RenderObjects
 {
-    [RegisterShader("voxel_frag","voxels/vox_render_frag.spv")]
-    public static ShaderInfo VoxelFrag => new (ShaderStageFlags.ShaderStageFragmentBit);
-    
-    [RegisterShader("voxel_vert","voxels/vox_render_vert.spv")]
-    public static ShaderInfo VoxelVert => new (ShaderStageFlags.ShaderStageVertexBit);
+    [RegisterShader("voxel_frag", "voxels/vox_render_frag.spv")]
+    public static ShaderInfo VoxelFrag => new(ShaderStageFlags.FragmentBit);
 
-    [RegisterDescriptorSet("master_octree")]
-    public static DescriptorSetInfo MasterOctree => new()
+    [RegisterShader("voxel_vert", "voxels/vox_render_vert.spv")]
+    public static ShaderInfo VoxelVert => new(ShaderStageFlags.VertexBit);
+
+    [RegisterDescriptorSet("master_bvh")]
+    public static DescriptorSetInfo MasterBvh => new()
     {
-        Bindings = new []
+        Bindings = new[]
         {
+            //Buffer containing the bvh nodes
             new DescriptorSetLayoutBinding()
             {
                 Binding = 0,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
-                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
+                StageFlags = ShaderStageFlags.FragmentBit
+            },
+            //Buffer containing the node indices
+            new DescriptorSetLayoutBinding()
+            {
+                Binding = 1,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageBuffer,
+                StageFlags = ShaderStageFlags.FragmentBit
             }
         }
     };
-    
+
     [RegisterDescriptorSet("voxel_octree")]
     public static DescriptorSetInfo VoxelOctreeNodes => new()
     {
@@ -41,15 +50,15 @@ public static class RenderObjects
                 Binding = 0,
                 DescriptorCount = 1_000_000,
                 DescriptorType = DescriptorType.StorageBuffer,
-                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
+                StageFlags = ShaderStageFlags.FragmentBit
             }
         },
         BindingFlags = new[]
         {
-            DescriptorBindingFlags.DescriptorBindingPartiallyBoundBit |
-            DescriptorBindingFlags.DescriptorBindingVariableDescriptorCountBit
+            DescriptorBindingFlags.PartiallyBoundBit |
+            DescriptorBindingFlags.VariableDescriptorCountBit
         },
-        CreateFlags = DescriptorSetLayoutCreateFlags.DescriptorSetLayoutCreateUpdateAfterBindPoolBit
+        CreateFlags = DescriptorSetLayoutCreateFlags.UpdateAfterBindPoolBit
     };
 
     [RegisterDescriptorSet("camera_data")]
@@ -62,11 +71,11 @@ public static class RenderObjects
                 Binding = 0,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.UniformBuffer,
-                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
+                StageFlags = ShaderStageFlags.FragmentBit
             }
         }
     };
-    
+
     [RegisterDescriptorSet("input_attachment")]
     public static DescriptorSetInfo DepthInput => new()
     {
@@ -78,22 +87,22 @@ public static class RenderObjects
                 Binding = 0,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.InputAttachment,
-                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
+                StageFlags = ShaderStageFlags.FragmentBit
             },
-            
+
             //Color attachment
             new DescriptorSetLayoutBinding()
             {
                 Binding = 1,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.InputAttachment,
-                StageFlags = ShaderStageFlags.ShaderStageFragmentBit
+                StageFlags = ShaderStageFlags.FragmentBit
             }
         }
     };
 
     [RegisterRenderPass("dual_pipeline")]
-    public static RenderPassInfo VoxelRenderPass => new (new[]
+    public static RenderPassInfo VoxelRenderPass => new(new[]
         {
             //Color
             new AttachmentDescription()
@@ -148,7 +157,7 @@ public static class RenderObjects
             new SubpassDescriptionInfo()
             {
                 Flags = 0,
-                ColorAttachments = new []
+                ColorAttachments = new[]
                 {
                     new AttachmentReference()
                     {
@@ -156,7 +165,7 @@ public static class RenderObjects
                         Layout = ImageLayout.General
                     },
                 },
-                InputAttachments = new []
+                InputAttachments = new[]
                 {
                     new AttachmentReference()
                     {
@@ -213,49 +222,57 @@ public static class RenderObjects
             return new GraphicsPipelineDescription
             {
                 Flags = 0,
-                Scissors = new[] {new Rect2D
+                Scissors = new[]
                 {
-                    Extent = VulkanEngine.SwapchainExtent,
-                    Offset = new Offset2D(0, 0)
-                }},
+                    new Rect2D
+                    {
+                        Extent = VulkanEngine.SwapchainExtent,
+                        Offset = new Offset2D(0, 0)
+                    }
+                },
                 Shaders = new[] {ShaderIDs.VoxelFrag, ShaderIDs.VoxelVert},
                 Topology = PrimitiveTopology.TriangleList,
-                Viewports = new[] {new Viewport
+                Viewports = new[]
                 {
-                    Width = VulkanEngine.SwapchainExtent.Width,
-                    Height = VulkanEngine.SwapchainExtent.Height,
-                    MaxDepth = 1.0f
-                }},
-                DescriptorSets = new []{
+                    new Viewport
+                    {
+                        Width = VulkanEngine.SwapchainExtent.Width,
+                        Height = VulkanEngine.SwapchainExtent.Height,
+                        MaxDepth = 1.0f
+                    }
+                },
+                DescriptorSets = new[]
+                {
                     Identifications.DescriptorSetIDs.CameraData,
                     DescriptorSetIDs.SampledTexture,
                     Identifications.DescriptorSetIDs.InputAttachment,
-                    Identifications.DescriptorSetIDs.MasterOctree,
+                    Identifications.DescriptorSetIDs.MasterBvh,
                     Identifications.DescriptorSetIDs.VoxelOctree,
                 },
-                DynamicStates = new [] {DynamicState.Scissor , DynamicState.Viewport},
+                DynamicStates = new[] {DynamicState.Scissor, DynamicState.Viewport},
                 RasterizationInfo =
                 {
-                    CullMode =  CullModeFlags.CullModeNone,
+                    CullMode = CullModeFlags.None,
                     FrontFace = FrontFace.Clockwise,
                     PolygonMode = PolygonMode.Fill,
                     LineWidth = 1
                 },
                 RenderPass = RenderPassIDs.DualPipeline,
-                SampleCount = SampleCountFlags.SampleCount1Bit,
+                SampleCount = SampleCountFlags.Count1Bit,
                 SubPass = 1,
                 BasePipelineHandle = default,
                 BasePipelineIndex = 0,
                 ColorBlendInfo =
                 {
-                    Attachments = new []
+                    Attachments = new[]
                     {
                         new PipelineColorBlendAttachmentState
                         {
                             BlendEnable = Vk.True,
                             AlphaBlendOp = BlendOp.Add,
                             ColorBlendOp = BlendOp.Add,
-                            ColorWriteMask = ColorComponentFlags.ColorComponentABit | ColorComponentFlags.ColorComponentRBit | ColorComponentFlags.ColorComponentGBit | ColorComponentFlags.ColorComponentBBit,
+                            ColorWriteMask = ColorComponentFlags.ABit | ColorComponentFlags.RBit |
+                                             ColorComponentFlags.GBit | ColorComponentFlags.BBit,
                             SrcColorBlendFactor = BlendFactor.One,
                             SrcAlphaBlendFactor = BlendFactor.SrcAlpha,
                             DstAlphaBlendFactor = BlendFactor.OneMinusSrcAlpha,
@@ -269,7 +286,7 @@ public static class RenderObjects
             };
         }
     }
-    
+
     [RegisterGraphicsPipeline("dual_texture")]
     internal static unsafe GraphicsPipelineDescription TextureDescription
     {
@@ -344,9 +361,9 @@ public static class RenderObjects
                     SrcAlphaBlendFactor = BlendFactor.One,
                     DstAlphaBlendFactor = BlendFactor.Zero,
                     AlphaBlendOp = BlendOp.Add,
-                    ColorWriteMask = ColorComponentFlags.ColorComponentRBit |
-                                     ColorComponentFlags.ColorComponentGBit |
-                                     ColorComponentFlags.ColorComponentBBit | ColorComponentFlags.ColorComponentABit
+                    ColorWriteMask = ColorComponentFlags.RBit |
+                                     ColorComponentFlags.GBit |
+                                     ColorComponentFlags.BBit | ColorComponentFlags.ABit
                 }
             };
 
@@ -367,14 +384,14 @@ public static class RenderObjects
                 Viewports = new[] {viewport},
                 DescriptorSets = new[]
                 {
-                    Identifications.DescriptorSetIDs.CameraBuffer, 
+                    Identifications.DescriptorSetIDs.CameraBuffer,
                     DescriptorSetIDs.SampledTexture
                 },
                 Flags = 0,
                 Topology = PrimitiveTopology.TriangleList,
                 DynamicStates = dynamicStates,
                 RenderPass = RenderPassIDs.DualPipeline,
-                SampleCount = SampleCountFlags.SampleCount1Bit,
+                SampleCount = SampleCountFlags.Count1Bit,
                 SubPass = 0,
                 BasePipelineHandle = default,
                 BasePipelineIndex = 0,
@@ -403,7 +420,7 @@ public static class RenderObjects
                     DepthWriteEnable = true,
                     DepthCompareOp = CompareOp.LessOrEqual,
                     MinDepthBounds = 0,
-                    MaxDepthBounds = 1, 
+                    MaxDepthBounds = 1,
                     StencilTestEnable = false,
                     DepthBoundsTestEnable = false
                 }

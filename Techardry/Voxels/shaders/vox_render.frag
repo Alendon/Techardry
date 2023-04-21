@@ -45,10 +45,12 @@ struct BvhNode{
     float minX;
     float minY;
     float minZ;
+    float padding1;
 
     float maxX;
     float maxY;
     float maxZ;
+    float padding2;
 
     int leftFirst;
     int count;
@@ -486,7 +488,7 @@ void raycast(in Ray ray, inout Result result){
 
 void raycastChunk(in Ray ray, int tree, inout Result result){
 
-    vec3 treeMin = vec3(trees[tree].minX, trees[tree].minY, trees[tree].minZ);
+    vec3 treeMin = vec3(trees[tree].minX, trees[tree].minY, trees[tree].minZ) * Dimensions;
     vec3 treeMax = treeMin + Dimensions;
 
     int childIndexModifier = 0;
@@ -546,7 +548,10 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
             return;
         }
 
-        StackEntry currentEntry = stack[stackIndex];
+        //Split definition and declaration to avoid a false error from the glsl plugin
+        StackEntry currentEntry;
+        currentEntry = stack[stackIndex];
+        
         stackIndex--;
 
         t0 = currentEntry.t0;
@@ -573,7 +578,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                     result.t = t0.x;
 
                     vec3 hitPos = ray.origin + ray.direction * result.t;
-                    result.uv = mod(vec2(hitPos.y, hitPos.z), 1);
+                    result.uv = mod(vec2(hitPos.y, hitPos.z), 1.);
 
                     if (ray.direction.x > 0){
                         result.normal = vec3(-1, 0, 0);
@@ -587,7 +592,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                     result.t = t0.y;
 
                     vec3 hitPos = ray.origin + ray.direction * result.t;
-                    result.uv = mod(vec2(hitPos.x, hitPos.z), 1);
+                    result.uv = mod(vec2(hitPos.x, hitPos.z), 1.);
 
                     if (ray.direction.y > 0){
                         result.normal = vec3(0, -1, 0);
@@ -601,7 +606,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                     result.t = t0.z;
 
                     vec3 hitPos = ray.origin + ray.direction * result.t;
-                    result.uv = mod(vec2(hitPos.x, hitPos.y), 1);
+                    result.uv = mod(vec2(hitPos.x, hitPos.y), 1.);
 
                     if (ray.direction.z > 0){
                         result.normal = vec3(0, 0, -1);

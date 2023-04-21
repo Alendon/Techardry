@@ -1,44 +1,44 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Numerics;
+using System.Runtime.InteropServices;
 using BepuUtilities;
-using Silk.NET.Vulkan;
 
 namespace Techardry.Render;
 
 public class MasterBvhTree
 {
-    private Node[] _nodes;
-    private BoundingBox[] _localTrees;
-    private int[] _treeIndices;
-    private int nodesUsed = 2;
-    
-    
+    internal readonly Node[] Nodes;
+    private readonly IList<BoundingBox> _localTreesBoundingBoxes;
+    internal readonly int[] TreeIndices;
+    private int _nodesUsed = 2;
+
+
     private const float FloatTolerance = 0.0001f;
     private const int BinCount = 32;
-    
-    public MasterBvhTree(BoundingBox[] localTrees)
+
+    public MasterBvhTree(IList<BoundingBox> localTreesBoundingBoxes)
     {
-        _localTrees = localTrees;
-        _nodes = new Node[localTrees.Length * 2 - 1];
-        _treeIndices = new int[localTrees.Length];
-        
-        for (var i = 0; i < localTrees.Length; i++)
+        _localTreesBoundingBoxes = localTreesBoundingBoxes;
+        Nodes = new Node[localTreesBoundingBoxes.Count * 2 - 1];
+        TreeIndices = new int[localTreesBoundingBoxes.Count];
+
+        for (var i = 0; i < localTreesBoundingBoxes.Count; i++)
         {
-            _treeIndices[i] = i;
+            TreeIndices[i] = i;
         }
 
-        _nodes[0] = new Node
+        Nodes[0] = new Node
         {
-            treeCount = localTrees.Length,
+            treeCount = localTreesBoundingBoxes.Count,
             leftFirst = 0
         };
 
         UpdateBounds(0);
         Subdivide(0);
     }
-    
-    private void Subdivide(uint nodeIndex)
+
+    private void Subdivide(int nodeIndex)
     {
-        ref var node = ref _nodes[nodeIndex];
+        ref var node = ref Nodes[nodeIndex];
 
         var splitCost = FindBestSplitPlane(ref node, out var axis, out var splitPosition);
         var noSplitCost = CalculateNodeCost(ref node);
@@ -46,38 +46,38 @@ public class MasterBvhTree
             return;
 
         var i = node.leftFirst;
-        var j = i + node.triangleCount - 1;
+        var j = i + node.treeCount - 1;
         while (i <= j)
         {
-            if (_triangles[_triangleIndices[i]].Center[axis] < splitPosition)
+            if (GetCenter(_localTreesBoundingBoxes[TreeIndices[i]])[axis] < splitPosition)
                 i++;
             else
             {
-                (_triangleIndices[i], _triangleIndices[j]) = (_triangleIndices[j], _triangleIndices[i]);
+                (TreeIndices[i], TreeIndices[j]) = (TreeIndices[j], TreeIndices[i]);
                 j--;
             }
         }
 
         var leftCount = i - node.leftFirst;
-        if (leftCount == 0 || leftCount == node.triangleCount) return;
+        if (leftCount == 0 || leftCount == node.treeCount) return;
 
-        var leftChildIndex = nodesUsed++;
-        var rightChildIndex = nodesUsed++;
+        var leftChildIndex = _nodesUsed++;
+        var rightChildIndex = _nodesUsed++;
 
-        _nodes[leftChildIndex] = new()
+        Nodes[leftChildIndex] = new()
         {
             leftFirst = node.leftFirst,
-            triangleCount = leftCount
+            treeCount = leftCount
         };
 
-        _nodes[rightChildIndex] = new()
+        Nodes[rightChildIndex] = new()
         {
             leftFirst = i,
-            triangleCount = node.triangleCount - leftCount
+            treeCount = node.treeCount - leftCount
         };
 
         node.leftFirst = leftChildIndex;
-        node.triangleCount = 0;
+        node.treeCount = 0;
 
         UpdateBounds(leftChildIndex);
         UpdateBounds(rightChildIndex);
@@ -86,27 +86,19 @@ public class MasterBvhTree
         Subdivide(rightChildIndex);
     }
 
-    private void UpdateBounds(uint nodeIndex)
+    private void UpdateBounds(int nodeIndex)
     {
-        ref var node = ref _nodes[nodeIndex];
+        ref var node = ref Nodes[nodeIndex];
         node.Bounds = new BoundingBox(new Vector3(float.MaxValue), new Vector3(float.MinValue));
 
-        var points = new Vector3[3];
-
-
-        for (var i = 0; i < node.triangleCount; i++)
+        for (var i = 0; i < node.treeCount; i++)
         {
-            var triangle = _triangles[_triangleIndices[node.leftFirst + i]];
-
-            points[0] = triangle.V0;
-            points[1] = triangle.V1;
-            points[2] = triangle.V2;
-
-            BoundingBox.CreateMerged(BoundingBox.CreateFromPoints(points), node.Bounds, out node.Bounds);
+            var boundingBox = _localTreesBoundingBoxes[TreeIndices[node.leftFirst + i]];
+            BoundingBox.CreateMerged(boundingBox, node.Bounds, out node.Bounds);
         }
     }
 
-    float FindBestSplitPlane(ref Node node, out int axis, out float splitPosition)
+    private float FindBestSplitPlane(ref Node node, out int axis, out float splitPosition)
     {
         axis = -1;
         splitPosition = float.NaN;
@@ -114,7 +106,6 @@ public class MasterBvhTree
         float bestCost = float.MaxValue;
 
         var bins = (stackalloc Bin[BinCount]);
-        var triangleVertices = new Vector3[3];
 
         var leftArea = (stackalloc float[BinCount - 1]);
         var rightArea = (stackalloc float[BinCount - 1]);
@@ -126,11 +117,11 @@ public class MasterBvhTree
             var boundsMin = float.MaxValue;
             var boundsMax = float.MinValue;
 
-            for (int i = 0; i < node.triangleCount; i++)
+            for (int i = 0; i < node.treeCount; i++)
             {
-                ref var triangle = ref _triangles[_triangleIndices[node.leftFirst + i]];
-                boundsMin = float.Min(boundsMin, triangle.Center[a]);
-                boundsMax = float.Max(boundsMax, triangle.Center[a]);
+                var center = GetCenter(_localTreesBoundingBoxes[TreeIndices[node.leftFirst + i]]);
+                boundsMin = float.Min(boundsMin, center[a]);
+                boundsMax = float.Max(boundsMax, center[a]);
             }
 
             if (Math.Abs(boundsMin - boundsMax) < FloatTolerance) continue;
@@ -138,17 +129,13 @@ public class MasterBvhTree
             bins.Clear();
 
             var scale = BinCount / (boundsMax - boundsMin);
-            for (int i = 0; i < node.triangleCount; i++)
+            for (int i = 0; i < node.treeCount; i++)
             {
-                ref var triangle = ref _triangles[_triangleIndices[node.leftFirst + i]];
-                var binIndex = int.Min(BinCount - 1, (int)((triangle.Center[a] - boundsMin) * scale));
+                var treeBoundingBox = _localTreesBoundingBoxes[TreeIndices[node.leftFirst + i]];
+                var binIndex = int.Min(BinCount - 1, (int) ((GetCenter(treeBoundingBox)[a] - boundsMin) * scale));
                 bins[binIndex].Count++;
 
-                triangleVertices[0] = triangle.V0;
-                triangleVertices[1] = triangle.V1;
-                triangleVertices[2] = triangle.V2;
-
-                BoundingBox.CreateMerged(BoundingBox.CreateFromPoints(triangleVertices), bins[binIndex].Bounds,
+                BoundingBox.CreateMerged(treeBoundingBox, bins[binIndex].Bounds,
                     out bins[binIndex].Bounds);
             }
 
@@ -190,29 +177,37 @@ public class MasterBvhTree
         return bestCost;
     }
 
-    float CalculateNodeCost(ref Node node)
+    private static float CalculateNodeCost(ref Node node)
     {
         var area = GetArea(node.Bounds);
-        return area * node.triangleCount;
+        return area * node.treeCount;
     }
 
-    private float GetArea(BoundingBox rightBounds)
+    private static float GetArea(BoundingBox rightBounds)
     {
         var e = rightBounds.Max - rightBounds.Min;
         return 2 * (e.X * e.Y + e.X * e.Z + e.Y * e.Z);
     }
-    
+
+    private static Vector3 GetCenter(BoundingBox bounds)
+    {
+        return (bounds.Max + bounds.Min) * 0.5f;
+    }
+
     [StructLayout(LayoutKind.Explicit)]
     public struct Node
     {
-        [FieldOffset(0)]
-        public BoundingBox Bounds;
+        [FieldOffset(0)] public BoundingBox Bounds;
         
-        [FieldOffset(sizeof(float) * 3 * 2)]
-        public int leftFirst;
-        
-        [FieldOffset(sizeof(float) * 3 * 2 + sizeof(int))]
+        [FieldOffset(32)] public int leftFirst;
+
+        [FieldOffset(32 + sizeof(int))]
         public int treeCount;
-        public bool IsLeaf => treeCount > 0;
+    }
+
+    struct Bin
+    {
+        public BoundingBox Bounds;
+        public int Count;
     }
 }
