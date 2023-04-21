@@ -4,7 +4,6 @@
 #define Dimensions 16
 #define MaxDepth 10
 #define FloatMax 1e+30
-#define FloatTolerance 0.001
 #define BvhStackSize 64
 
 layout (location = 0) in vec3 in_position;
@@ -211,6 +210,12 @@ float delinearizeDepth(float linearDepth)
     return ((- (((2 * camera.data.Near * camera.data.Far) / linearDepth) - camera.data.Far - camera.data.Near) / (camera.data.Far - camera.data.Near)) + 1.0f) / 2.0f;
 }
 
+bool floatEquals(float a, float b){
+    float dynamicEpsilon = 0.001 * abs(a);
+    
+    return abs(a - b) < dynamicEpsilon;
+}
+
 void main()
 {
     vec3 octreePosition = vec3(-Dimensions / 2, -Dimensions / 2 - 20, -Dimensions / 2);
@@ -244,7 +249,7 @@ void main()
 
     raycast(ray, result);
 
-    bool hit = abs(result.t - FloatMax) > 0.0001;
+    bool hit = !floatEquals(result.t, FloatMax);
 
     if(result.fail){
         out_color = result.failColor;
@@ -472,13 +477,13 @@ void raycast(in Ray ray, inout Result result){
             dist2 = tempDist;
         }
 
-        if(abs(dist1 - FloatMax) < FloatTolerance){
+        if( floatEquals(dist1, FloatMax)){
             if(stackIndex == 0) break;
             nodeIndex = stack[--stackIndex];
         }
         else{
             nodeIndex = child1;
-            if(abs(dist2 - FloatMax) > FloatTolerance){
+            if(!floatEquals(dist2, FloatMax)){
                 stack[stackIndex++] = child2;
             }
         }
@@ -569,13 +574,11 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                 continue;
             }
             else {
-                //TODO hit results
-                result.nodeIndex = node;
-                result.tree = tree;
-
                 if (t0.x > t0.y && t0.x > t0.z && t0.x < result.t){
 
                     result.t = t0.x;
+                    result.nodeIndex = node;
+                    result.tree = tree;
 
                     vec3 hitPos = ray.origin + ray.direction * result.t;
                     result.uv = mod(vec2(hitPos.y, hitPos.z), 1.);
@@ -590,6 +593,8 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                 else if (t0.y > t0.x && t0.y > t0.z && t0.y < result.t){
 
                     result.t = t0.y;
+                    result.nodeIndex = node;
+                    result.tree = tree;
 
                     vec3 hitPos = ray.origin + ray.direction * result.t;
                     result.uv = mod(vec2(hitPos.x, hitPos.z), 1.);
@@ -604,6 +609,8 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                 else if (t0.z > t0.x && t0.z > t0.y && t0.z < result.t){
 
                     result.t = t0.z;
+                    result.nodeIndex = node;
+                    result.tree = tree;
 
                     vec3 hitPos = ray.origin + ray.direction * result.t;
                     result.uv = mod(vec2(hitPos.x, hitPos.y), 1.);
