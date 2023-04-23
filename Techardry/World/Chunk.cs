@@ -21,6 +21,7 @@ public class Chunk : IDisposable
     public Timestamp LastSyncedTime { get; set; }
 
     public TechardryWorld ParentWorld { get; }
+    
 
 
     public Chunk(Int3 chunkPos, TechardryWorld parentWorld) : this(chunkPos, new VoxelOctree(), parentWorld)

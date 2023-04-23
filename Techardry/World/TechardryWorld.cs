@@ -56,6 +56,8 @@ public class TechardryWorld : IWorld
     public TechardryWorld(bool isServerWorld, WorldGeneratorSettings settings)
     {
         IsServerWorld = isServerWorld;
+        ChunkManager = new ChunkManager(this);
+        
         _entityManager = new EntityManager(this);
         _systemManager = new SystemManager(this);
         WorldGenerator = new WorldGenerator(this, settings);
@@ -67,7 +69,7 @@ public class TechardryWorld : IWorld
 
         _physicsWorld = PhysicsWorld.Create(narrowPhase, poseIntegrator, solveDescription);
 
-        ChunkManager = new ChunkManager(this);
+        
         RegisterPhysicsExtensions();
     }
 

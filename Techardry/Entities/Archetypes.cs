@@ -33,7 +33,7 @@ public static class Archetypes
     {
         public void SetupEntity(IWorld world, Entity entity)
         {
-            world.EntityManager.GetComponent<Position>(entity).Value = new Vector3(0,22,0);
+            world.EntityManager.GetComponent<Position>(entity).Value = new Vector3(8,22,8);
             world.EntityManager.GetComponent<InstancedRenderAble>(entity) = new InstancedRenderAble()
             {
                 MaterialMeshCombination = InstancedRenderDataIDs.DualBlock

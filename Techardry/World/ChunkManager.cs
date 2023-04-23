@@ -30,6 +30,12 @@ public class ChunkManager : IDisposable
     private readonly ConcurrentDictionary<Int3, object?> _activeChunkCreations = new();
 
     private readonly CancellationTokenSource _cancellationTokenSource = new();
+    
+    public event Action<Int3> ChunkAdded = delegate { };
+    public event Action<Int3> ChunkUpdated = delegate { };
+    public event Action<Int3> ChunkRemoved = delegate { }; 
+
+
 
     public ChunkManager(TechardryWorld parentWorld)
     {
@@ -220,6 +226,8 @@ public class ChunkManager : IDisposable
             _parentWorld.PhysicsWorld.Simulation.Statics.Remove(chunkEntry.StaticHandle);
             chunkEntry.Chunk.Dispose();
             _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
+            
+            ChunkRemoved(chunkToUnload);
         }
 
 
@@ -235,6 +243,8 @@ public class ChunkManager : IDisposable
 
             _chunks.TryAdd(toLoad.ChunkPosition, new ChunkEntry(toLoad.Chunk, bodyHandle, shape));
             _activeChunkCreations.TryRemove(toLoad.ChunkPosition, out _);
+            
+            ChunkAdded(chunkPosition);
         }
 
         if (!_parentWorld.IsServerWorld)
@@ -268,6 +278,8 @@ public class ChunkManager : IDisposable
                         Chunk.Size, shape));
 
                 _chunks[chunkPosition] = new ChunkEntry(chunk, staticHandle, shape);
+                
+                ChunkUpdated(chunkPosition);
             }
         }
 
@@ -294,6 +306,24 @@ public class ChunkManager : IDisposable
 
         chunk = null;
         return false;
+    }
+
+    public void SetBlock(Int3 chunkPos, Vector3 blockPos, Identification blockId, int depth,
+        BlockRotation rotation = BlockRotation.None)
+    {
+        if (!_chunks.TryGetValue(chunkPos, out var chunkEntry))
+        {
+            Logger.WriteLog($"Chunk to set block in was not found: {chunkPos}", LogImportance.Error,
+                "ChunkManager");
+
+            return;
+        }
+
+        var (chunk, _, _) = chunkEntry;
+
+        chunk.SetBlock(blockPos, blockId, depth, rotation);
+        
+        ChunkUpdated(chunkPos);
     }
 
     record ChunkEntry(Chunk Chunk, StaticHandle StaticHandle, TypedIndex Shape);
