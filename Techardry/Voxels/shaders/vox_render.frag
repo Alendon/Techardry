@@ -1,15 +1,22 @@
 ﻿#version 460
 #extension GL_EXT_nonuniform_qualifier : require
 
+//As there is currently no include support, the shader file is quite large.
+//The shader is split into multiple sections:
+// 1. The shader inputs
+// 2. Struct definitions
+// 3. Function declarations
+// 4. Shader input/output
+// 5. Actual shader code
+
+//All define statements
+
 #define Dimensions 16
 #define MaxDepth 10
 #define FloatMax 1e+30
 #define BvhStackSize 64
 
-layout (location = 0) in vec3 in_position;
-
-layout (location = 0) out vec3 out_color;
-
+//struct definitions
 struct Ray{
     vec3 origin, direction, inverseDirection;
 };
@@ -29,16 +36,6 @@ struct CameraDataStruct{
     float Near;
     float Far;
 };
-
-layout(set = 0, binding = 0) readonly uniform CameraData
-{
-    CameraDataStruct data;
-} camera;
-
-layout(set = 1, binding = 0) uniform sampler2DArray tex;
-
-layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
-layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
 
 struct BvhNode{
     float minX;
@@ -60,128 +57,6 @@ struct AABB{
     vec3 max;
 };
 
-layout(std430, set = 3, binding = 0) readonly buffer MasterBvh
-{
-    BvhNode nodes[];
-} masterBvh;
-
-layout(std430, set = 3, binding = 1) readonly buffer MasterBvhIndices
-{
-    int indices[];
-} masterBvhIndices;
-
-bool bvhNode_IsLeaf(in BvhNode node){
-    return node.count > 0;
-}
-
-AABB bvhNode_GetAABB(in BvhNode node){
-    return AABB(vec3(node.minX, node.minY, node.minZ), vec3(node.maxX, node.maxY, node.maxZ));
-}
-
-layout(std430, set = 4, binding = 0) readonly buffer Octree
-{
-    uint nodeCount;
-    int minX;
-    int minY;
-    int minZ;
-    uint data[];
-} trees[];
-
-#define NodeSize 6
-
-#define Node_Children_Offset 0
-uint NodeChildren(uint tree, uint nodeIndex, uint childIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Children_Offset] + childIndex;
-}
-    #undef Node_Children_Offset
-
-    #define Node_DataIndex_Offset 1
-uint NodeDataIndex(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
-}
-    #undef Node_DataIndex_Offset
-
-    #define Node_Index_Offset 2
-uint NodeIndex(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Index_Offset];
-}
-    #undef Node_Index_Offset
-
-    #define Node_ParentIndex_Offset 3
-uint NodeParentIndex(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
-}
-    #undef Node_ParentIndex_Offset
-
-    #define Node_AdditionalData_Offset 4
-
-uint NodeParentChildIndex(uint tree, uint nodeIndex){
-    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0x7;
-}
-
-
-bool NodeLeaf(uint tree, uint nodeIndex){
-    return NodeChildren(tree, nodeIndex, 0) == 0xFFFFFFFF;
-}
-
-uint NodeDepth(uint tree, uint nodeIndex){
-    return (trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0xF0 ) >> 4;
-}
-
-bool NodeIsEmpty(uint tree, uint nodeIndex){
-    return NodeDataIndex(tree, nodeIndex) == 0xFFFFFFFF;
-}
-    #undef Node_AdditionalData_Offset
-
-
-    #define VoxelSize 6
-
-    #define Voxel_Color_Offset 0
-uint VoxelColor(uint tree, uint voxelIndex){
-    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
-    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
-}
-    #undef Voxel_Color_Offset
-
-    #define Voxel_TextureStartX_Offset 1
-uint VoxelTextureStartX(uint tree, uint voxelIndex){
-    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
-    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
-}
-    #undef Voxel_TextureStartX_Offset
-
-    #define Voxel_TextureStartY_Offset 2
-uint VoxelTextureStartY(uint tree, uint voxelIndex){
-    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
-    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
-}
-    #undef Voxel_TextureStartY_Offset
-
-    #define Voxel_ArrayIndex_Offset 3
-uint VoxelArrayIndex(uint tree, uint voxelIndex){
-    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
-    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
-}
-    #undef Voxel_ArrayIndex_Offset
-
-    #define Voxel_TextureSizeX_Offset 4
-uint VoxelTextureSizeX(uint tree, uint voxelIndex){
-    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
-    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
-}
-    #undef Voxel_TextureSizeX_Offset
-
-    #define Voxel_TextureSizeY_Offset 5
-uint VoxelTextureSizeY(uint tree, uint voxelIndex){
-    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
-    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];
-}
-    #undef Voxel_TextureSizeY_Offset
-
-    #undef VoxelSize
-
-    #undef NodeSize
-
 struct Result{
     uint nodeIndex;
     vec3 normal;
@@ -192,33 +67,78 @@ struct Result{
     vec3 failColor;
 };
 
+//function declarations.
+void main();
 
 void raycast(in Ray ray, inout Result result);
 void raycastChunk(in Ray ray, int tree, inout Result result);
 
+float linearizeDepth(float depth);
+float delinearizeDepth(float linearDepth);
+bool floatEquals(float a, float b);
 
-float linearDepth(float depth)
+float intersectBoundingBox(in Ray ray, in AABB aabb, in Result result);
+
+bool bvhNode_IsLeaf(in BvhNode node);
+AABB bvhNode_GetAABB(in BvhNode node);
+
+int octree_GetFirstNode(vec3 t0, vec3 tm);
+int octree_GetNextNode(vec3 tm, ivec3 c);
+int octree_GetNextChildIndex(int currentChildIndex, vec3 t0, vec3 t1, vec3 tm);
+void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out vec3 childT1);
+
+uint voxelNode_GetChildren(uint tree, uint nodeIndex, uint childIndex);
+uint voxelNode_GetDataIndex(uint tree, uint nodeIndex);
+uint voxelNode_GetNodeIndex(uint tree, uint nodeIndex);
+uint voxelNode_GetParentIndex(uint tree, uint nodeIndex);
+uint voxelNode_GetParentChildIndex(uint tree, uint nodeIndex);
+bool voxelNode_IsLeaf(uint tree, uint nodeIndex);
+uint voxelNode_GetDepth(uint tree, uint nodeIndex);
+bool voxelNode_IsEmpty(uint tree, uint nodeIndex);
+uint voxelData_GetColor(uint tree, uint voxelIndex);
+uint voxelData_GetTextureStartX(uint tree, uint voxelIndex);
+uint voxelData_GetTextureStartY(uint tree, uint voxelIndex);
+uint voxelData_GetTextureArrayIndex(uint tree, uint voxelIndex);
+uint voxelData_GetTextureSizeX(uint tree, uint voxelIndex);
+uint voxelData_GetTextureSizeY(uint tree, uint voxelIndex);
+
+//shader in/output
+layout (location = 0) in vec3 in_position;
+layout (location = 0) out vec3 out_color;
+
+layout(set = 0, binding = 0) readonly uniform CameraData
 {
-    float z = depth * 2.0f - 1.0f;
-    return (2.0f * camera.data.Near * camera.data.Far) / (camera.data.Far + camera.data.Near - z * (camera.data.Far - camera.data.Near));
-}
+    CameraDataStruct data;
+} camera;
 
-//delinearize depth to get the depth value in the range [0, 1]
-//(the inverse of linearDepth)
-float delinearizeDepth(float linearDepth)
+layout(set = 1, binding = 0) uniform sampler2DArray tex;
+
+layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
+layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
+
+layout(std430, set = 3, binding = 0) readonly buffer MasterBvh
 {
-    return ((- (((2 * camera.data.Near * camera.data.Far) / linearDepth) - camera.data.Far - camera.data.Near) / (camera.data.Far - camera.data.Near)) + 1.0f) / 2.0f;
-}
+    BvhNode nodes[];
+} masterBvh;
 
-bool floatEquals(float a, float b){
-    float dynamicEpsilon = 0.001 * abs(a);
-    
-    return abs(a - b) < dynamicEpsilon;
-}
+layout(std430, set = 3, binding = 1) readonly buffer MasterBvhIndices
+{
+    int indices[];
+} masterBvhIndices;
+
+layout(std430, set = 4, binding = 0) readonly buffer Octree
+{
+    uint nodeCount;
+    int minX;
+    int minY;
+    int minZ;
+    uint data[];
+} trees[];
+
+//actual shader code
 
 void main()
 {
-    vec3 octreePosition = vec3(-Dimensions / 2, -Dimensions / 2 - 20, -Dimensions / 2);
     vec3 camPos = vec3(camera.data.PositionX, camera.data.PositionY, camera.data.PositionZ);
 
     vec2 screenPos = vec2(in_position.xy);
@@ -261,7 +181,7 @@ void main()
         return;
     }
 
-    float lDepth = linearDepth(depth);
+    float lDepth = linearizeDepth(depth);
 
     float hitDepth = result.t - camera.data.Near;
 
@@ -276,13 +196,13 @@ void main()
 
     #define TextureSize 128.
 
-    uint voxel = NodeDataIndex(result.tree, result.nodeIndex);
+    uint voxel = voxelNode_GetDataIndex(result.tree, result.nodeIndex);
 
 
 
-    vec3 texStart = vec3(VoxelTextureStartX(result.tree, voxel) / TextureSize, VoxelTextureStartY(result.tree, voxel) / TextureSize, VoxelArrayIndex(result.tree, voxel));
+    vec3 texStart = vec3(voxelData_GetTextureStartX(result.tree, voxel) / TextureSize, voxelData_GetTextureStartY(result.tree, voxel) / TextureSize, voxelData_GetTextureArrayIndex(result.tree, voxel));
 
-    vec2 texSize = vec2(VoxelTextureSizeX(result.tree, voxel) / TextureSize, VoxelTextureSizeY(result.tree, voxel) / TextureSize);
+    vec2 texSize = vec2(voxelData_GetTextureSizeX(result.tree, voxel) / TextureSize, voxelData_GetTextureSizeY(result.tree, voxel) / TextureSize);
     out_color = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
 
 
@@ -301,146 +221,6 @@ void main()
 
 }
 
-int getFirstNode(vec3 t0, vec3 tm){
-    int result = 0;
-
-    if (t0.x > t0.y){
-        if (t0.x > t0.z)// PLANE YZ
-        {
-            if (tm.y < t0.x) result|=2;// set bit at position 1
-            if (tm.z < t0.x) result|=1;// set bit at position 0 			
-            return result;
-        }
-    }
-    else
-    {
-        if (t0.y > t0.z)// PLANE XZ
-        {
-            if (tm.x < t0.y) result|=4;// set bit at position 2
-            if (tm.z < t0.y) result|=1;// set bit at position 0
-            return result;
-        }
-    }
-
-    // PLANE XY
-    if (tm.x < t0.z) result|=4;// set bit at position 2
-    if (tm.y < t0.z) result|=2;// set bit at position 1
-    return result;
-}
-
-int nextNode(vec3 tm, ivec3 c){
-    if (tm.x < tm.y){
-        if (tm.x < tm.z){
-            return c.x;
-        }
-    }
-    else {
-        if (tm.y < tm.z){
-            return c.y;
-        }
-    }
-    return c.z;
-
-}
-
-int getNextChildIndex(int currentChildIndex, vec3 t0, vec3 t1, vec3 tm){
-    switch (currentChildIndex){
-        case -1:{
-            return getFirstNode(t0, tm);
-        }
-        case 0:{
-            return nextNode(vec3(tm.x, tm.y, tm.z), ivec3(4, 2, 1));
-        }
-        case 1:{
-            return nextNode(vec3(tm.x, tm.y, t1.z), ivec3(5, 3, 8));
-        }
-        case 2:{
-            return nextNode(vec3(tm.x, t1.y, tm.z), ivec3(6, 8, 3));
-        }
-        case 3:{
-            return nextNode(vec3(tm.x, t1.y, t1.z), ivec3(7, 8, 8));
-        }
-        case 4:{
-            return nextNode(vec3(t1.x, tm.y, tm.z), ivec3(8, 6, 5));
-        }
-        case 5:{
-            return nextNode(vec3(t1.x, tm.y, t1.z), ivec3(8, 7, 8));
-        }
-        case 6:{
-            return nextNode(vec3(t1.x, t1.y, tm.z), ivec3(8, 8, 7));
-        }
-        default :{
-            return 8;
-        }
-    }
-}
-
-void getChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out vec3 childT1){
-    switch (childIndex){
-        case 0:{
-            childT0 = vec3(t0.x, t0.y, t0.z);
-            childT1 = vec3(tm.x, tm.y, tm.z);
-            break;
-        }
-        case 1:{
-            childT0 = vec3(t0.x, t0.y, tm.z);
-            childT1 = vec3(tm.x, tm.y, t1.z);
-            break;
-        }
-        case 2:{
-            childT0 = vec3(t0.x, tm.y, t0.z);
-            childT1 = vec3(tm.x, t1.y, tm.z);
-            break;
-        }
-        case 3:{
-            childT0 = vec3(t0.x, tm.y, tm.z);
-            childT1 = vec3(tm.x, t1.y, t1.z);
-            break;
-        }
-        case 4:{
-            childT0 = vec3(tm.x, t0.y, t0.z);
-            childT1 = vec3(t1.x, tm.y, tm.z);
-            break;
-        }
-        case 5:{
-            childT0 = vec3(tm.x, t0.y, tm.z);
-            childT1 = vec3(t1.x, tm.y, t1.z);
-            break;
-        }
-        case 6:{
-            childT0 = vec3(tm.x, tm.y, t0.z);
-            childT1 = vec3(t1.x, t1.y, tm.z);
-            break;
-        }
-        case 7:{
-            childT0 = vec3(tm.x, tm.y, tm.z);
-            childT1 = vec3(t1.x, t1.y, t1.z);
-            break;
-        }
-    }
-}
-
-float intersectBoundingBox(in Ray ray, in AABB aabb, in Result result){
-    float tx1 = (aabb.min.x - ray.origin.x) * ray.inverseDirection.x;
-    float tx2 = (aabb.max.x - ray.origin.x) * ray.inverseDirection.x;
-    float tmin = min(tx1, tx2);
-    float tmax = max(tx1, tx2);
-
-    float ty1 = (aabb.min.y - ray.origin.y) * ray.inverseDirection.y;
-    float ty2 = (aabb.max.y - ray.origin.y) * ray.inverseDirection.y;
-    tmin = max(tmin, min(ty1, ty2));
-    tmax = min(tmax, max(ty1, ty2));
-
-    float tz1 = (aabb.min.z - ray.origin.z) * ray.inverseDirection.z;
-    float tz2 = (aabb.max.z - ray.origin.z) * ray.inverseDirection.z;
-    tmin = max(tmin, min(tz1, tz2));
-    tmax = min(tmax, max(tz1, tz2));
-
-    if(tmax >= tmin && tmin < result.t && tmax > 0){
-        return tmin;
-    }
-    return FloatMax;
-}
 
 void raycast(in Ray ray, inout Result result){
     
@@ -568,9 +348,9 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
             continue;
         }
 
-        if (NodeLeaf(tree, node)){
+        if (voxelNode_IsLeaf(tree, node)){
             //We found a leaf.
-            if (NodeIsEmpty(tree, node)){
+            if (voxelNode_IsEmpty(tree, node)){
                 continue;
             }
             else {
@@ -632,7 +412,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
         vec3 tm = (t0 + t1) * 0.5;
 
         int lastChildIndex = currentEntry.lastChildIndex;
-        int nextChildIndex = getNextChildIndex(lastChildIndex, t0, t1, tm);
+        int nextChildIndex = octree_GetNextChildIndex(lastChildIndex, t0, t1, tm);
 
         if (nextChildIndex >= 8){
             //The end is reached
@@ -642,7 +422,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
         //Get the parameters for the next child
         vec3 childT0;
         vec3 childT1;
-        getChildT(nextChildIndex, t0, t1, tm, childT0, childT1);
+        octree_GetChildT(nextChildIndex, t0, t1, tm, childT0, childT1);
 
         stackIndex++;
         currentEntry.lastChildIndex = nextChildIndex;
@@ -650,7 +430,269 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
 
         stackIndex++;
 
-        uint nodeChildren = NodeChildren(tree, node, nextChildIndex ^ childIndexModifier);
+        uint nodeChildren = voxelNode_GetChildren(tree, node, nextChildIndex ^ childIndexModifier);
         stack[stackIndex] = StackEntry(nodeChildren, -1, childT0, childT1);
     }
 }
+
+
+int octree_GetFirstNode(vec3 t0, vec3 tm){
+    int result = 0;
+
+    if (t0.x > t0.y){
+        if (t0.x > t0.z)// PLANE YZ
+        {
+            if (tm.y < t0.x) result|=2;// set bit at position 1
+            if (tm.z < t0.x) result|=1;// set bit at position 0 			
+            return result;
+        }
+    }
+    else
+    {
+        if (t0.y > t0.z)// PLANE XZ
+        {
+            if (tm.x < t0.y) result|=4;// set bit at position 2
+            if (tm.z < t0.y) result|=1;// set bit at position 0
+            return result;
+        }
+    }
+
+    // PLANE XY
+    if (tm.x < t0.z) result|=4;// set bit at position 2
+    if (tm.y < t0.z) result|=2;// set bit at position 1
+    return result;
+}
+
+int octree_GetNextNode(vec3 tm, ivec3 c){
+    if (tm.x < tm.y){
+        if (tm.x < tm.z){
+            return c.x;
+        }
+    }
+    else {
+        if (tm.y < tm.z){
+            return c.y;
+        }
+    }
+    return c.z;
+
+}
+
+int octree_GetNextChildIndex(int currentChildIndex, vec3 t0, vec3 t1, vec3 tm){
+    switch (currentChildIndex){
+        case -1:{
+                    return octree_GetFirstNode(t0, tm);
+                }
+        case 0:{
+                    return octree_GetNextNode(vec3(tm.x, tm.y, tm.z), ivec3(4, 2, 1));
+                }
+        case 1:{
+                    return octree_GetNextNode(vec3(tm.x, tm.y, t1.z), ivec3(5, 3, 8));
+                }
+        case 2:{
+                    return octree_GetNextNode(vec3(tm.x, t1.y, tm.z), ivec3(6, 8, 3));
+                }
+        case 3:{
+                    return octree_GetNextNode(vec3(tm.x, t1.y, t1.z), ivec3(7, 8, 8));
+                }
+        case 4:{
+                    return octree_GetNextNode(vec3(t1.x, tm.y, tm.z), ivec3(8, 6, 5));
+                }
+        case 5:{
+                    return octree_GetNextNode(vec3(t1.x, tm.y, t1.z), ivec3(8, 7, 8));
+                }
+        case 6:{
+                    return octree_GetNextNode(vec3(t1.x, t1.y, tm.z), ivec3(8, 8, 7));
+                }
+        default :{
+                    return 8;
+                }
+    }
+}
+
+void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out vec3 childT1){
+    switch (childIndex){
+        case 0:{
+                   childT0 = vec3(t0.x, t0.y, t0.z);
+                   childT1 = vec3(tm.x, tm.y, tm.z);
+                   break;
+               }
+        case 1:{
+                   childT0 = vec3(t0.x, t0.y, tm.z);
+                   childT1 = vec3(tm.x, tm.y, t1.z);
+                   break;
+               }
+        case 2:{
+                   childT0 = vec3(t0.x, tm.y, t0.z);
+                   childT1 = vec3(tm.x, t1.y, tm.z);
+                   break;
+               }
+        case 3:{
+                   childT0 = vec3(t0.x, tm.y, tm.z);
+                   childT1 = vec3(tm.x, t1.y, t1.z);
+                   break;
+               }
+        case 4:{
+                   childT0 = vec3(tm.x, t0.y, t0.z);
+                   childT1 = vec3(t1.x, tm.y, tm.z);
+                   break;
+               }
+        case 5:{
+                   childT0 = vec3(tm.x, t0.y, tm.z);
+                   childT1 = vec3(t1.x, tm.y, t1.z);
+                   break;
+               }
+        case 6:{
+                   childT0 = vec3(tm.x, tm.y, t0.z);
+                   childT1 = vec3(t1.x, t1.y, tm.z);
+                   break;
+               }
+        case 7:{
+                   childT0 = vec3(tm.x, tm.y, tm.z);
+                   childT1 = vec3(t1.x, t1.y, t1.z);
+                   break;
+               }
+    }
+}
+
+float intersectBoundingBox(in Ray ray, in AABB aabb, in Result result){
+    float tx1 = (aabb.min.x - ray.origin.x) * ray.inverseDirection.x;
+    float tx2 = (aabb.max.x - ray.origin.x) * ray.inverseDirection.x;
+    float tmin = min(tx1, tx2);
+    float tmax = max(tx1, tx2);
+
+    float ty1 = (aabb.min.y - ray.origin.y) * ray.inverseDirection.y;
+    float ty2 = (aabb.max.y - ray.origin.y) * ray.inverseDirection.y;
+    tmin = max(tmin, min(ty1, ty2));
+    tmax = min(tmax, max(ty1, ty2));
+
+    float tz1 = (aabb.min.z - ray.origin.z) * ray.inverseDirection.z;
+    float tz2 = (aabb.max.z - ray.origin.z) * ray.inverseDirection.z;
+    tmin = max(tmin, min(tz1, tz2));
+    tmax = min(tmax, max(tz1, tz2));
+
+    if(tmax >= tmin && tmin < result.t && tmax > 0){
+        return tmin;
+    }
+    return FloatMax;
+}
+
+bool bvhNode_IsLeaf(in BvhNode node){
+    return node.count > 0;
+}
+
+AABB bvhNode_GetAABB(in BvhNode node){
+    return AABB(vec3(node.minX, node.minY, node.minZ), vec3(node.maxX, node.maxY, node.maxZ));
+}
+
+float linearizeDepth(float depth)
+{
+    float z = depth * 2.0f - 1.0f;
+    return (2.0f * camera.data.Near * camera.data.Far) / (camera.data.Far + camera.data.Near - z * (camera.data.Far - camera.data.Near));
+}
+
+//delinearize depth to get the depth value in the range [0, 1]
+//(the inverse of linearizeDepth)
+float delinearizeDepth(float linearDepth)
+{
+    return ((- (((2 * camera.data.Near * camera.data.Far) / linearDepth) - camera.data.Far - camera.data.Near) / (camera.data.Far - camera.data.Near)) + 1.0f) / 2.0f;
+}
+
+bool floatEquals(float a, float b){
+    float dynamicEpsilon = 0.001 * abs(a);
+
+    return abs(a - b) < dynamicEpsilon;
+}
+
+#define NodeSize 6
+
+#define Node_Children_Offset 0
+uint voxelNode_GetChildren(uint tree, uint nodeIndex, uint childIndex){
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Children_Offset] + childIndex;
+}
+#undef Node_Children_Offset
+
+    #define Node_DataIndex_Offset 1
+uint voxelNode_GetDataIndex(uint tree, uint nodeIndex){
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
+}
+#undef Node_DataIndex_Offset
+
+    #define Node_Index_Offset 2
+uint voxelNode_GetNodeIndex(uint tree, uint nodeIndex){
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Index_Offset];
+}
+#undef Node_Index_Offset
+
+    #define Node_ParentIndex_Offset 3
+uint voxelNode_GetParentIndex(uint tree, uint nodeIndex){
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
+}
+#undef Node_ParentIndex_Offset
+
+    #define Node_AdditionalData_Offset 4
+
+uint voxelNode_GetParentChildIndex(uint tree, uint nodeIndex){
+    return trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0x7;
+}
+
+
+bool voxelNode_IsLeaf(uint tree, uint nodeIndex){
+    return voxelNode_GetChildren(tree, nodeIndex, 0) == 0xFFFFFFFF;
+}
+
+uint voxelNode_GetDepth(uint tree, uint nodeIndex){
+    return (trees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0xF0 ) >> 4;
+}
+
+bool voxelNode_IsEmpty(uint tree, uint nodeIndex){
+    return voxelNode_GetDataIndex(tree, nodeIndex) == 0xFFFFFFFF;
+}
+#undef Node_AdditionalData_Offset
+
+
+    #define VoxelSize 6
+
+    #define Voxel_Color_Offset 0
+uint voxelData_GetColor(uint tree, uint voxelIndex){
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
+}
+#undef Voxel_Color_Offset
+
+    #define Voxel_TextureStartX_Offset 1
+uint voxelData_GetTextureStartX(uint tree, uint voxelIndex){
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
+}
+#undef Voxel_TextureStartX_Offset
+
+    #define Voxel_TextureStartY_Offset 2
+uint voxelData_GetTextureStartY(uint tree, uint voxelIndex){
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
+}
+#undef Voxel_TextureStartY_Offset
+
+    #define Voxel_ArrayIndex_Offset 3
+uint voxelData_GetTextureArrayIndex(uint tree, uint voxelIndex){
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
+}
+#undef Voxel_ArrayIndex_Offset
+
+    #define Voxel_TextureSizeX_Offset 4
+uint voxelData_GetTextureSizeX(uint tree, uint voxelIndex){
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
+}
+#undef Voxel_TextureSizeX_Offset
+
+    #define Voxel_TextureSizeY_Offset 5
+uint voxelData_GetTextureSizeY(uint tree, uint voxelIndex){
+    uint nodeCount = trees[nonuniformEXT(tree)].nodeCount;
+    return trees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];
+}
+#undef Voxel_TextureSizeY_Offset
+#undef VoxelSize
+#undef NodeSize
