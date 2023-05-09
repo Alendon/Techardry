@@ -205,7 +205,7 @@ public sealed partial class VoxelRender : ARenderSystem
             renderData.CameraDataBuffer = MemoryBuffer.Create(
                 BufferUsageFlags.UniformBufferBit,
                 (ulong)Marshal.SizeOf<CameraData>(), SharingMode.Exclusive, queue,
-                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, false, true);
+                MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, false);
         }
     }
 
