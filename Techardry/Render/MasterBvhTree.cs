@@ -15,20 +15,21 @@ public class MasterBvhTree
     private const float FloatTolerance = 0.0001f;
     private const int BinCount = 32;
 
-    public MasterBvhTree(IList<BoundingBox> localTreesBoundingBoxes)
+    public MasterBvhTree(IEnumerable<BoundingBox> localTreesBoundingBoxes)
     {
-        _localTreesBoundingBoxes = localTreesBoundingBoxes;
-        Nodes = new Node[localTreesBoundingBoxes.Count * 2 - 1];
-        TreeIndices = new int[localTreesBoundingBoxes.Count];
+        _localTreesBoundingBoxes = localTreesBoundingBoxes as BoundingBox[] ??
+                                   localTreesBoundingBoxes as IList<BoundingBox> ?? localTreesBoundingBoxes.ToArray();
+        Nodes = new Node[_localTreesBoundingBoxes.Count * 2 - 1];
+        TreeIndices = new int[_localTreesBoundingBoxes.Count];
 
-        for (var i = 0; i < localTreesBoundingBoxes.Count; i++)
+        for (var i = 0; i < _localTreesBoundingBoxes.Count; i++)
         {
             TreeIndices[i] = i;
         }
 
         Nodes[0] = new Node
         {
-            treeCount = localTreesBoundingBoxes.Count,
+            treeCount = _localTreesBoundingBoxes.Count,
             leftFirst = 0
         };
 
@@ -132,7 +133,7 @@ public class MasterBvhTree
             for (int i = 0; i < node.treeCount; i++)
             {
                 var treeBoundingBox = _localTreesBoundingBoxes[TreeIndices[node.leftFirst + i]];
-                var binIndex = int.Min(BinCount - 1, (int) ((GetCenter(treeBoundingBox)[a] - boundsMin) * scale));
+                var binIndex = int.Min(BinCount - 1, (int)((GetCenter(treeBoundingBox)[a] - boundsMin) * scale));
                 bins[binIndex].Count++;
 
                 BoundingBox.CreateMerged(treeBoundingBox, bins[binIndex].Bounds,
@@ -198,11 +199,10 @@ public class MasterBvhTree
     public struct Node
     {
         [FieldOffset(0)] public BoundingBox Bounds;
-        
+
         [FieldOffset(32)] public int leftFirst;
 
-        [FieldOffset(32 + sizeof(int))]
-        public int treeCount;
+        [FieldOffset(32 + sizeof(int))] public int treeCount;
     }
 
     struct Bin

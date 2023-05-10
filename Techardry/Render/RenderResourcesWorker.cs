@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -18,19 +19,24 @@ namespace Techardry.Render;
 
 public class RenderResourcesWorker
 {
-    private readonly ConcurrentUniqueQueue<Int3> _chunkAddQueue = new();
-    private readonly ConcurrentUniqueQueue<Int3> _chunkUpdateQueue = new();
-    private readonly ConcurrentUniqueQueue<Int3> _chunkRemoveQueue = new();
+    private readonly ConcurrentDictionary<Int3, object?> _chunkRemoveQueue = new();
+    private readonly ConcurrentDictionary<Int3, (BufferWrapper buffer, DateTime time)> _newChunkBuffers = new();
 
     private readonly RenderData[] _frameRenderDat;
+
+    /// <summary>
+    /// The current render data to be used in the next frame
+    /// </summary>
+    /// <remarks>Always lock the access through <see cref="_lock"/></remarks>
+    private RenderData _currentRenderData = new()
+    {
+        UsedBuffers = new List<BufferWrapper>()
+    };
 
     private readonly Dictionary<Int3, int> _chunkPositionsToIndex = new();
     private readonly List<Int3> _chunkPositions = new();
     private readonly List<BufferWrapper> _chunkBuffers = new();
     private readonly List<BoundingBox> _chunkBoundingBoxes = new();
-
-    private BufferWrapper? _masterBvhBuffer;
-    private BufferWrapper? _masterBvhIndexBuffer;
 
     private readonly object _lock = new();
     private Thread? _workerThread;
@@ -39,14 +45,17 @@ public class RenderResourcesWorker
 
     private readonly TechardryWorld _world;
 
-    public unsafe RenderResourcesWorker(TechardryWorld world)
+    public RenderResourcesWorker(TechardryWorld world)
     {
         _world = world;
         _frameRenderDat = new RenderData[VulkanEngine.SwapchainImageCount];
 
         for (var index = 0; index < _frameRenderDat.Length; index++)
         {
-            _frameRenderDat[index] = new();
+            _frameRenderDat[index] = new()
+            {
+                UsedBuffers = new List<BufferWrapper>()
+            };
         }
     }
 
@@ -58,7 +67,7 @@ public class RenderResourcesWorker
 
         foreach (var chunk in _world.ChunkManager.GetLoadedChunks())
         {
-            _chunkAddQueue.TryEnqueue(chunk);
+            Task.Run(() => UpdateChunkData(chunk, DateTime.UtcNow));
         }
 
         _isRunning = true;
@@ -73,15 +82,9 @@ public class RenderResourcesWorker
         _world.ChunkManager.ChunkRemoved -= ChunkManager_ChunkRemoved;
         _world.ChunkManager.ChunkUpdated -= ChunkManager_ChunkUpdated;
 
-        _isRunning = false;
-        _chunkUpdateQueue.Clear();
         _chunkRemoveQueue.Clear();
-        _chunkAddQueue.Clear();
         _workerThread?.Join();
-        
-        _masterBvhBuffer?.RemoveUse();
-        _masterBvhIndexBuffer?.RemoveUse();
-        
+
         foreach (var buffer in _chunkBuffers)
         {
             buffer.RemoveUse();
@@ -89,67 +92,119 @@ public class RenderResourcesWorker
 
         foreach (var renderData in _frameRenderDat)
         {
-            foreach (var renderDataUsedBuffer in renderData.UsedBuffers)
-            {
-                renderDataUsedBuffer.RemoveUse();
-            }
-            
-            renderData.MasterBvhBuffer?.RemoveUse();
-            renderData.MasterBvhIndexBuffer?.RemoveUse();
-            
-            DescriptorSetHandler.FreeDescriptorSet(renderData.MasterBvhDescriptor);
-            DescriptorSetHandler.FreeDescriptorSet(renderData.OctreeDescriptor);
+            renderData.RemoveUse();
+        }
+
+        foreach (var (_, tuple) in _newChunkBuffers)
+        {
+            tuple.buffer.RemoveUse();
         }
     }
 
-    private unsafe void Worker()
+    private void Worker()
     {
         while (_isRunning)
         {
+            bool structureChanged = false;
+
+            //The returned keys are a copy of the actual keys, so we can safely iterate over them
+            //Any newly added chunks after this will be handled in the next iteration. Updates may be handled in the same iteration
+            var newChunkPositions = _newChunkBuffers.Keys;
+
+            foreach (var position in newChunkPositions)
+            {
+                if (!_newChunkBuffers.TryRemove(position, out var result))
+                    continue;
+
+                structureChanged = true;
+
+                if (_chunkPositionsToIndex.TryGetValue(position, out var index))
+                {
+                    _chunkBuffers[index].RemoveUse();
+                    _chunkBuffers[index] = result.buffer;
+                    continue;
+                }
+
+                index = _chunkPositions.Count;
+                _chunkPositionsToIndex.Add(position, index);
+                _chunkPositions.Add(position);
+                _chunkBuffers.Add(result.buffer);
+
+                var bMin = new Vector3(position.X, position.Y, position.Z) * Chunk.Size;
+                _chunkBoundingBoxes.Add(new BoundingBox(bMin, bMin + new Vector3(Chunk.Size)));
+            }
+
+            ValidateChunkPositions();
+
+            var chunksToRemove = _chunkRemoveQueue.Keys;
+            foreach (var position in chunksToRemove)
+            {
+                _chunkRemoveQueue.TryRemove(position, out _);
+            }
+
+            if (chunksToRemove.Count > 0)
+            {
+                DestroyChunkData(chunksToRemove);
+
+                structureChanged = true;
+            }
+
+
+            if (!structureChanged) continue;
+
+            if (!UpdateMasterBvh(out var masterBvhBuffer, out var bvhIndexBuffer))
+            {
+                //Clear resources as no chunks exists atm
+                lock (_lock)
+                {
+                    //the current render data is already empty
+                    if (_currentRenderData.UsedBuffers.Count == 0) continue;
+
+                    RenderData empty = new RenderData
+                    {
+                        UsedBuffers = new List<BufferWrapper>()
+                    };
+
+                    //maybe a bit unconventional, but this just swaps the current render data with the empty one
+                    (_currentRenderData, empty) = (empty, _currentRenderData);
+
+                    //empty now points to the old render data so we can remove the use
+                    empty.RemoveUse();
+                }
+
+                continue;
+            }
+
+            CreateDescriptorSets(masterBvhBuffer, bvhIndexBuffer, out DescriptorSet octreeDescriptorSet,
+                out DescriptorSet masterBvhDescriptorSet);
+
+            var renderData = new RenderData()
+            {
+                UsedBuffers = new List<BufferWrapper>(_chunkBuffers),
+                OctreeDescriptor = new DescriptorWrapper(octreeDescriptorSet),
+                MasterBvhDescriptor = new DescriptorWrapper(masterBvhDescriptorSet),
+                MasterBvhBuffer = new BufferWrapper(masterBvhBuffer),
+                MasterBvhIndexBuffer = new BufferWrapper(bvhIndexBuffer)
+            };
+            
+            renderData.AddUse();
+
             lock (_lock)
             {
-                bool structureChanged = false;
-
-                while (_chunkAddQueue.TryDequeue(out var position))
-                {
-                    structureChanged = true;
-                    UpdateChunkData(position);
-                }
-
-                while (_chunkUpdateQueue.TryDequeue(out var position))
-                {
-                    UpdateChunkData(position);
-                }
-
-                while (_chunkRemoveQueue.TryDequeue(out var position))
-                {
-                    structureChanged = true;
-                    DestroyChunkData(position);
-                }
-
-                if (structureChanged)
-                {
-                    DestroyMasterBvh();
-                    UpdateMasterBvh();
-                }
+                var oldRenderData = _currentRenderData;
+                _currentRenderData = renderData;
+                oldRenderData.RemoveUse();
             }
         }
     }
 
-    private void DestroyMasterBvh()
-    {
-        _masterBvhBuffer?.RemoveUse();
-        _masterBvhBuffer = null;
-
-        _masterBvhIndexBuffer?.RemoveUse();
-        _masterBvhIndexBuffer = null;
-    }
-
-    private unsafe void UpdateMasterBvh()
+    private unsafe bool UpdateMasterBvh(out MemoryBuffer nodeBuffer, out MemoryBuffer indexBuffer)
     {
         if (_chunkBoundingBoxes.Count == 0)
         {
-            return;
+            nodeBuffer = default;
+            indexBuffer = default;
+            return false;
         }
 
         var masterBvhTree = new MasterBvhTree(_chunkBoundingBoxes);
@@ -179,13 +234,13 @@ public class RenderResourcesWorker
             new Span<int>(MemoryManager.Map(indicesStagingBuffer.Memory).ToPointer(), indices.Length);
         indices.AsSpan().CopyTo(stagingIndices);
 
-        var nodeBuffer = MemoryBuffer.Create(
+        nodeBuffer = MemoryBuffer.Create(
             BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit,
             (ulong)(Marshal.SizeOf<MasterBvhTree.Node>() * nodes.Length),
             SharingMode.Exclusive, queueIndices,
             MemoryPropertyFlags.DeviceLocalBit, false);
 
-        var indexBuffer = MemoryBuffer.Create(
+        indexBuffer = MemoryBuffer.Create(
             BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit,
             (ulong)(sizeof(int) * indices.Length), SharingMode.Exclusive, queueIndices,
             MemoryPropertyFlags.DeviceLocalBit, false);
@@ -215,14 +270,13 @@ public class RenderResourcesWorker
 
         VulkanEngine.ExecuteSingleTimeCommandBuffer(copyCommandBuffer);
 
-        _masterBvhBuffer = new(nodeBuffer);
-        _masterBvhIndexBuffer = new(indexBuffer);
-
         nodeStagingBuffer.Dispose();
         indicesStagingBuffer.Dispose();
+
+        return true;
     }
 
-    private void UpdateChunkData(Int3 position)
+    private void UpdateChunkData(Int3 position, DateTime started)
     {
         Logger.AssertAndThrow(_world.ChunkManager.TryGetChunk(position, out var chunk), "Chunk not found",
             "RenderResourceWorker");
@@ -233,26 +287,20 @@ public class RenderResourcesWorker
 
         bufferSize = (uint)MintyCore.Utils.Maths.MathHelper.CeilPower2(checked((int)bufferSize));
 
-        ulong oldBufferSize = 0;
-
-        if (_chunkPositionsToIndex.TryGetValue(position, out int index))
-        {
-            oldBufferSize = _chunkBuffers[index].Buffer.Size;
-        }
-
-        BufferWrapper bufferWrapper;
-        if (bufferSize > oldBufferSize || bufferSize < oldBufferSize * 2)
-        {
-            DestroyChunkData(position);
-            CreateChunkDataBuffer(position, bufferSize, out bufferWrapper);
-        }
-        else
-        {
-            bufferWrapper = _chunkBuffers[index];
-        }
+        var buffer = MemoryBuffer.Create(
+            BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit,
+            bufferSize,
+            SharingMode.Exclusive,
+            new[] { VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value },
+            MemoryPropertyFlags.DeviceLocalBit,
+            false
+        );
 
         using (chunk.Octree.AcquireReadLock())
-            FillOctreeBuffer(chunk.Position, chunk.Octree, bufferWrapper.Buffer);
+            FillOctreeBuffer(chunk.Position, chunk.Octree, buffer);
+
+        _newChunkBuffers.AddOrUpdate(position, _ => (new BufferWrapper(buffer), started),
+            (_, oldEntry) => oldEntry.time < started ? (new BufferWrapper(buffer), started) : oldEntry);
     }
 
     private unsafe void FillOctreeBuffer(Int3 position, VoxelOctree octree, MemoryBuffer buffer)
@@ -312,101 +360,88 @@ public class RenderResourcesWorker
         bufferSize = headerSize + nodeSize * octree.NodeCount + dataSize * octree.DataCount;
     }
 
-    private void CreateChunkDataBuffer(Int3 position, uint bufferSize, out BufferWrapper bufferWrapper)
+    private void DestroyChunkData(ICollection<Int3> position)
     {
-        Span<uint> queue = stackalloc uint[] { VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value };
-
-        var buffer = MemoryBuffer.Create(
-            BufferUsageFlags.StorageBufferBit | BufferUsageFlags.TransferDstBit,
-            bufferSize,
-            SharingMode.Exclusive,
-            queue,
-            MemoryPropertyFlags.DeviceLocalBit,
-            false
-        );
-
-        bufferWrapper = new BufferWrapper(buffer);
-
-        _chunkPositionsToIndex.Add(position, _chunkPositions.Count);
-        _chunkPositions.Add(position);
-
-        var bMin = new Vector3(position.X, position.Y, position.Z) * Chunk.Size;
-        _chunkBoundingBoxes.Add(new BoundingBox(bMin, bMin + new Vector3(Chunk.Size)));
-
-        _chunkBuffers.Add(bufferWrapper);
-    }
-
-    private void DestroyChunkData(Int3 position)
-    {
-        if (!_chunkPositionsToIndex.Remove(position, out var index)) return;
-
-        _chunkPositions.RemoveAt(index);
-        for (var i = 0; i < _chunkPositions.Count; i++)
+        foreach (var pos in position)
         {
-            var chunkPosition = _chunkPositions[i];
-            _chunkPositionsToIndex[chunkPosition] = i;
-        }
+            _chunkPositionsToIndex.Remove(pos, out var index);
+            _chunkPositions.RemoveAt(index);
+            _chunkBoundingBoxes.RemoveAt(index);
 
-        _chunkBoundingBoxes.RemoveAt(index);
-
-        var buffer = _chunkBuffers[index];
-        buffer.RemoveUse();
-        _chunkBuffers.RemoveAt(index);
-    }
-
-    internal bool PrepareRenderResources(out DescriptorSet masterBvhDescriptor, out DescriptorSet octreeDescriptors)
-    {
-        lock (_lock)
-        {
-            var currentRenderData = _frameRenderDat[VulkanEngine.ImageIndex];
-
-            masterBvhDescriptor = octreeDescriptors = default;
-
-            DeleteOldRenderData(currentRenderData);
-
-            if (!CreateOctreeDescriptorSet(out octreeDescriptors)) return false;
-            currentRenderData.OctreeDescriptor = octreeDescriptors;
-            currentRenderData.UsedBuffers.AddRange(_chunkBuffers);
-            foreach (var bufferWrapper in currentRenderData.UsedBuffers)
+            //could be optimized but works for now
+            for (int i = index; i < _chunkPositions.Count; i++)
             {
-                bufferWrapper.AddUse();
+                _chunkPositionsToIndex[_chunkPositions[i]] = i;
             }
 
-            if (!CreateMasterBvhDescriptorSet(out masterBvhDescriptor)) return false;
-
-            currentRenderData.MasterBvhDescriptor = masterBvhDescriptor;
-
-            _masterBvhBuffer?.AddUse();
-            _masterBvhIndexBuffer?.AddUse();
-            currentRenderData.MasterBvhBuffer = _masterBvhBuffer;
-            currentRenderData.MasterBvhIndexBuffer = _masterBvhIndexBuffer;
-
-            return true;
+            var buffer = _chunkBuffers[index];
+            buffer.RemoveUse();
+            _chunkBuffers.RemoveAt(index);
         }
+
+        ValidateChunkPositions();
     }
 
-    private unsafe bool CreateMasterBvhDescriptorSet(out DescriptorSet masterBvhDescriptor)
+    private void ValidateChunkPositions()
     {
-        if (_masterBvhBuffer is null || _masterBvhIndexBuffer is null)
+        foreach (var (pos, index) in _chunkPositionsToIndex)
         {
-            masterBvhDescriptor = default;
-            return false;
+            if(_chunkPositions.Count <= index || _chunkPositions[index] != pos)
+                throw new Exception("Chunk positions are not valid");
+        }
+        
+        if(_chunkPositions.Any( pos => !_chunkPositionsToIndex.ContainsKey(pos)))
+            throw new Exception("Chunk positions are not valid");
+    }
+    
+    internal bool TryGetRenderResources(out DescriptorSet masterBvhDescriptor, out DescriptorSet octreeDescriptors)
+    {
+        _frameRenderDat[VulkanEngine.ImageIndex].RemoveUse();
+
+        RenderData current;
+        lock (_lock)
+        {
+            _currentRenderData.AddUse();
+            current = _currentRenderData;
         }
 
+        _frameRenderDat[VulkanEngine.ImageIndex] = current;
+
+        masterBvhDescriptor = default;
+        octreeDescriptors = default;
+
+        if (current.OctreeDescriptor is null || current.MasterBvhDescriptor is null) return false;
+
+
+        masterBvhDescriptor = current.MasterBvhDescriptor.Set;
+        octreeDescriptors = current.OctreeDescriptor.Set;
+        return true;
+    }
+
+    internal void CreateDescriptorSets(MemoryBuffer masterBvhBuffer, MemoryBuffer masterBvhIndexBuffer,
+        out DescriptorSet octreeDescriptors, out DescriptorSet masterBvhDescriptor)
+    {
+        CreateOctreeDescriptorSet(out octreeDescriptors);
+        CreateMasterBvhDescriptorSet(masterBvhBuffer, masterBvhIndexBuffer, out masterBvhDescriptor);
+    }
+
+    private unsafe void CreateMasterBvhDescriptorSet(MemoryBuffer masterBvhBuffer, MemoryBuffer masterBvhIndexBuffer,
+        out DescriptorSet masterBvhDescriptor)
+    {
         masterBvhDescriptor = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.MasterBvh);
 
         var bvhBufferInfo = new DescriptorBufferInfo
         {
-            Buffer = _masterBvhBuffer.Buffer.Buffer,
+            Buffer = masterBvhBuffer.Buffer,
             Offset = 0,
-            Range = _masterBvhBuffer.Buffer.Size
+            Range = masterBvhBuffer.Size
         };
 
         var indexBufferInfo = new DescriptorBufferInfo
         {
-            Buffer = _masterBvhIndexBuffer.Buffer.Buffer,
+            Buffer = masterBvhIndexBuffer.Buffer,
             Offset = 0,
-            Range = _masterBvhIndexBuffer.Buffer.Size
+            Range = masterBvhIndexBuffer.Size
         };
 
         var writeDescriptors = (stackalloc WriteDescriptorSet[]
@@ -432,18 +467,10 @@ public class RenderResourcesWorker
         });
 
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, writeDescriptors, 0, null);
-
-        return true;
     }
 
-    private unsafe bool CreateOctreeDescriptorSet(out DescriptorSet octreeDescriptor)
+    private unsafe void CreateOctreeDescriptorSet(out DescriptorSet octreeDescriptor)
     {
-        if (_chunkBuffers.Count == 0)
-        {
-            octreeDescriptor = default;
-            return false;
-        }
-
         octreeDescriptor =
             DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree, _chunkBuffers.Count);
 
@@ -487,55 +514,60 @@ public class RenderResourcesWorker
 
         bufferInfoHandle.Free();
         writeDescriptorSetHandle.Free();
-
-        return true;
-    }
-
-    private static void DeleteOldRenderData(RenderData currentRenderData)
-    {
-        if (currentRenderData.OctreeDescriptor.Handle != 0)
-            DescriptorSetHandler.FreeDescriptorSet(currentRenderData.OctreeDescriptor);
-
-        if (currentRenderData.MasterBvhDescriptor.Handle != 0)
-            DescriptorSetHandler.FreeDescriptorSet(currentRenderData.MasterBvhDescriptor);
-
-        foreach (var bufferWrapper in currentRenderData.UsedBuffers)
-        {
-            bufferWrapper.RemoveUse();
-        }
-
-        currentRenderData.UsedBuffers.Clear();
-
-        currentRenderData.MasterBvhBuffer?.RemoveUse();
-        currentRenderData.MasterBvhIndexBuffer?.RemoveUse();
     }
 
     private void ChunkManager_ChunkAdded(Int3 position)
     {
-        _chunkAddQueue.TryEnqueue(position);
+        Task.Run(() => UpdateChunkData(position, DateTime.UtcNow));
     }
 
     private void ChunkManager_ChunkUpdated(Int3 position)
     {
-        _chunkUpdateQueue.TryEnqueue(position);
+        Task.Run(() => UpdateChunkData(position, DateTime.UtcNow));
     }
 
     private void ChunkManager_ChunkRemoved(Int3 position)
     {
-        _chunkRemoveQueue.TryEnqueue(position);
-        _chunkAddQueue.TryRemove(position);
-        _chunkUpdateQueue.TryRemove(position);
+        _chunkRemoveQueue.TryAdd(position, null);
     }
 
     private class RenderData
     {
-        public readonly List<BufferWrapper> UsedBuffers = new();
-        public BufferWrapper? MasterBvhBuffer;
-        public BufferWrapper? MasterBvhIndexBuffer;
+        public required List<BufferWrapper> UsedBuffers { get; init; }
+        public BufferWrapper? MasterBvhBuffer { get; init; }
+        public BufferWrapper? MasterBvhIndexBuffer { get; init; }
 
-        public DescriptorSet OctreeDescriptor;
-        public DescriptorSet MasterBvhDescriptor;
+        public DescriptorWrapper? OctreeDescriptor { get; init; }
+        public DescriptorWrapper? MasterBvhDescriptor { get; init; }
+
+
+        public void AddUse()
+        {
+            foreach (var buffer in UsedBuffers)
+            {
+                buffer.AddUse();
+            }
+
+            MasterBvhBuffer?.AddUse();
+            MasterBvhIndexBuffer?.AddUse();
+            OctreeDescriptor?.AddUse();
+            MasterBvhDescriptor?.AddUse();
+        }
+
+        public void RemoveUse()
+        {
+            foreach (var buffer in UsedBuffers)
+            {
+                buffer.RemoveUse();
+            }
+
+            MasterBvhBuffer?.RemoveUse();
+            MasterBvhIndexBuffer?.RemoveUse();
+            OctreeDescriptor?.RemoveUse();
+            MasterBvhDescriptor?.RemoveUse();
+        }
     }
+
 
     private class BufferWrapper
     {
@@ -558,6 +590,31 @@ public class RenderResourcesWorker
             if (Interlocked.Decrement(ref _useCount) == 0)
             {
                 Buffer.Dispose();
+            }
+        }
+    }
+
+    private class DescriptorWrapper
+    {
+        private int _useCount;
+        public readonly DescriptorSet Set;
+
+        public DescriptorWrapper(DescriptorSet set)
+        {
+            Set = set;
+            _useCount = 1;
+        }
+
+        public void AddUse()
+        {
+            Interlocked.Increment(ref _useCount);
+        }
+
+        public void RemoveUse()
+        {
+            if (Interlocked.Decrement(ref _useCount) == 0)
+            {
+                DescriptorSetHandler.FreeDescriptorSet(Set);
             }
         }
     }

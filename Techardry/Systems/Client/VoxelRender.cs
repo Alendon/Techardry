@@ -93,7 +93,7 @@ public sealed partial class VoxelRender : ARenderSystem
 
         if (cameraEntity.Entity.ArchetypeId == default) return;
 
-        if (_worker is null || !_worker.PrepareRenderResources(out var masterBvhDescriptor, out var octreeDescriptors))
+        if (_worker is null || !_worker.TryGetRenderResources(out var masterBvhDescriptor, out var octreeDescriptors))
         {
             Logger.WriteLog("Failed to update voxel data", LogImportance.Error, "VoxelRender");
             return;
