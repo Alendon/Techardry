@@ -234,7 +234,7 @@ public class RenderResourcesWorker
             BufferUsageFlags.TransferSrcBit,
             (ulong)(Marshal.SizeOf<MasterBvhTree.Node>() * nodes.Length),
             SharingMode.Exclusive, queueIndices,
-            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, true, true);
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, true);
         var stagingNodes =
             new Span<MasterBvhTree.Node>(MemoryManager.Map(nodeStagingBuffer.Memory).ToPointer(), nodes.Length);
         nodes.AsSpan().CopyTo(stagingNodes);
@@ -242,7 +242,7 @@ public class RenderResourcesWorker
         var indicesStagingBuffer = MemoryBuffer.Create(
             BufferUsageFlags.TransferSrcBit,
             (ulong)(sizeof(int) * indices.Length), SharingMode.Exclusive, queueIndices,
-            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, true, true);
+            MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, true);
         var stagingIndices =
             new Span<int>(MemoryManager.Map(indicesStagingBuffer.Memory).ToPointer(), indices.Length);
         indices.AsSpan().CopyTo(stagingIndices);
@@ -352,7 +352,7 @@ public class RenderResourcesWorker
             SharingMode.Exclusive,
             queue,
             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit,
-            true, true
+            true
         );
 
         var data = MemoryManager.Map(stagingBuffer.Memory);
