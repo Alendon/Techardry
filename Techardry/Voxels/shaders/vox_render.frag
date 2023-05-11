@@ -77,7 +77,7 @@ float linearizeDepth(float depth);
 float delinearizeDepth(float linearDepth);
 bool floatEquals(float a, float b);
 
-float intersectBoundingBox(in Ray ray, in AABB aabb, in Result result);
+float intersectBoundingBox(in Ray ray, in AABB aabb, float currentT);
 
 bool bvhNode_IsLeaf(in BvhNode node);
 AABB bvhNode_GetAABB(in BvhNode node);
@@ -244,8 +244,8 @@ void raycast(in Ray ray, inout Result result){
         int child1 = masterBvh.nodes[nodeIndex].leftFirst;
         int child2 = child1 + 1;
 
-        float dist1 = intersectBoundingBox(ray, bvhNode_GetAABB(masterBvh.nodes[child1]), result);
-        float dist2 = intersectBoundingBox(ray, bvhNode_GetAABB(masterBvh.nodes[child2]), result);
+        float dist1 = intersectBoundingBox(ray, bvhNode_GetAABB(masterBvh.nodes[child1]), result.t);
+        float dist2 = intersectBoundingBox(ray, bvhNode_GetAABB(masterBvh.nodes[child2]), result.t);
 
         if(dist1 > dist2){
             int tempChild = child1;
@@ -555,7 +555,7 @@ void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT
     }
 }
 
-float intersectBoundingBox(in Ray ray, in AABB aabb, in Result result){
+float intersectBoundingBox(in Ray ray, in AABB aabb, float currentT){
     float tx1 = (aabb.min.x - ray.origin.x) * ray.inverseDirection.x;
     float tx2 = (aabb.max.x - ray.origin.x) * ray.inverseDirection.x;
     float tmin = min(tx1, tx2);
@@ -571,7 +571,7 @@ float intersectBoundingBox(in Ray ray, in AABB aabb, in Result result){
     tmin = max(tmin, min(tz1, tz2));
     tmax = min(tmax, max(tz1, tz2));
 
-    if(tmax >= tmin && tmin < result.t && tmax > 0){
+    if(tmax >= tmin && tmin < currentT && tmax > 0){
         return tmin;
     }
     return FloatMax;
