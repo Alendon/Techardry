@@ -280,10 +280,22 @@ public class RenderResourcesWorker
     {
         Logger.AssertAndThrow(_world.ChunkManager.TryGetChunk(position, out var chunk), "Chunk not found",
             "RenderResourceWorker");
+        
 
         uint bufferSize;
         using (chunk.Octree.AcquireReadLock())
+        {
+            //the chunk is empty, so we dont want to create render resources as this would be a waste of memory and compute time
+            if (chunk.Octree.DataCount == 0)
+            {
+                //add the current chunk to the remove queue. This makes sure that the chunk is no longer present
+                //if it wasn't added in the first place it will be ignored
+                _chunkRemoveQueue.TryAdd(position, null);
+                return;
+            }
+            
             CalculateOctreeBufferSize(chunk.Octree, out bufferSize);
+        }
 
         bufferSize = (uint)MintyCore.Utils.Maths.MathHelper.CeilPower2(checked((int)bufferSize));
 
@@ -364,7 +376,13 @@ public class RenderResourcesWorker
     {
         foreach (var pos in position)
         {
-            _chunkPositionsToIndex.Remove(pos, out var index);
+            if (!_chunkPositionsToIndex.Remove(pos, out var index))
+            {
+                //this may happen if the chunk was added empty
+                //in this case we can just ignore it
+                //The reason for this is to not need locking to check if a chunk is present if a empty one gets added
+                continue;
+            }
             _chunkPositions.RemoveAt(index);
             _chunkBoundingBoxes.RemoveAt(index);
 
