@@ -167,7 +167,7 @@ public class RenderResourcesWorker
             if (!UpdateMasterBvh(out var masterBvhBuffer, out var bvhIndexBuffer))
             {
                 //Clear resources as no chunks exists atm
-                lock (_lock)
+                using(_lock.AcquireWriteLock())
                 {
                     //the current render data is already empty
                     if (_currentRenderData.UsedBuffers.Count == 0) continue;
@@ -201,7 +201,7 @@ public class RenderResourcesWorker
 
             renderData.AddUse();
 
-            lock (_lock)
+            using(_lock.AcquireWriteLock())
             {
                 var oldRenderData = _currentRenderData;
                 _currentRenderData = renderData;
@@ -292,9 +292,10 @@ public class RenderResourcesWorker
     private bool UpdateChunkData(Int3 position, CommandBuffer commandBuffer, out MemoryBuffer buffer,
         out MemoryBuffer stagingBuffer)
     {
-        Logger.AssertAndThrow(_world.ChunkManager.TryGetChunk(position, out var chunk), "Chunk not found",
-            "RenderResourceWorker");
-
+        buffer = default;
+        stagingBuffer = default;
+        
+        if (!_world.ChunkManager.TryGetChunk(position, out var chunk)) return false;
 
         uint bufferSize;
         using (chunk.Octree.AcquireReadLock())
@@ -305,9 +306,7 @@ public class RenderResourcesWorker
                 //add the current chunk to the remove queue. This makes sure that the chunk is no longer present
                 //if it wasn't added in the first place it will be ignored
                 _chunkRemoveQueue.TryEnqueue(position);
-
-                buffer = default;
-                stagingBuffer = default;
+                
                 return false;
             }
 
@@ -426,18 +425,26 @@ public class RenderResourcesWorker
     internal bool TryGetRenderResources(out DescriptorSet masterBvhDescriptor, out DescriptorSet octreeDescriptors)
     {
         _frameRenderDat[VulkanEngine.ImageIndex].RemoveUse();
+        
+        masterBvhDescriptor = default;
+        octreeDescriptors = default;
 
         RenderData current;
-        lock (_lock)
+        var lockHolder = _lock.AcquireReadLock(TimeSpan.FromMilliseconds(5));
+        if (lockHolder.IsEmpty) return false;
+        try
         {
             _currentRenderData.AddUse();
             current = _currentRenderData;
         }
+        finally
+        {
+            lockHolder.Dispose();
+        }
 
         _frameRenderDat[VulkanEngine.ImageIndex] = current;
 
-        masterBvhDescriptor = default;
-        octreeDescriptors = default;
+        
 
         if (current.OctreeDescriptor is null || current.MasterBvhDescriptor is null) return false;
 
