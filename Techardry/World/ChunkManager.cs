@@ -28,6 +28,8 @@ public class ChunkManager : IDisposable
     private readonly ConcurrentQueue<(Int3, VoxelOctree)> _chunksToUpdate = new();
 
     private readonly ConcurrentDictionary<Int3, object?> _activeChunkCreations = new();
+    private readonly List<Task> _newChunkUpdateTasks = new();
+    private Task _currentWaitTasks = Task.CompletedTask;
 
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     
@@ -157,7 +159,14 @@ public class ChunkManager : IDisposable
 
             if (!_activeChunkCreations.TryAdd(chunk, null)) continue;
 
-            Task.Run(() => CreateChunk(chunk), _cancellationTokenSource.Token);
+            var newTask = _currentWaitTasks.ContinueWith(_ => CreateChunk(chunk), _cancellationTokenSource.Token);
+
+            _newChunkUpdateTasks.Add(newTask);
+            var maxConcurrencyLevel = Task.Factory.Scheduler?.MaximumConcurrencyLevel ?? 4;
+            if (_newChunkUpdateTasks.Count < maxConcurrencyLevel / 4) continue;
+            
+            _currentWaitTasks = Task.WhenAll(_newChunkUpdateTasks);
+            _newChunkUpdateTasks.Clear();
         }
 
 
