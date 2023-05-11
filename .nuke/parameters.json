@@ -11,6 +11,6 @@
     "shaders/voxels",
     "shaders"
   ],
-  "ShaderDebugging": true,
+  "ShaderDebugging": false,
   "ResourceFolder": "Resources"
 }
