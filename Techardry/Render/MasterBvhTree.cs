@@ -13,7 +13,7 @@ public class MasterBvhTree
 
 
     private const float FloatTolerance = 0.0001f;
-    private const int BinCount = 32;
+    private const int BinCount = 8;
 
     public MasterBvhTree(IEnumerable<BoundingBox> localTreesBoundingBoxes)
     {
@@ -34,10 +34,10 @@ public class MasterBvhTree
         };
 
         UpdateBounds(0);
-        Subdivide(0);
+        NaiveSubdivide(0);
     }
 
-    private void Subdivide(int nodeIndex)
+    private void BinnedSubdivide(int nodeIndex)
     {
         ref var node = ref Nodes[nodeIndex];
 
@@ -83,8 +83,65 @@ public class MasterBvhTree
         UpdateBounds(leftChildIndex);
         UpdateBounds(rightChildIndex);
 
-        Subdivide(leftChildIndex);
-        Subdivide(rightChildIndex);
+        BinnedSubdivide(leftChildIndex);
+        BinnedSubdivide(rightChildIndex);
+    }
+
+    private void NaiveSubdivide(int nodeIndex)
+    {
+        ref var node = ref Nodes[nodeIndex];
+
+        if (node.treeCount <= 2) return;
+        
+        var extent = node.Bounds.Max - node.Bounds.Min;
+        var axis = 0;
+        if (extent.Y > extent.X)
+            axis = 1;
+        if (extent.Z > extent[axis])
+            axis = 2;
+        
+        var splitPos = node.Bounds.Min + new Vector3(extent[axis] * 0.5f);
+        
+        var i = node.leftFirst;
+        var j = i + node.treeCount - 1;
+
+        while (i <= j)
+        {
+            if(GetCenter(_localTreesBoundingBoxes[TreeIndices[i]])[axis] < splitPos[axis])
+                i++;
+            else
+            {
+                (TreeIndices[i], TreeIndices[j]) = (TreeIndices[j], TreeIndices[i]);
+                j--;
+            }
+        }
+        
+        var leftCount = i - node.leftFirst;
+        if (leftCount == 0 || leftCount == node.treeCount) return;
+        
+        var leftChildIndex = _nodesUsed++;
+        var rightChildIndex = _nodesUsed++;
+        
+        Nodes[leftChildIndex] = new()
+        {
+            leftFirst = node.leftFirst,
+            treeCount = leftCount
+        };
+        
+        Nodes[rightChildIndex] = new()
+        {
+            leftFirst = i,
+            treeCount = node.treeCount - leftCount
+        };
+        
+        node.leftFirst = leftChildIndex;
+        node.treeCount = 0;
+        
+        UpdateBounds(leftChildIndex);
+        UpdateBounds(rightChildIndex);
+        
+        NaiveSubdivide(leftChildIndex);
+        NaiveSubdivide(rightChildIndex);
     }
 
     private void UpdateBounds(int nodeIndex)
