@@ -19,8 +19,8 @@ namespace Techardry.Render;
 
 public class RenderResourcesWorker
 {
-    private readonly ConcurrentDictionary<Int3, object?> _chunkRemoveQueue = new();
-    private readonly ConcurrentDictionary<Int3, (BufferWrapper buffer, DateTime time)> _newChunkBuffers = new();
+    private readonly ConcurrentUniqueQueue<Int3> _chunkRemoveQueue = new();
+    private readonly ConcurrentUniqueQueue<Int3> _chunkUpdateQueue = new();
 
     private readonly RenderData[] _frameRenderDat;
 
@@ -67,7 +67,7 @@ public class RenderResourcesWorker
 
         foreach (var chunk in _world.ChunkManager.GetLoadedChunks())
         {
-            Task.Run(() => UpdateChunkData(chunk, DateTime.UtcNow));
+            _chunkUpdateQueue.TryEnqueue(chunk);
         }
 
         _isRunning = true;
@@ -94,57 +94,69 @@ public class RenderResourcesWorker
         {
             renderData.RemoveUse();
         }
-
-        foreach (var (_, tuple) in _newChunkBuffers)
-        {
-            tuple.buffer.RemoveUse();
-        }
     }
 
     private void Worker()
     {
+        MemoryBuffer[] stagingBuffers = new MemoryBuffer[16];
+
         while (_isRunning)
         {
             bool structureChanged = false;
 
             //The returned keys are a copy of the actual keys, so we can safely iterate over them
             //Any newly added chunks after this will be handled in the next iteration. Updates may be handled in the same iteration
-            var newChunkPositions = _newChunkBuffers.Keys;
+            var cb = VulkanEngine.GetSingleTimeCommandBuffer();
 
-            foreach (var position in newChunkPositions)
+            var stagingBufferSpan = stagingBuffers.AsSpan();
+
+            int i = 0;
+            while(_chunkUpdateQueue.TryDequeue(out var position))
             {
-                if (!_newChunkBuffers.TryRemove(position, out var result))
+                if (!UpdateChunkData(position, cb, out var memoryBuffer, out var stagingBuffer))
+                {
+                    _chunkRemoveQueue.TryEnqueue(position);
                     continue;
+                }
+
+                if (i >= stagingBuffers.Length)
+                {
+                    Array.Resize(ref stagingBuffers, stagingBuffers.Length * 2);
+                    stagingBufferSpan = stagingBuffers.AsSpan();
+                }
+
+                stagingBufferSpan[i] = stagingBuffer;
+                i++;
 
                 structureChanged = true;
 
                 if (_chunkPositionsToIndex.TryGetValue(position, out var index))
                 {
                     _chunkBuffers[index].RemoveUse();
-                    _chunkBuffers[index] = result.buffer;
+                    _chunkBuffers[index] = new BufferWrapper(memoryBuffer);
                     continue;
                 }
 
                 index = _chunkPositions.Count;
                 _chunkPositionsToIndex.Add(position, index);
                 _chunkPositions.Add(position);
-                _chunkBuffers.Add(result.buffer);
+                _chunkBuffers.Add(new BufferWrapper(memoryBuffer));
 
                 var bMin = new Vector3(position.X, position.Y, position.Z) * Chunk.Size;
                 _chunkBoundingBoxes.Add(new BoundingBox(bMin, bMin + new Vector3(Chunk.Size)));
             }
 
+            VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
+
+            stagingBufferSpan = stagingBufferSpan[..i];
+
+            DisposeBuffers(stagingBufferSpan);
+
             ValidateChunkPositions();
 
-            var chunksToRemove = _chunkRemoveQueue.Keys;
-            foreach (var position in chunksToRemove)
+            while(_chunkRemoveQueue.TryDequeue(out var position))
             {
-                _chunkRemoveQueue.TryRemove(position, out _);
-            }
-
-            if (chunksToRemove.Count > 0)
-            {
-                DestroyChunkData(chunksToRemove);
+                DestroyChunkData(position);
 
                 structureChanged = true;
             }
@@ -186,7 +198,7 @@ public class RenderResourcesWorker
                 MasterBvhBuffer = new BufferWrapper(masterBvhBuffer),
                 MasterBvhIndexBuffer = new BufferWrapper(bvhIndexBuffer)
             };
-            
+
             renderData.AddUse();
 
             lock (_lock)
@@ -197,6 +209,7 @@ public class RenderResourcesWorker
             }
         }
     }
+
 
     private unsafe bool UpdateMasterBvh(out MemoryBuffer nodeBuffer, out MemoryBuffer indexBuffer)
     {
@@ -276,11 +289,12 @@ public class RenderResourcesWorker
         return true;
     }
 
-    private void UpdateChunkData(Int3 position, DateTime started)
+    private bool UpdateChunkData(Int3 position, CommandBuffer commandBuffer, out MemoryBuffer buffer,
+        out MemoryBuffer stagingBuffer)
     {
         Logger.AssertAndThrow(_world.ChunkManager.TryGetChunk(position, out var chunk), "Chunk not found",
             "RenderResourceWorker");
-        
+
 
         uint bufferSize;
         using (chunk.Octree.AcquireReadLock())
@@ -290,16 +304,19 @@ public class RenderResourcesWorker
             {
                 //add the current chunk to the remove queue. This makes sure that the chunk is no longer present
                 //if it wasn't added in the first place it will be ignored
-                _chunkRemoveQueue.TryAdd(position, null);
-                return;
+                _chunkRemoveQueue.TryEnqueue(position);
+
+                buffer = default;
+                stagingBuffer = default;
+                return false;
             }
-            
+
             CalculateOctreeBufferSize(chunk.Octree, out bufferSize);
         }
 
         bufferSize = (uint)MintyCore.Utils.Maths.MathHelper.CeilPower2(checked((int)bufferSize));
 
-        var buffer = MemoryBuffer.Create(
+        buffer = MemoryBuffer.Create(
             BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit,
             bufferSize,
             SharingMode.Exclusive,
@@ -309,19 +326,27 @@ public class RenderResourcesWorker
         );
 
         using (chunk.Octree.AcquireReadLock())
-            FillOctreeBuffer(chunk.Position, chunk.Octree, buffer);
+            FillOctreeBuffer(chunk.Position, chunk.Octree, buffer, out stagingBuffer);
 
-        _newChunkBuffers.AddOrUpdate(position, _ => (new BufferWrapper(buffer), started),
-            (_, oldEntry) => oldEntry.time < started ? (new BufferWrapper(buffer), started) : oldEntry);
+        BufferCopy copy = new()
+        {
+            Size = buffer.Size,
+            DstOffset = 0,
+            SrcOffset = 0
+        };
+        VulkanEngine.Vk.CmdCopyBuffer(commandBuffer, stagingBuffer.Buffer, buffer.Buffer, 1, copy);
+
+        return true;
     }
 
-    private unsafe void FillOctreeBuffer(Int3 position, VoxelOctree octree, MemoryBuffer buffer)
+    private unsafe void FillOctreeBuffer(Int3 position, VoxelOctree octree, MemoryBuffer buffer,
+        out MemoryBuffer stagingBuffer)
     {
         Span<uint> queue = stackalloc uint[] { VulkanEngine.QueueFamilyIndexes.GraphicsFamily!.Value };
         var headerSize = (uint)Marshal.SizeOf<OctreeHeader>();
         var nodeSize = (uint)Marshal.SizeOf<VoxelOctree.Node>();
 
-        var stagingBuffer = MemoryBuffer.Create(
+        stagingBuffer = MemoryBuffer.Create(
             BufferUsageFlags.TransferSrcBit,
             buffer.Size,
             SharingMode.Exclusive,
@@ -348,19 +373,6 @@ public class RenderResourcesWorker
         srcData.CopyTo(dstData);
 
         MemoryManager.UnMap(stagingBuffer.Memory);
-
-        var copy = new BufferCopy
-        {
-            Size = buffer.Size,
-            SrcOffset = 0,
-            DstOffset = 0
-        };
-
-        var cb = VulkanEngine.GetSingleTimeCommandBuffer();
-        VulkanEngine.Vk.CmdCopyBuffer(cb, stagingBuffer.Buffer, buffer.Buffer, 1, copy);
-        VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
-
-        stagingBuffer.Dispose();
     }
 
     private static void CalculateOctreeBufferSize(VoxelOctree octree, out uint bufferSize)
@@ -372,30 +384,29 @@ public class RenderResourcesWorker
         bufferSize = headerSize + nodeSize * octree.NodeCount + dataSize * octree.DataCount;
     }
 
-    private void DestroyChunkData(ICollection<Int3> position)
+    private void DestroyChunkData(Int3 position)
     {
-        foreach (var pos in position)
+        if (!_chunkPositionsToIndex.Remove(position, out var index))
         {
-            if (!_chunkPositionsToIndex.Remove(pos, out var index))
-            {
-                //this may happen if the chunk was added empty
-                //in this case we can just ignore it
-                //The reason for this is to not need locking to check if a chunk is present if a empty one gets added
-                continue;
-            }
-            _chunkPositions.RemoveAt(index);
-            _chunkBoundingBoxes.RemoveAt(index);
-
-            //could be optimized but works for now
-            for (int i = index; i < _chunkPositions.Count; i++)
-            {
-                _chunkPositionsToIndex[_chunkPositions[i]] = i;
-            }
-
-            var buffer = _chunkBuffers[index];
-            buffer.RemoveUse();
-            _chunkBuffers.RemoveAt(index);
+            //this may happen if the chunk was added empty
+            //in this case we can just ignore it
+            //The reason for this is to not need locking to check if a chunk is present if a empty one gets added
+            return;
         }
+
+        _chunkPositions.RemoveAt(index);
+        _chunkBoundingBoxes.RemoveAt(index);
+
+        //could be optimized but works for now
+        for (int i = index; i < _chunkPositions.Count; i++)
+        {
+            _chunkPositionsToIndex[_chunkPositions[i]] = i;
+        }
+
+        var buffer = _chunkBuffers[index];
+        buffer.RemoveUse();
+        _chunkBuffers.RemoveAt(index);
+
 
         ValidateChunkPositions();
     }
@@ -404,14 +415,14 @@ public class RenderResourcesWorker
     {
         foreach (var (pos, index) in _chunkPositionsToIndex)
         {
-            if(_chunkPositions.Count <= index || _chunkPositions[index] != pos)
+            if (_chunkPositions.Count <= index || _chunkPositions[index] != pos)
                 throw new Exception("Chunk positions are not valid");
         }
-        
-        if(_chunkPositions.Any( pos => !_chunkPositionsToIndex.ContainsKey(pos)))
+
+        if (_chunkPositions.Any(pos => !_chunkPositionsToIndex.ContainsKey(pos)))
             throw new Exception("Chunk positions are not valid");
     }
-    
+
     internal bool TryGetRenderResources(out DescriptorSet masterBvhDescriptor, out DescriptorSet octreeDescriptors)
     {
         _frameRenderDat[VulkanEngine.ImageIndex].RemoveUse();
@@ -443,7 +454,8 @@ public class RenderResourcesWorker
         CreateMasterBvhDescriptorSet(masterBvhBuffer, masterBvhIndexBuffer, out masterBvhDescriptor);
     }
 
-    private unsafe void CreateMasterBvhDescriptorSet(MemoryBuffer masterBvhBuffer, MemoryBuffer masterBvhIndexBuffer,
+    private unsafe void CreateMasterBvhDescriptorSet(MemoryBuffer masterBvhBuffer,
+        MemoryBuffer masterBvhIndexBuffer,
         out DescriptorSet masterBvhDescriptor)
     {
         masterBvhDescriptor = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.MasterBvh);
@@ -534,19 +546,28 @@ public class RenderResourcesWorker
         writeDescriptorSetHandle.Free();
     }
 
+    private void DisposeBuffers(Span<MemoryBuffer> stagingBufferSpan)
+    {
+        foreach (var staging in stagingBufferSpan)
+        {
+            staging.Dispose();
+        }
+    }
+
+
     private void ChunkManager_ChunkAdded(Int3 position)
     {
-        Task.Run(() => UpdateChunkData(position, DateTime.UtcNow));
+        _chunkUpdateQueue.TryEnqueue(position);
     }
 
     private void ChunkManager_ChunkUpdated(Int3 position)
     {
-        Task.Run(() => UpdateChunkData(position, DateTime.UtcNow));
+        _chunkUpdateQueue.TryEnqueue(position);
     }
 
     private void ChunkManager_ChunkRemoved(Int3 position)
     {
-        _chunkRemoveQueue.TryAdd(position, null);
+        _chunkRemoveQueue.TryEnqueue(position);
     }
 
     private class RenderData
