@@ -19,7 +19,8 @@ public class DescriptorSets
                 DescriptorType = DescriptorType.UniformBuffer,
                 StageFlags = ShaderStageFlags.VertexBit
             }
-        }
+        },
+        DescriptorSetsPerPool = 16
     };
     
     

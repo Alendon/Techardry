@@ -37,7 +37,8 @@ public static class RenderObjects
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.FragmentBit
             }
-        }
+        },
+        DescriptorSetsPerPool = 16
     };
 
     [RegisterDescriptorSet("voxel_octree")]
@@ -48,7 +49,7 @@ public static class RenderObjects
             new DescriptorSetLayoutBinding
             {
                 Binding = 0,
-                DescriptorCount = 1_000_000,
+                DescriptorCount = 100_000,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.FragmentBit
             }
@@ -58,7 +59,8 @@ public static class RenderObjects
             DescriptorBindingFlags.PartiallyBoundBit |
             DescriptorBindingFlags.VariableDescriptorCountBit
         },
-        CreateFlags = DescriptorSetLayoutCreateFlags.UpdateAfterBindPoolBit
+        CreateFlags = DescriptorSetLayoutCreateFlags.UpdateAfterBindPoolBit,
+        DescriptorSetsPerPool = 16
     };
 
     [RegisterDescriptorSet("camera_data")]
@@ -73,7 +75,8 @@ public static class RenderObjects
                 DescriptorType = DescriptorType.UniformBuffer,
                 StageFlags = ShaderStageFlags.FragmentBit
             }
-        }
+        },
+        DescriptorSetsPerPool = 16
     };
 
     [RegisterDescriptorSet("input_attachment")]
@@ -98,7 +101,8 @@ public static class RenderObjects
                 DescriptorType = DescriptorType.InputAttachment,
                 StageFlags = ShaderStageFlags.FragmentBit
             }
-        }
+        },
+        DescriptorSetsPerPool = 16
     };
 
     [RegisterRenderPass("dual_pipeline")]

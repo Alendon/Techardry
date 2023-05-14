@@ -509,7 +509,7 @@ public class RenderResourcesWorker
     private unsafe void CreateOctreeDescriptorSet(out DescriptorSet octreeDescriptor)
     {
         octreeDescriptor =
-            DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.VoxelOctree, _chunkBuffers.Count);
+            DescriptorSetHandler.AllocateVariableDescriptorSet(DescriptorSetIDs.VoxelOctree, (uint)_chunkBuffers.Count);
 
 
         DescriptorBufferInfo[] bufferInfos = new DescriptorBufferInfo[_chunkBuffers.Count];

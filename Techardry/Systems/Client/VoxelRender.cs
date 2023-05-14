@@ -75,7 +75,8 @@ public sealed partial class VoxelRender : ARenderSystem
         var index = VulkanEngine.ImageIndex;
         if (VulkanEngine.SwapchainImageViews[index].Handle != _renderData[index].LastColorImageView.Handle)
         {
-            DescriptorSetHandler.FreeDescriptorSet(_renderData[index].InputAttachmentDescriptorSet);
+            if (_renderData[index].InputAttachmentDescriptorSet.Handle != 0)
+                DescriptorSetHandler.FreeDescriptorSet(_renderData[index].InputAttachmentDescriptorSet);
             CreateInputAttachments(index);
         }
 
@@ -98,7 +99,7 @@ public sealed partial class VoxelRender : ARenderSystem
             Logger.WriteLog("Failed to update voxel data", LogImportance.Error, "VoxelRender");
             return;
         }
-        
+
         var vk = VulkanEngine.Vk;
 
 
@@ -194,7 +195,6 @@ public sealed partial class VoxelRender : ARenderSystem
         CurrentRenderData.LastColorImageView = VulkanEngine.SwapchainImageViews[index];
     }
 
-    
 
     private unsafe void CreateCameraDataBuffers()
     {
@@ -249,7 +249,7 @@ public sealed partial class VoxelRender : ARenderSystem
     public override void Dispose()
     {
         _worker?.Stop();
-        
+
         foreach (var renderData in _renderData)
         {
             DescriptorSetHandler.FreeDescriptorSet(renderData.InputAttachmentDescriptorSet);
