@@ -273,7 +273,7 @@ void raycast(in Ray ray, inout Result result){
 
 void raycastChunk(in Ray ray, int tree, inout Result result){
 
-    vec3 treeMin = vec3(trees[tree].minX, trees[tree].minY, trees[tree].minZ) * Dimensions;
+    vec3 treeMin = vec3(trees[nonuniformEXT(tree)].minX, trees[nonuniformEXT(tree)].minY, trees[nonuniformEXT(tree)].minZ) * Dimensions;
     vec3 treeMax = treeMin + Dimensions;
 
     int childIndexModifier = 0;
