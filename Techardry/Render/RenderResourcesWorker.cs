@@ -189,7 +189,7 @@ public class RenderResourcesWorker
                 continue;
             }
 
-            var descriptorSet = AllocateDescriptorSet((uint)_chunkBuffers.Count + 2);
+            var descriptorSet = AllocateDescriptorSet((uint)_chunkBuffers.Count);
 
             WriteMasterBvhDescriptors(masterBvhBuffer, bvhIndexBuffer, descriptorSet);
             WriteOctreeDescriptors(descriptorSet);
@@ -574,7 +574,7 @@ public class RenderResourcesWorker
 
     private unsafe (DescriptorPool pool, uint size) GetDescriptorPool(uint bufferCount)
     {
-        var power = uint.Log2(bufferCount);
+        var power = uint.Log2(bufferCount) + 1;
         var alignedCount = 1u << (int)power;
         
         var poolIndex = _availableDescriptorPools.FindIndex(x => x.size >= alignedCount);
@@ -604,7 +604,7 @@ public class RenderResourcesWorker
     
     private unsafe DescriptorSet AllocateDescriptorSet(uint bufferCount)
     {
-        var (pool, size) = GetDescriptorPool(bufferCount);
+        var (pool, size) = GetDescriptorPool(bufferCount + 2);
 
         var layout = RenderObjects.RenderDescriptorLayout;
         
