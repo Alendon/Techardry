@@ -102,6 +102,8 @@ public class RenderResourcesWorker
 
         while (_isRunning)
         {
+            UpdateDescriptorPools();
+            
             bool structureChanged = false;
 
             //The returned keys are a copy of the actual keys, so we can safely iterate over them
@@ -187,14 +189,15 @@ public class RenderResourcesWorker
                 continue;
             }
 
-            CreateDescriptorSets(masterBvhBuffer, bvhIndexBuffer, out DescriptorSet octreeDescriptorSet,
-                out DescriptorSet masterBvhDescriptorSet);
+            var descriptorSet = AllocateDescriptorSet((uint)_chunkBuffers.Count + 2);
+
+            WriteMasterBvhDescriptors(masterBvhBuffer, bvhIndexBuffer, descriptorSet);
+            WriteOctreeDescriptors(descriptorSet);
 
             var renderData = new RenderData()
             {
                 UsedBuffers = new List<BufferWrapper>(_chunkBuffers),
-                OctreeDescriptor = new DescriptorWrapper(octreeDescriptorSet),
-                MasterBvhDescriptor = new DescriptorWrapper(masterBvhDescriptorSet),
+                RenderDescriptor = new RenderDescriptorWrapper(descriptorSet, this),
                 MasterBvhBuffer = new BufferWrapper(masterBvhBuffer),
                 MasterBvhIndexBuffer = new BufferWrapper(bvhIndexBuffer)
             };
@@ -422,12 +425,11 @@ public class RenderResourcesWorker
             throw new Exception("Chunk positions are not valid");
     }
 
-    internal bool TryGetRenderResources(out DescriptorSet masterBvhDescriptor, out DescriptorSet octreeDescriptors)
+    internal bool TryGetRenderResources(out DescriptorSet renderDescriptorSet)
     {
         _frameRenderDat[VulkanEngine.ImageIndex].RemoveUse();
         
-        masterBvhDescriptor = default;
-        octreeDescriptors = default;
+        renderDescriptorSet = default;
 
         RenderData current;
         var lockHolder = _lock.AcquireReadLock(TimeSpan.FromMilliseconds(5));
@@ -446,27 +448,17 @@ public class RenderResourcesWorker
 
         
 
-        if (current.OctreeDescriptor is null || current.MasterBvhDescriptor is null) return false;
+        if (current.RenderDescriptor is null) return false;
 
 
-        masterBvhDescriptor = current.MasterBvhDescriptor.Set;
-        octreeDescriptors = current.OctreeDescriptor.Set;
+        renderDescriptorSet = current.RenderDescriptor.Set;
         return true;
     }
 
-    internal void CreateDescriptorSets(MemoryBuffer masterBvhBuffer, MemoryBuffer masterBvhIndexBuffer,
-        out DescriptorSet octreeDescriptors, out DescriptorSet masterBvhDescriptor)
-    {
-        CreateOctreeDescriptorSet(out octreeDescriptors);
-        CreateMasterBvhDescriptorSet(masterBvhBuffer, masterBvhIndexBuffer, out masterBvhDescriptor);
-    }
-
-    private unsafe void CreateMasterBvhDescriptorSet(MemoryBuffer masterBvhBuffer,
+    private unsafe void WriteMasterBvhDescriptors(MemoryBuffer masterBvhBuffer,
         MemoryBuffer masterBvhIndexBuffer,
-        out DescriptorSet masterBvhDescriptor)
+        DescriptorSet descriptorSet)
     {
-        masterBvhDescriptor = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.MasterBvh);
-
         var bvhBufferInfo = new DescriptorBufferInfo
         {
             Buffer = masterBvhBuffer.Buffer,
@@ -489,7 +481,7 @@ public class RenderResourcesWorker
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 DstBinding = 0,
-                DstSet = masterBvhDescriptor,
+                DstSet = descriptorSet,
                 PBufferInfo = &bvhBufferInfo
             },
             new WriteDescriptorSet()
@@ -498,7 +490,7 @@ public class RenderResourcesWorker
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 DstBinding = 1,
-                DstSet = masterBvhDescriptor,
+                DstSet = descriptorSet,
                 PBufferInfo = &indexBufferInfo
             }
         });
@@ -506,12 +498,8 @@ public class RenderResourcesWorker
         VulkanEngine.Vk.UpdateDescriptorSets(VulkanEngine.Device, writeDescriptors, 0, null);
     }
 
-    private unsafe void CreateOctreeDescriptorSet(out DescriptorSet octreeDescriptor)
+    private unsafe void WriteOctreeDescriptors(DescriptorSet descriptorSet)
     {
-        octreeDescriptor =
-            DescriptorSetHandler.AllocateVariableDescriptorSet(DescriptorSetIDs.VoxelOctree, (uint)_chunkBuffers.Count);
-
-
         DescriptorBufferInfo[] bufferInfos = new DescriptorBufferInfo[_chunkBuffers.Count];
         WriteDescriptorSet[] writeDescriptorSets = new WriteDescriptorSet[_chunkBuffers.Count];
         Span<DescriptorBufferInfo> bufferInfosSpan = bufferInfos;
@@ -538,8 +526,8 @@ public class RenderResourcesWorker
                 SType = StructureType.WriteDescriptorSet,
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
-                DstBinding = 0,
-                DstSet = octreeDescriptor,
+                DstBinding = 2,
+                DstSet = descriptorSet,
                 DstArrayElement = (uint)currentChunk,
                 PBufferInfo = (DescriptorBufferInfo*)Unsafe.AsPointer(ref bufferInfos[currentChunk])
             };
@@ -551,6 +539,95 @@ public class RenderResourcesWorker
 
         bufferInfoHandle.Free();
         writeDescriptorSetHandle.Free();
+    }
+
+    ConcurrentQueue<DescriptorSet> _returnedDescriptorSets = new();
+    private Dictionary<DescriptorSet, (DescriptorPool pool, uint size)> _usedDescriptorPools = new();
+    private List<(DescriptorPool pool, uint size)> _availableDescriptorPools = new();
+
+    private unsafe void UpdateDescriptorPools()
+    {
+        while (_returnedDescriptorSets.TryDequeue(out var set))
+        {
+            if (!_usedDescriptorPools.Remove(set, out var poolInfo))
+            {
+                Logger.WriteLog("Returned descriptor set was not found in used pools", LogImportance.Error,
+                    "RenderResourcesWorker");
+                continue;
+            }
+            
+            VulkanUtils.Assert(VulkanEngine.Vk.ResetDescriptorPool(VulkanEngine.Device, poolInfo.pool, 0));
+            _availableDescriptorPools.Add(poolInfo);
+        }
+
+        const int maxAvailablePools = 4;
+        if (_availableDescriptorPools.Count <= maxAvailablePools) return;
+
+        for (var i = 0; i < _availableDescriptorPools.Count - maxAvailablePools; i++)
+        {
+            var (pool, _) = _availableDescriptorPools[i];
+            VulkanEngine.Vk.DestroyDescriptorPool(VulkanEngine.Device, pool, VulkanEngine.AllocationCallback);
+        }
+        
+        _availableDescriptorPools.RemoveRange(0, _availableDescriptorPools.Count - maxAvailablePools);
+    }
+
+    private unsafe (DescriptorPool pool, uint size) GetDescriptorPool(uint bufferCount)
+    {
+        var power = uint.Log2(bufferCount);
+        var alignedCount = 1u << (int)power;
+        
+        var poolIndex = _availableDescriptorPools.FindIndex(x => x.size >= alignedCount);
+        if (poolIndex != -1)
+        {
+            var poolInfo = _availableDescriptorPools[poolIndex];
+            _availableDescriptorPools.RemoveAt(poolIndex);
+            return poolInfo;
+        }
+        DescriptorPoolSize bufferSize = new DescriptorPoolSize
+        {
+            DescriptorCount = alignedCount,
+            Type = DescriptorType.StorageBuffer
+        };
+
+        var poolCreateInfo = new DescriptorPoolCreateInfo()
+        {
+            SType = StructureType.DescriptorPoolCreateInfo,
+            MaxSets = 1,
+            PoolSizeCount = 1,
+            PPoolSizes = &bufferSize
+        };
+        
+        VulkanUtils.Assert(VulkanEngine.Vk.CreateDescriptorPool(VulkanEngine.Device, poolCreateInfo, VulkanEngine.AllocationCallback, out var pool));
+        return (pool, alignedCount);
+    }
+    
+    private unsafe DescriptorSet AllocateDescriptorSet(uint bufferCount)
+    {
+        var (pool, size) = GetDescriptorPool(bufferCount);
+
+        var layout = RenderObjects.RenderDescriptorLayout;
+        
+        var variableDescriptorCountAllocateInfo = new DescriptorSetVariableDescriptorCountAllocateInfo
+        {
+            SType = StructureType.DescriptorSetVariableDescriptorCountAllocateInfo,
+            DescriptorSetCount = 1,
+            PDescriptorCounts = &bufferCount
+        };
+        
+        var descriptorSetAllocateInfo = new DescriptorSetAllocateInfo
+        {
+            SType = StructureType.DescriptorSetAllocateInfo,
+            DescriptorPool = pool,
+            DescriptorSetCount = 1,
+            PSetLayouts = &layout,
+            PNext = &variableDescriptorCountAllocateInfo
+        };
+        
+        VulkanUtils.Assert(VulkanEngine.Vk.AllocateDescriptorSets(VulkanEngine.Device, descriptorSetAllocateInfo, out var descriptorSet));
+        
+        _usedDescriptorPools.Add(descriptorSet, (pool, size));
+        return descriptorSet;
     }
 
     private void DisposeBuffers(Span<MemoryBuffer> stagingBufferSpan)
@@ -582,9 +659,8 @@ public class RenderResourcesWorker
         public required List<BufferWrapper> UsedBuffers { get; init; }
         public BufferWrapper? MasterBvhBuffer { get; init; }
         public BufferWrapper? MasterBvhIndexBuffer { get; init; }
-
-        public DescriptorWrapper? OctreeDescriptor { get; init; }
-        public DescriptorWrapper? MasterBvhDescriptor { get; init; }
+        
+        public RenderDescriptorWrapper? RenderDescriptor { get; init; }
 
 
         public void AddUse()
@@ -596,8 +672,7 @@ public class RenderResourcesWorker
 
             MasterBvhBuffer?.AddUse();
             MasterBvhIndexBuffer?.AddUse();
-            OctreeDescriptor?.AddUse();
-            MasterBvhDescriptor?.AddUse();
+            RenderDescriptor?.AddUse();
         }
 
         public void RemoveUse()
@@ -609,8 +684,7 @@ public class RenderResourcesWorker
 
             MasterBvhBuffer?.RemoveUse();
             MasterBvhIndexBuffer?.RemoveUse();
-            OctreeDescriptor?.RemoveUse();
-            MasterBvhDescriptor?.RemoveUse();
+            RenderDescriptor?.RemoveUse();
         }
     }
 
@@ -640,15 +714,18 @@ public class RenderResourcesWorker
         }
     }
 
-    private class DescriptorWrapper
+    private class RenderDescriptorWrapper
     {
         private int _useCount;
         public readonly DescriptorSet Set;
+        private RenderResourcesWorker _worker;
 
-        public DescriptorWrapper(DescriptorSet set)
+        public RenderDescriptorWrapper(DescriptorSet set, RenderResourcesWorker parentWorker)
         {
             Set = set;
             _useCount = 1;
+            
+            _worker = parentWorker;
         }
 
         public void AddUse()
@@ -660,7 +737,7 @@ public class RenderResourcesWorker
         {
             if (Interlocked.Decrement(ref _useCount) == 0)
             {
-                DescriptorSetHandler.FreeDescriptorSet(Set);
+                _worker._returnedDescriptorSets.Enqueue(Set);
             }
         }
     }

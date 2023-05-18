@@ -16,6 +16,7 @@ using Techardry.Components.Client;
 using Techardry.Entities;
 using Techardry.Identifications;
 using Techardry.Registries;
+using Techardry.Voxels;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
 using TextureIDs = Techardry.Identifications.TextureIDs;
 
@@ -57,6 +58,9 @@ public partial class TechardryMod : IMod
     public void Load()
     {
         Logger.WriteLog("Loading TechardryMod", LogImportance.Info, "Techardry");
+        
+        RenderObjects.CreateRenderDescriptorLayout();
+        
         InternalRegister();
 
         PlayerHandler.OnPlayerReady += (player, serverSide) =>
@@ -200,6 +204,7 @@ public partial class TechardryMod : IMod
     public void Unload()
     {
         InternalUnregister();
+        RenderObjects.DestroyRenderDescriptorLayout();
     }
 
     public static TechardryMod? Instance { get; private set; }

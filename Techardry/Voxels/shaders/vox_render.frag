@@ -126,7 +126,7 @@ layout(std430, set = 3, binding = 1) readonly buffer MasterBvhIndices
     int indices[];
 } masterBvhIndices;
 
-layout(std430, set = 4, binding = 0) readonly buffer Octree
+layout(std430, set = 3, binding = 2) readonly buffer Octree
 {
     uint nodeCount;
     int minX;

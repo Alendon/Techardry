@@ -1,6 +1,8 @@
 ﻿using System.Numerics;
+using System.Runtime.CompilerServices;
 using MintyCore.Registries;
 using MintyCore.Render;
+using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using DescriptorSetIDs = MintyCore.Identifications.DescriptorSetIDs;
 using RenderPassIDs = Techardry.Identifications.RenderPassIDs;
@@ -15,53 +17,6 @@ public static class RenderObjects
 
     [RegisterShader("voxel_vert", "voxels/vox_render_vert.spv")]
     public static ShaderInfo VoxelVert => new(ShaderStageFlags.VertexBit);
-
-    [RegisterDescriptorSet("master_bvh")]
-    public static DescriptorSetInfo MasterBvh => new()
-    {
-        Bindings = new[]
-        {
-            //Buffer containing the bvh nodes
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 0,
-                DescriptorCount = 1,
-                DescriptorType = DescriptorType.StorageBuffer,
-                StageFlags = ShaderStageFlags.FragmentBit
-            },
-            //Buffer containing the node indices
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 1,
-                DescriptorCount = 1,
-                DescriptorType = DescriptorType.StorageBuffer,
-                StageFlags = ShaderStageFlags.FragmentBit
-            }
-        },
-        DescriptorSetsPerPool = 16
-    };
-
-    [RegisterDescriptorSet("voxel_octree")]
-    public static DescriptorSetInfo VoxelOctreeNodes => new()
-    {
-        Bindings = new[]
-        {
-            new DescriptorSetLayoutBinding
-            {
-                Binding = 0,
-                DescriptorCount = 100_000,
-                DescriptorType = DescriptorType.StorageBuffer,
-                StageFlags = ShaderStageFlags.FragmentBit
-            }
-        },
-        BindingFlags = new[]
-        {
-            DescriptorBindingFlags.PartiallyBoundBit |
-            DescriptorBindingFlags.VariableDescriptorCountBit
-        },
-        CreateFlags = DescriptorSetLayoutCreateFlags.UpdateAfterBindPoolBit,
-        DescriptorSetsPerPool = 16
-    };
 
     [RegisterDescriptorSet("camera_data")]
     public static DescriptorSetInfo CameraData => new()
@@ -234,7 +189,7 @@ public static class RenderObjects
                         Offset = new Offset2D(0, 0)
                     }
                 },
-                Shaders = new[] {ShaderIDs.VoxelFrag, ShaderIDs.VoxelVert},
+                Shaders = new[] { ShaderIDs.VoxelFrag, ShaderIDs.VoxelVert },
                 Topology = PrimitiveTopology.TriangleList,
                 Viewports = new[]
                 {
@@ -250,10 +205,9 @@ public static class RenderObjects
                     Identifications.DescriptorSetIDs.CameraData,
                     DescriptorSetIDs.SampledTexture,
                     Identifications.DescriptorSetIDs.InputAttachment,
-                    Identifications.DescriptorSetIDs.MasterBvh,
-                    Identifications.DescriptorSetIDs.VoxelOctree,
+                    Identifications.DescriptorSetIDs.Render
                 },
-                DynamicStates = new[] {DynamicState.Scissor, DynamicState.Viewport},
+                DynamicStates = new[] { DynamicState.Scissor, DynamicState.Viewport },
                 RasterizationInfo =
                 {
                     CullMode = CullModeFlags.None,
@@ -315,7 +269,7 @@ public static class RenderObjects
                 new VertexInputBindingDescription
                 {
                     Binding = 1,
-                    Stride = (uint) sizeof(Matrix4x4),
+                    Stride = (uint)sizeof(Matrix4x4),
                     InputRate = VertexInputRate.Instance
                 }
             };
@@ -329,29 +283,29 @@ public static class RenderObjects
             {
                 Binding = 1,
                 Format = Format.R32G32B32A32Sfloat,
-                Location = (uint) attributes.Length,
+                Location = (uint)attributes.Length,
                 Offset = 0
             };
             vertexInputAttributes[attributes.Length + 1] = new VertexInputAttributeDescription
             {
                 Binding = 1,
                 Format = Format.R32G32B32A32Sfloat,
-                Location = (uint) attributes.Length + 1,
-                Offset = (uint) sizeof(Vector4)
+                Location = (uint)attributes.Length + 1,
+                Offset = (uint)sizeof(Vector4)
             };
             vertexInputAttributes[attributes.Length + 2] = new VertexInputAttributeDescription
             {
                 Binding = 1,
                 Format = Format.R32G32B32A32Sfloat,
-                Location = (uint) attributes.Length + 2,
-                Offset = (uint) sizeof(Vector4) * 2
+                Location = (uint)attributes.Length + 2,
+                Offset = (uint)sizeof(Vector4) * 2
             };
             vertexInputAttributes[attributes.Length + 3] = new VertexInputAttributeDescription
             {
                 Binding = 1,
                 Format = Format.R32G32B32A32Sfloat,
-                Location = (uint) attributes.Length + 3,
-                Offset = (uint) sizeof(Vector4) * 3
+                Location = (uint)attributes.Length + 3,
+                Offset = (uint)sizeof(Vector4) * 3
             };
 
             var colorBlendAttachment = new[]
@@ -384,8 +338,8 @@ public static class RenderObjects
                     ShaderIDs.TriangleVert,
                     ShaderIDs.TextureFrag
                 },
-                Scissors = new[] {scissor},
-                Viewports = new[] {viewport},
+                Scissors = new[] { scissor },
+                Viewports = new[] { viewport },
                 DescriptorSets = new[]
                 {
                     Identifications.DescriptorSetIDs.CameraBuffer,
@@ -431,5 +385,78 @@ public static class RenderObjects
             };
             return pipelineDescription;
         }
+    }
+
+    [RegisterExternalDescriptorSet("render")]
+    public static ExternalDescriptorSetInfo ExternalRenderDescriptorRegisterInfo => new()
+    {
+        Layout = RenderDescriptorLayout
+    };
+
+    public static DescriptorSetLayout RenderDescriptorLayout { get; private set; }
+
+    public static unsafe void CreateRenderDescriptorLayout()
+    {
+        Logger.AssertAndThrow(RenderDescriptorLayout.Handle == default, "Render descriptor layout already created",
+            "RenderObjects");
+
+        var bindingFlags = stackalloc DescriptorBindingFlags[]
+        {
+            DescriptorBindingFlags.None,
+            DescriptorBindingFlags.None,
+            DescriptorBindingFlags.VariableDescriptorCountBit | DescriptorBindingFlags.PartiallyBoundBit
+        };
+        DescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsCreateInfo = new()
+        {
+            SType = StructureType.DescriptorSetLayoutBindingFlagsCreateInfo,
+            BindingCount = 3,
+            PBindingFlags = bindingFlags
+        };
+
+        var descriptorBindings = stackalloc DescriptorSetLayoutBinding[]
+        {
+            new DescriptorSetLayoutBinding()
+            {
+                Binding = 0,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageBuffer,
+                StageFlags = ShaderStageFlags.FragmentBit
+            },
+            new DescriptorSetLayoutBinding()
+            {
+                Binding = 1,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageBuffer,
+                StageFlags = ShaderStageFlags.FragmentBit
+            },
+            new DescriptorSetLayoutBinding()
+            {
+                Binding = 2,
+                DescriptorCount = 1_000_000,
+                DescriptorType = DescriptorType.StorageBuffer,
+                StageFlags = ShaderStageFlags.FragmentBit
+            }
+        };
+
+        DescriptorSetLayoutCreateInfo createInfo = new()
+        {
+            SType = StructureType.DescriptorSetLayoutCreateInfo,
+            PNext = &bindingFlagsCreateInfo,
+            BindingCount = 3,
+            PBindings = descriptorBindings
+        };
+
+        VulkanUtils.Assert(VulkanEngine.Vk.CreateDescriptorSetLayout(VulkanEngine.Device, createInfo,
+            VulkanEngine.AllocationCallback, out var renderDescriptorLayout));
+        RenderDescriptorLayout = renderDescriptorLayout;
+    }
+
+    public static unsafe void DestroyRenderDescriptorLayout()
+    {
+        if (RenderDescriptorLayout.Handle == default) return;
+        
+        VulkanEngine.Vk.DestroyDescriptorSetLayout(VulkanEngine.Device, RenderDescriptorLayout,
+            VulkanEngine.AllocationCallback);
+        RenderDescriptorLayout = default;
     }
 }
