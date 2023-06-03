@@ -1,6 +1,5 @@
 ﻿using System.Numerics;
 using JetBrains.Annotations;
-using MintyCore.UI;
 using MintyCore.Utils;
 using SixLabors.Fonts;
 using SixLabors.ImageSharp;

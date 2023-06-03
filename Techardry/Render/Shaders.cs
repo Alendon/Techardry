@@ -1,7 +1,7 @@
 ﻿using MintyCore.Registries;
 using Silk.NET.Vulkan;
 
-namespace Techardry.Registries;
+namespace Techardry.Render;
 
 public class Shaders
 {

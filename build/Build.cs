@@ -103,7 +103,7 @@ class Build : NukeBuild
 
                 foreach (var metadataResource in packageMetadataResources)
                 {
-                    var packageMetadata = metadataResource.GetMetadataAsync(packageName, false, true, new SourceCacheContext(), NullLogger.Instance,
+                    var packageMetadata = metadataResource.GetMetadataAsync(packageName, true, true, new SourceCacheContext(), NullLogger.Instance,
                         default);
                     packageMetadata.Wait();
 

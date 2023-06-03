@@ -1,5 +1,4 @@
-﻿using MintyCore.UI;
-using Techardry.Identifications;
+﻿using Techardry.Identifications;
 
 namespace Techardry.UI;
 

@@ -1,5 +1,4 @@
-﻿using MintyCore.UI;
-using MintyCore.Utils;
+﻿using MintyCore.Utils;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 

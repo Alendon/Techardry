@@ -2,7 +2,6 @@
 using MintyCore.ECS;
 using MintyCore.Modding;
 using MintyCore.Render;
-using MintyCore.UI;
 using MintyCore.Utils;
 using Silk.NET.Maths;
 using SixLabors.Fonts;
@@ -11,6 +10,7 @@ using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using Techardry.Identifications;
+using Techardry.Render;
 
 namespace Techardry.UI;
 
@@ -106,8 +106,7 @@ public class MainMenu : ElementContainer
 
     private void OnPlayLocal()
     {
-        Engine.MainMenu = null;
-        MainUiRenderer.SetMainUiContext(null);
+        TechardryMod.MainUiRenderer?.SetMainUiContext(null);
 
         Engine.SetGameType(GameType.Local);
 
@@ -127,8 +126,7 @@ public class MainMenu : ElementContainer
 
     private void OnConnectToServer()
     {
-        Engine.MainMenu = null;
-        MainUiRenderer.SetMainUiContext(null);
+        TechardryMod.MainUiRenderer?.SetMainUiContext(null);
 
         if (_playerIdValue == 0)
         {
@@ -162,8 +160,7 @@ public class MainMenu : ElementContainer
 
     private void OnCreateServer()
     {
-        Engine.MainMenu = null;
-        MainUiRenderer.SetMainUiContext(null);
+        TechardryMod.MainUiRenderer?.SetMainUiContext(null);
 
         Engine.SetGameType(GameType.Server);
 

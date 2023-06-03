@@ -1,5 +1,6 @@
 ﻿using System.IO.Compression;
 using System.Numerics;
+using FontStashSharp;
 using JetBrains.Annotations;
 using MintyCore;
 using MintyCore.Components.Common;
@@ -8,7 +9,6 @@ using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
 using MintyCore.Network;
 using MintyCore.Render;
-using MintyCore.UI;
 using MintyCore.Utils;
 using MintyCore.Utils.Maths;
 using Silk.NET.Vulkan;
@@ -16,6 +16,8 @@ using Techardry.Components.Client;
 using Techardry.Entities;
 using Techardry.Identifications;
 using Techardry.Registries;
+using Techardry.Render;
+using Techardry.UI;
 using Techardry.Voxels;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
 using TextureIDs = Techardry.Identifications.TextureIDs;
@@ -28,8 +30,11 @@ public partial class TechardryMod : IMod
 {
     public ushort ModId { get; set; }
     public string ModName => "Techardry";
-    
+
     public int ServerRenderDistance { get; set; } = 8;
+    
+    public static UiRenderer? MainUiRenderer { get; private set; }
+    public static FontSystem? FontSystem { get; private set; }
 
     public void Dispose()
     {
@@ -50,7 +55,7 @@ public partial class TechardryMod : IMod
             ShaderStorageBufferArrayNonUniformIndexing = true,
             DescriptorBindingVariableDescriptorCount = true,
         });
-        
+
         Engine.RunMainMenu = RunMainMenu;
         Engine.RunHeadless = RunHeadless;
     }
@@ -58,9 +63,9 @@ public partial class TechardryMod : IMod
     public void Load()
     {
         Logger.WriteLog("Loading TechardryMod", LogImportance.Info, "Techardry");
-        
+
         RenderObjects.CreateRenderDescriptorLayout();
-        
+
         InternalRegister();
 
         PlayerHandler.OnPlayerReady += (player, serverSide) =>
@@ -83,18 +88,19 @@ public partial class TechardryMod : IMod
     private static void RunMainMenu()
     {
         Engine.Timer.Reset();
+        Element? mainMenu = null;
         while (Engine.Window is not null && Engine.Window.Exists)
         {
             Engine.Timer.Tick();
 
             Engine.Window.DoEvents();
 
-            if (Engine.MainMenu is null)
+            if (mainMenu is null)
             {
-                Engine.MainMenu = UiHandler.GetRootElement(UiIDs.MainMenu);
-                Engine.MainMenu.Initialize();
-                Engine.MainMenu.IsActive = true;
-                MainUiRenderer.SetMainUiContext(Engine.MainMenu);
+                mainMenu = UiHandler.GetRootElement(UiIDs.MainMenu);
+                mainMenu.Initialize();
+                mainMenu.IsActive = true;
+                MainUiRenderer?.SetMainUiContext(mainMenu);
             }
 
             if (Engine.Timer.GameUpdate(out var deltaTime))
@@ -105,13 +111,12 @@ public partial class TechardryMod : IMod
 
             if (!Engine.Timer.RenderUpdate(out _) || !VulkanEngine.PrepareDraw()) continue;
 
-            MainUiRenderer.DrawMainUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
+            MainUiRenderer?.DrawMainUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
 
             VulkanEngine.EndDraw();
         }
 
-        MainUiRenderer.SetMainUiContext(null);
-        Engine.MainMenu = null;
+        MainUiRenderer?.SetMainUiContext(null);
     }
 
     private static void RunHeadless()
@@ -143,14 +148,14 @@ public partial class TechardryMod : IMod
 
         Engine.CleanupGame();
     }
-    
+
     /// <summary>
     ///     The main game loop
     /// </summary>
     public static void GameLoop()
     {
         //If this is a client game (client or local) wait until the player is connected
-        while (MathHelper.IsBitSet((int) Engine.GameType, (int) GameType.Client) &&
+        while (MathHelper.IsBitSet((int)Engine.GameType, (int)GameType.Client) &&
                PlayerHandler.LocalPlayerGameId == Constants.InvalidId)
             NetworkHandler.Update();
 
@@ -174,7 +179,7 @@ public partial class TechardryMod : IMod
 
             if (drawingEnable)
             {
-                MainUiRenderer.DrawMainUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
+                MainUiRenderer?.DrawMainUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
                 VulkanEngine.EndDraw();
             }
 
@@ -187,12 +192,19 @@ public partial class TechardryMod : IMod
             if (simulationEnable)
                 Engine.Tick++;
         }
+        
+        MainUiRenderer?.SetMainUiContext(null);
 
         Engine.CleanupGame();
     }
 
     public void PostLoad()
     {
+        if (!Engine.HeadlessModeActive)
+        {
+            MainUiRenderer = new UiRenderer();
+            MainUiRenderer.SetupMainUiRendering();
+        }
     }
 
     [RegisterTextureAtlas("block_texture")]
@@ -203,6 +215,12 @@ public partial class TechardryMod : IMod
 
     public void Unload()
     {
+        if (!Engine.HeadlessModeActive)
+        {
+            VulkanEngine.WaitForAll();
+            MainUiRenderer?.DestroyMainUiRendering();
+        }
+        
         InternalUnregister();
         RenderObjects.DestroyRenderDescriptorLayout();
     }

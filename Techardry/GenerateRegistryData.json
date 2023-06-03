@@ -16,7 +16,7 @@
     ]
   },
   {
-    "FullRegistryClassName": "MintyCore.Registries.ImageRegistry",
+    "FullRegistryClassName": "Techardry.Registries.ImageRegistry",
     "RegisterMethodName": "RegisterImage",
     "RegistryId": "image",
     "RegistryPhase": 2,
