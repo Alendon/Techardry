@@ -13,16 +13,23 @@ namespace Techardry.UI;
 [PublicAPI]
 public abstract class Element : IDisposable
 {
+    private bool _dirty;
+
     /// <summary />
     protected Element(RectangleF layout)
     {
         Layout = layout;
     }
 
+
     /// <summary>
-    ///     Did the Element changed last frame
+    ///     
     /// </summary>
-    public bool HasChanged { get; protected set; }
+    public bool Dirty
+    {
+        get => _dirty || GetChildElements().Any(element => element.Dirty);
+        protected set => _dirty = value;
+    }
 
     /// <summary>
     ///     The parent of this Element
@@ -40,11 +47,6 @@ public abstract class Element : IDisposable
     ///     <remarks>The (0,0) coordinate is the upper left corner</remarks>
     /// </summary>
     public RectangleF Layout { get; }
-
-    /// <summary>
-    ///     The image representing this Ui Element
-    /// </summary>
-    public abstract Image<Rgba32>? Image { get; }
 
     /// <summary>
     ///     Whether or not the cursor is hovering over the element
@@ -78,17 +80,6 @@ public abstract class Element : IDisposable
     public virtual void Dispose()
     {
         GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    ///     helper method to copy a image to another
-    /// </summary>
-    /// <param name="destination">Destination image to copy to</param>
-    /// <param name="source">Source image to copy from</param>
-    /// <param name="location">Location on the destination to draw to</param>
-    protected static void CopyImage(Image<Rgba32> destination, Image<Rgba32> source, Point location)
-    {
-        destination.Mutate(context => context.DrawImage(source, location, 1f));
     }
 
     /// <summary>
