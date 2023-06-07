@@ -100,7 +100,7 @@ public partial class TechardryMod : IMod
                 mainMenu = UiHandler.GetRootElement(UiIDs.MainMenu);
                 mainMenu.Initialize();
                 mainMenu.IsActive = true;
-                MainUiRenderer?.SetMainUiContext(mainMenu);
+                MainUiRenderer?.SetUiContext(mainMenu);
             }
 
             if (Engine.Timer.GameUpdate(out var deltaTime))
@@ -111,12 +111,12 @@ public partial class TechardryMod : IMod
 
             if (!Engine.Timer.RenderUpdate(out _) || !VulkanEngine.PrepareDraw()) continue;
 
-            MainUiRenderer?.DrawMainUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
+            MainUiRenderer?.DrawUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
 
             VulkanEngine.EndDraw();
         }
 
-        MainUiRenderer?.SetMainUiContext(null);
+        MainUiRenderer?.SetUiContext(null);
     }
 
     private static void RunHeadless()
@@ -179,7 +179,7 @@ public partial class TechardryMod : IMod
 
             if (drawingEnable)
             {
-                MainUiRenderer?.DrawMainUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
+                MainUiRenderer?.DrawUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
                 VulkanEngine.EndDraw();
             }
 
@@ -193,7 +193,7 @@ public partial class TechardryMod : IMod
                 Engine.Tick++;
         }
         
-        MainUiRenderer?.SetMainUiContext(null);
+        MainUiRenderer?.SetUiContext(null);
 
         Engine.CleanupGame();
     }

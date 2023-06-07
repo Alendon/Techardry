@@ -33,15 +33,14 @@ public unsafe class UiRenderer : IFontStashRenderer2
     }
 
     /// <summary>
-    ///     Set the main ui element
+    ///     Set the root ui element
     /// </summary>
-    /// <param name="mainUiElement"></param>
-    public void SetMainUiContext(Element? mainUiElement)
+    public void SetUiContext(Element? rootUiElement)
     {
-        _rootElement = mainUiElement;
+        _rootElement = rootUiElement;
     }
 
-    public void DrawMainUi(Material uiMaterial)
+    public void DrawUi(Material uiMaterial)
     {
         if (_rootElement is null) return;
         VulkanEngine.SetActiveRenderPass(RenderPassHandler.GetRenderPass(RenderPassIDs.Main),

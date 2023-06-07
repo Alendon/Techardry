@@ -1,6 +1,10 @@
 ﻿using System.Numerics;
+using FontStashSharp;
+using FontStashSharp.Interfaces;
 using JetBrains.Annotations;
 using MintyCore.Utils;
+using Silk.NET.Vulkan;
+using SixLabors.Fonts;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -13,7 +17,7 @@ namespace Techardry.UI;
 [PublicAPI]
 public abstract class Element : IDisposable
 {
-    private bool _dirty;
+    private bool _redraw;
 
     /// <summary />
     protected Element(RectangleF layout)
@@ -23,13 +27,44 @@ public abstract class Element : IDisposable
 
 
     /// <summary>
-    ///     
+    ///     Indicator if the element needs to be redrawn
     /// </summary>
-    public bool Dirty
+    public bool Redraw
     {
-        get => _dirty || GetChildElements().Any(element => element.Dirty);
-        protected set => _dirty = value;
+        get => _redraw || GetChildElements().Any(element => element.Redraw);
+        protected set => _redraw = value;
     }
+
+    public virtual void Draw(CommandBuffer commandBuffer)
+    {
+        InternalDraw(commandBuffer);
+        Redraw = false;
+        
+        foreach (var element in GetChildElements())
+        {
+            element.Draw(commandBuffer);
+        }
+    }
+
+    public abstract void InternalDraw(CommandBuffer commandBuffer);
+
+    public virtual void DrawString(string text, Identification font, CommandBuffer commandBuffer, Vector2 position,
+        FSColor color, Vector2? scale = null, float rotation = 0f, Vector2 origin = default, float layerDepth = 0f,
+        float characterSpacing = 0f, float lineSpacing = 0f, TextStyle textStyle = TextStyle.None,
+        FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0)
+    {
+        /*SpriteFontBase fotn = FontSystem.GetFont(font);
+        FontSystem a;
+        IFontStashRenderer2 renderer2 = FontSystem.GetRenderer2(font);
+        renderer2.UseCommandBuffer(commandBuffer);
+        
+        fotn.DrawText(renderer2, text, position, color, scale, rotation, origin, layerDepth, characterSpacing,
+            lineSpacing, textStyle, effect, effectAmount);*/
+        
+        Console.WriteLine("Oh no, drawing strings on ui elements is not implemented yet");
+    }
+    
+    public virtual bool HasChanged { get; protected set; }
 
     /// <summary>
     ///     The parent of this Element

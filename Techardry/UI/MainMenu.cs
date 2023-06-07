@@ -106,7 +106,7 @@ public class MainMenu : ElementContainer
 
     private void OnPlayLocal()
     {
-        TechardryMod.MainUiRenderer?.SetMainUiContext(null);
+        TechardryMod.MainUiRenderer?.SetUiContext(null);
 
         Engine.SetGameType(GameType.Local);
 
@@ -126,7 +126,7 @@ public class MainMenu : ElementContainer
 
     private void OnConnectToServer()
     {
-        TechardryMod.MainUiRenderer?.SetMainUiContext(null);
+        TechardryMod.MainUiRenderer?.SetUiContext(null);
 
         if (_playerIdValue == 0)
         {
@@ -160,7 +160,7 @@ public class MainMenu : ElementContainer
 
     private void OnCreateServer()
     {
-        TechardryMod.MainUiRenderer?.SetMainUiContext(null);
+        TechardryMod.MainUiRenderer?.SetUiContext(null);
 
         Engine.SetGameType(GameType.Server);
 
