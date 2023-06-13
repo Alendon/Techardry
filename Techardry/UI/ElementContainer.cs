@@ -1,6 +1,7 @@
-﻿using MintyCore.Utils;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+﻿using System.Drawing;
+using JetBrains.Annotations;
+using MintyCore.Utils;
+using Silk.NET.Vulkan;
 
 namespace Techardry.UI;
 
@@ -10,9 +11,6 @@ namespace Techardry.UI;
 public class ElementContainer : Element
 {
     private readonly List<Element> _containingElements = new();
-
-    /// <summary />
-    protected Image<Rgba32>? CombinedImage;
 
     /// <summary>
     ///     Constructor
@@ -24,37 +22,29 @@ public class ElementContainer : Element
     }
 
     /// <inheritdoc />
-    public override Image<Rgba32>? Image
-    {
-        get
-        {
-            if (CombinedImage is null) return null;
-
-            foreach (var element in _containingElements)
-            {
-                if (element.Image is null) continue;
-
-                CopyImage(CombinedImage, element.Image,
-                    new Point((int) (PixelSize.Width * element.Layout.X), (int) (PixelSize.Height * element.Layout.Y)));
-            }
-
-            return CombinedImage;
-        }
-    }
-
-    /// <inheritdoc />
     public override void Initialize()
     {
-        CombinedImage = new Image<Rgba32>((int) PixelSize.Width, (int) PixelSize.Height);
     }
 
-    /// <inheritdoc />
-    public override void Resize()
+    private bool _redraw = true;
+    
+    /*public override bool Redraw
     {
-        CombinedImage?.Dispose();
-        if (PixelSize.Width == 0 || PixelSize.Height == 0) return;
-        CombinedImage = new Image<Rgba32>((int) PixelSize.Width, (int) PixelSize.Height);
-        foreach (var element in _containingElements) element.Resize();
+        get => _redraw || GetChildElements().Any(element => element.Redraw);
+        protected set => _redraw = value;
+    }*/
+
+    public override void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport)
+    {
+        foreach (var childElement in GetChildElements())
+        {
+            var childViewport = viewport;
+            childViewport.Width *= childElement.RelativeLayout.Width;
+            childViewport.Height *= childElement.RelativeLayout.Height;
+            childViewport.X += (int)(viewport.Width * childElement.RelativeLayout.X);
+            childViewport.Y += (int)(viewport.Height * childElement.RelativeLayout.Y);
+            childElement.Draw(commandBuffer, resourcesToDispose, scissor, childViewport);
+        }
     }
 
     /// <summary>
@@ -63,16 +53,16 @@ public class ElementContainer : Element
     /// <param name="element">Element to add as a child</param>
     public void AddElement(Element element)
     {
-        if (element.IsRootElement)
+        if (element is RootElement)
             Logger.WriteLog("Root element can not be added as a child", LogImportance.Exception, "UI");
 
-        if (!Layout.Contains(element.Layout))
+        if (!RelativeLayout.Contains(element.RelativeLayout))
         {
             Logger.WriteLog("Element to add is not inside parent bounds", LogImportance.Error, "UI");
             return;
         }
 
-        if (_containingElements.Any(childElement => element.Layout.IntersectsWith(childElement.Layout)))
+        if (_containingElements.Any(childElement => element.RelativeLayout.IntersectsWith(childElement.RelativeLayout)))
         {
             Logger.WriteLog("Element to add overlaps with existing element", LogImportance.Error, "UI");
             return;
@@ -83,19 +73,19 @@ public class ElementContainer : Element
         element.Initialize();
     }
 
-    /// <inheritdoc />
-    public override IEnumerable<Element> GetChildElements()
+    [PublicAPI]
+    public virtual IEnumerable<Element> GetChildElements()
     {
         return _containingElements;
     }
 
-    /// <inheritdoc />
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        GC.SuppressFinalize(this);
-        base.Dispose();
-        foreach (var element in _containingElements) element.Dispose();
-
-        CombinedImage?.Dispose();
+        foreach (var childElement in GetChildElements())
+        {
+            childElement.Dispose();
+        }
+        
+        base.Dispose(disposing);
     }
 }

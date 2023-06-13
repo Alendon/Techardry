@@ -1,9 +1,9 @@
-﻿using System.Numerics;
+﻿using System.Drawing;
+using System.Numerics;
 using JetBrains.Annotations;
 using MintyCore;
 using MintyCore.Utils;
 using Silk.NET.Input;
-using SixLabors.ImageSharp;
 
 namespace Techardry.UI;
 
@@ -14,7 +14,7 @@ namespace Techardry.UI;
 public static class UiHandler
 {
     private static readonly Dictionary<Identification, Identification> _uiRootElementCreators = new();
-    private static readonly Dictionary<Identification, Element> _uiRootElements = new();
+    private static readonly Dictionary<Identification, RootElement> _uiRootElements = new();
     private static readonly Dictionary<Identification, Func<Element>> _elementPrefabs = new();
 
     private static bool _lastLeftMouseState;
@@ -55,7 +55,7 @@ public static class UiHandler
     /// </summary>
     /// <param name="id"></param>
     /// <returns></returns>
-    public static Element GetRootElement(Identification id)
+    public static RootElement GetRootElement(Identification id)
     {
         return _uiRootElements[id];
     }
@@ -80,7 +80,11 @@ public static class UiHandler
 
         try
         {
-            foreach (var element in _uiRootElements.Values) UpdateElement(element);
+            foreach (var rootElement in _uiRootElements.Values)
+            {
+                if (rootElement is not Element element) throw new Exception();
+                UpdateElement(element, rootElement.PixelSize);
+            }
         }
         catch (InvalidOperationException)
         {
@@ -93,15 +97,16 @@ public static class UiHandler
     ///     Update a specific element
     /// </summary>
     /// <param name="element">Element to update</param>
-    /// <param name="absoluteOffset">The absolute offset from (0,0)</param>
     /// <param name="updateChildren">Whether or not the children should be updated</param>
-    public static void UpdateElement(Element element, PointF absoluteOffset = default, bool updateChildren = true)
+    public static void UpdateElement(Element element, Size rootSize, bool updateChildren = true)
     {
         if (!element.IsActive) return;
 
         var cursorPos = GetUiCursorPosition();
 
-        var absoluteLayout = new RectangleF(absoluteOffset, new SizeF(element.PixelSize));
+        var absoluteLayout = new RectangleF(element.RelativeLayout.X * rootSize.Width,
+            element.RelativeLayout.Y * rootSize.Height,
+            rootSize.Width * element.RelativeLayout.Width, rootSize.Height * element.RelativeLayout.Height);
 
         if (absoluteLayout.Contains(cursorPos))
         {
@@ -111,8 +116,10 @@ public static class UiHandler
                 element.OnCursorEnter();
             }
 
-            element.CursorPosition = new Vector2(cursorPos.X - absoluteOffset.X - element.Layout.X,
-                cursorPos.Y - absoluteOffset.Y - element.Layout.Y);
+            //calculate the relative position of the cursor in the element from 0 to 1
+
+            element.CursorPosition = new Vector2((cursorPos.X - absoluteLayout.X) / absoluteLayout.Width,
+                (cursorPos.Y - absoluteLayout.Y) / absoluteLayout.Height);
         }
         else
         {
@@ -130,24 +137,28 @@ public static class UiHandler
         if (InputHandler.ScrollWheelDelta != Vector2.Zero) element.OnScroll(InputHandler.ScrollWheelDelta);
 
         element.Update(Engine.DeltaTime);
-        if (!updateChildren) return;
-        foreach (var childElement in element.GetChildElements())
+        if (!updateChildren || element is not ElementContainer elementContainer) return;
+
+        foreach (var childElement in elementContainer.GetChildElements())
         {
-            var childOffset = absoluteOffset + new PointF(element.PixelSize.Width * childElement.Layout.X,
-                element.PixelSize.Height * childElement.Layout.Y);
-            UpdateElement(childElement, childOffset);
+            UpdateElement(childElement, rootSize);
         }
     }
 
-    private static Vector2 GetUiCursorPosition()
+    private static PointF GetUiCursorPosition()
     {
-        return new Vector2(InputHandler.MousePosition.X,
-            Engine.Window!.Size.Y - InputHandler.MousePosition.Y);
+        return new PointF(InputHandler.MousePosition with { Y = Engine.Window!.Size.Y - InputHandler.MousePosition.Y });
     }
 
     internal static void Clear()
     {
-        foreach (var element in _uiRootElements.Values) element.Dispose();
+        foreach (var rootElement in _uiRootElements.Values)
+        {
+            if (rootElement is Element element)
+            {
+                element.Dispose();
+            }
+        }
 
         _uiRootElementCreators.Clear();
         _uiRootElements.Clear();
@@ -157,7 +168,10 @@ public static class UiHandler
     internal static void RemoveElement(Identification objectId)
     {
         _elementPrefabs.Remove(objectId);
-        if (_uiRootElements.Remove(objectId, out var element)) element.Dispose();
+        if (_uiRootElements.Remove(objectId, out var rootElement) && rootElement is Element element)
+        {
+            element.Dispose();
+        }
         _uiRootElementCreators.Remove(objectId);
     }
 
@@ -166,7 +180,9 @@ public static class UiHandler
         foreach (var (elementId, creatorId) in _uiRootElementCreators)
         {
             if (_uiRootElements.ContainsKey(elementId)) continue;
-            _uiRootElements.Add(elementId, CreateElement(creatorId));
+            var element = CreateElement(creatorId);
+            if (element is not RootElement rootElement) throw new Exception("Root elements must be of type RootElement");
+            _uiRootElements.Add(elementId, rootElement);
         }
     }
 }

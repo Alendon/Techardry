@@ -1,11 +1,8 @@
-﻿using System.Numerics;
+﻿using System.Drawing;
 using JetBrains.Annotations;
 using MintyCore.Utils;
+using Silk.NET.Vulkan;
 using SixLabors.Fonts;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Drawing.Processing;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 
 namespace Techardry.UI;
 
@@ -26,22 +23,22 @@ public class TextBox : Element
     private Font? _font;
     private HorizontalAlignment _horizontalAlignment;
 
-    private Image<Rgba32>? _image;
     private RectangleF _innerLayout;
 
     /// <summary>
     ///     Constructor
     /// </summary>
-    /// <param name="layout">The layout to use for the text box</param>
+    /// <param name="relativeLayout">The layout to use for the text box</param>
     /// <param name="content">The string the text box will show</param>
     /// <param name="fontFamilyId">The font family to use for rendering</param>
     /// <param name="desiredFontSize">The desired size of the font used.</param>
     /// <param name="useBorder">Whether or not a border should be drawn around the element</param>
     /// <param name="horizontalAlignment">Which horizontal alignment the text should use</param>
     // ReSharper disable once NotNullMemberIsNotInitialized
-    public TextBox(RectangleF layout, string content, Identification fontFamilyId,
+    public TextBox(RectangleF relativeLayout, string content, Identification fontFamilyId,
         ushort desiredFontSize = ushort.MaxValue,
-        bool useBorder = true, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Center) : base(layout)
+        bool useBorder = true, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Center) : base(
+        relativeLayout)
     {
         _content = content;
         _fontId = fontFamilyId;
@@ -51,9 +48,6 @@ public class TextBox : Element
         _drawColor = Color.White;
         _fillColor = Color.Transparent;
     }
-
-    /// <inheritdoc />
-    public override Image<Rgba32>? Image => _image;
 
     /// <summary>
     ///     Get or set the content
@@ -110,21 +104,27 @@ public class TextBox : Element
     /// <inheritdoc />
     public override void Initialize()
     {
-        _image = _useBorder
-            ? BorderBuilder.BuildBorderedImage((int)PixelSize.Width, (int)PixelSize.Height, Color.Transparent,
-                BorderHelper.GetDefaultBorderImages(), out _innerLayout)
-            : new Image<Rgba32>((int)PixelSize.Width, (int)PixelSize.Height);
-        if (!_useBorder) _innerLayout = new RectangleF(Vector2.Zero, new SizeF(PixelSize.Width, PixelSize.Height));
-
-        _font = GetFittingFont();
+        //_font = GetFittingFont();
 
         HasChanged = true;
+    }
+
+    public override void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissors, Viewport viewports)
+    {
+        if (_useBorder)
+        {
+            var borderTextures = BorderHelper.GetDefaultBorderImages();
+
+            BorderBuilder.DrawBorder(commandBuffer, 0.05f, _fillColor, borderTextures,
+                resourcesToDispose, scissors, viewports);
+        } 
+        //TODO implement through string drawing
     }
 
     /// <inheritdoc />
     public override void Update(float deltaTime)
     {
-        if (!HasChanged) return;
+        /*if (!HasChanged) return;
 
         if (_image is null) return;
 
@@ -154,20 +154,13 @@ public class TextBox : Element
             {
                 HorizontalAlignment = HorizontalAlignment,
                 VerticalAlignment = VerticalAlignment.Center,
-                Origin = drawPoint
+                Origin = drawPoint.ToVector2()
             };
 
             context.DrawText(textOptions, _content, DrawColor);
         });
 
-        HasChanged = false;
-    }
-
-    /// <inheritdoc />
-    public override void Resize()
-    {
-        _image?.Dispose();
-        Initialize();
+        HasChanged = false;*/
     }
 
     private Font GetFittingFont()
@@ -199,13 +192,5 @@ public class TextBox : Element
 
             return !(size.Width > _innerLayout.Width) && !(size.Height > _innerLayout.Height);
         }
-    }
-
-    /// <inheritdoc />
-    public override void Dispose()
-    {
-        GC.SuppressFinalize(this);
-        base.Dispose();
-        _image?.Dispose();
     }
 }

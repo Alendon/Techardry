@@ -37,8 +37,8 @@ internal struct MintyPoseIntegratorCallback : IPoseIntegratorCallbacks
     public void PrepareForIntegration(float dt)
     {
         _dtGravity = Vector3Wide.Broadcast(_gravity * dt);
-        _dtLinearDamping = new Vector<float>(MathF.Pow(BepuUtilities.MathHelper.Clamp(1 - _linearDamping, 0, 1), dt));
-        _dtAngularDamping = new Vector<float>(MathF.Pow(BepuUtilities.MathHelper.Clamp(1 - _angularDamping, 0, 1), dt));
+        _dtLinearDamping = new Vector<float>(MathF.Pow(MathHelper.Clamp(1 - _linearDamping, 0, 1), dt));
+        _dtAngularDamping = new Vector<float>(MathF.Pow(MathHelper.Clamp(1 - _angularDamping, 0, 1), dt));
     }
 
     public void IntegrateVelocity(Vector<int> bodyIndices, Vector3Wide position, QuaternionWide orientation,

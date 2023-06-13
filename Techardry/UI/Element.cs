@@ -1,13 +1,9 @@
-﻿using System.Numerics;
+﻿using System.Drawing;
+using System.Numerics;
 using FontStashSharp;
-using FontStashSharp.Interfaces;
 using JetBrains.Annotations;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
-using SixLabors.Fonts;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 
 namespace Techardry.UI;
 
@@ -20,33 +16,18 @@ public abstract class Element : IDisposable
     private bool _redraw;
 
     /// <summary />
-    protected Element(RectangleF layout)
+    protected Element(RectangleF relativeLayout)
     {
-        Layout = layout;
+        RelativeLayout = relativeLayout;
     }
 
 
     /// <summary>
     ///     Indicator if the element needs to be redrawn
     /// </summary>
-    public bool Redraw
-    {
-        get => _redraw || GetChildElements().Any(element => element.Redraw);
-        protected set => _redraw = value;
-    }
+    //public virtual bool Redraw { get; protected set; } = true;
 
-    public virtual void Draw(CommandBuffer commandBuffer)
-    {
-        InternalDraw(commandBuffer);
-        Redraw = false;
-        
-        foreach (var element in GetChildElements())
-        {
-            element.Draw(commandBuffer);
-        }
-    }
-
-    public abstract void InternalDraw(CommandBuffer commandBuffer);
+    public abstract void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport);
 
     public virtual void DrawString(string text, Identification font, CommandBuffer commandBuffer, Vector2 position,
         FSColor color, Vector2? scale = null, float rotation = 0f, Vector2 origin = default, float layerDepth = 0f,
@@ -56,14 +37,20 @@ public abstract class Element : IDisposable
         /*SpriteFontBase fotn = FontSystem.GetFont(font);
         FontSystem a;
         IFontStashRenderer2 renderer2 = FontSystem.GetRenderer2(font);
-        renderer2.UseCommandBuffer(commandBuffer);
+        renderer2.prepareDraw(commandBuffer);
         
         fotn.DrawText(renderer2, text, position, color, scale, rotation, origin, layerDepth, characterSpacing,
-            lineSpacing, textStyle, effect, effectAmount);*/
+            lineSpacing, textStyle, effect, effectAmount);
         
+        //This line actually draws the text
+        //the DrawText method only prepares the draw and records the needed draw information
+        //This method combines those information to execute a single draw call
+        renderer2.EndDraw(commandBuffer);    
+            */
+
         Console.WriteLine("Oh no, drawing strings on ui elements is not implemented yet");
     }
-    
+
     public virtual bool HasChanged { get; protected set; }
 
     /// <summary>
@@ -72,16 +59,28 @@ public abstract class Element : IDisposable
     public Element? Parent { get; set; }
 
     /// <summary>
-    ///     Whether or not this element is a root element
-    /// </summary>
-    public bool IsRootElement { get; init; }
-
-    /// <summary>
     ///     The layout off the element relative to the parent
     ///     Values needs to be in Range 0f-1f
-    ///     <remarks>The (0,0) coordinate is the upper left corner</remarks>
+    ///     <remarks>The (0,0) coordinate is the lower left corner</remarks>
     /// </summary>
-    public RectangleF Layout { get; }
+    public RectangleF RelativeLayout { get; }
+
+    /// <summary>
+    ///     The absolute layout of the element
+    ///     Values needs to be in Range 0f-1f
+    ///     <remarks>The (0,0) coordinate is the lower left corner</remarks>
+    /// </summary>
+    public virtual RectangleF AbsoluteLayout
+    {
+        get
+        {
+            if (this is RootElement) return new RectangleF(0, 0, 1, 1);
+            Logger.AssertAndThrow(Parent is not null, "Cannot get absolute layout of element as parent is null", "UI");
+            return new RectangleF(Parent.AbsoluteLayout.X + Parent.AbsoluteLayout.Width * RelativeLayout.X,
+                Parent.AbsoluteLayout.Y + Parent.AbsoluteLayout.Height * RelativeLayout.Y,
+                Parent.AbsoluteLayout.Width * RelativeLayout.Width, Parent.AbsoluteLayout.Height * RelativeLayout.Height);
+        }
+    }
 
     /// <summary>
     ///     Whether or not the cursor is hovering over the element
@@ -94,38 +93,11 @@ public abstract class Element : IDisposable
     public Vector2 CursorPosition { get; set; }
 
     /// <summary>
-    ///     The absolute pixel size of the element
-    /// </summary>
-    public virtual SizeF PixelSize
-    {
-        get
-        {
-            Logger.AssertAndThrow(!IsRootElement, $"RootElements have to override {nameof(PixelSize)}", "UI");
-            Logger.AssertAndThrow(Parent != null, "Cannot get pixel size of element as parent is null", "UI");
-            return new SizeF(Parent!.PixelSize.Width * Layout.Width, Parent!.PixelSize.Height * Layout.Height);
-        }
-    }
-
-    /// <summary>
     ///     Get/set whether or not this component is active (will get updated)
     /// </summary>
     public virtual bool IsActive { get; set; }
-
-    /// <inheritdoc />
-    public virtual void Dispose()
-    {
-        GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    ///     Get the children of this element
-    /// </summary>
-    /// <returns></returns>
-    public virtual IEnumerable<Element> GetChildElements()
-    {
-        return Enumerable.Empty<Element>();
-    }
-
+    
+    
     /// <summary>
     ///     Update the element
     /// </summary>
@@ -137,12 +109,10 @@ public abstract class Element : IDisposable
     /// <summary>
     ///     Initialize the element
     /// </summary>
-    public abstract void Initialize();
-
-    /// <summary>
-    ///     Resize the element
-    /// </summary>
-    public abstract void Resize();
+    public virtual void Initialize()
+    {
+        
+    }
 
     /// <summary>
     ///     Triggered when the cursor enters the element
@@ -177,5 +147,21 @@ public abstract class Element : IDisposable
     /// </summary>
     public virtual void OnScroll(Vector2 movement)
     {
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    ~Element()
+    {
+        Dispose(false);
     }
 }

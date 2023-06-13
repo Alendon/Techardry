@@ -10,33 +10,9 @@ public static class RenderObjects
 {
     [RegisterShader("ui_texture_fragment_shader", "ui/ui_texture_frag.spv")]
     public static ShaderInfo UiFragmentShader => new(ShaderStageFlags.FragmentBit);
-    
+
     [RegisterShader("ui_texture_vertex_shader", "ui/ui_texture_vert.spv")]
     public static ShaderInfo UiVertexShader => new(ShaderStageFlags.VertexBit);
-
-    [RegisterDescriptorSet("ui_texture_descriptor")]
-    public static DescriptorSetInfo UiTextureDescriptorSet => new()
-    {
-        DescriptorSetsPerPool = 64,
-        CreateFlags = DescriptorSetLayoutCreateFlags.None,
-        Bindings = new []
-        {
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 0,
-                DescriptorType = DescriptorType.StorageBuffer,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.VertexBit
-            },
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 1,
-                DescriptorType = DescriptorType.SampledImage,
-                DescriptorCount = 1,
-                StageFlags = ShaderStageFlags.FragmentBit
-            }
-        }
-    };
 
     [RegisterGraphicsPipeline("ui_texture_pipeline")]
     public static GraphicsPipelineDescription UiTexturePipeline => new()
@@ -46,30 +22,30 @@ public static class RenderObjects
         {
             new Rect2D()
             {
-                Offset = new Offset2D(0,0),
+                Offset = new Offset2D(0, 0),
                 Extent = VulkanEngine.SwapchainExtent
             }
         },
-        Shaders = new []
+        Shaders = new[]
         {
             ShaderIDs.UiTextureVertexShader,
             ShaderIDs.UiTextureFragmentShader
         },
         Topology = PrimitiveTopology.TriangleList,
-        Viewports = new []
+        Viewports = new[]
         {
             new Viewport()
             {
                 Height = VulkanEngine.SwapchainExtent.Height,
-                Width =  VulkanEngine.SwapchainExtent.Width,
+                Width = VulkanEngine.SwapchainExtent.Width,
                 MaxDepth = 1f
             }
         },
-        DescriptorSets = new []
+        DescriptorSets = new[]
         {
-            DescriptorSetIDs.UiTextureDescriptor
+            MintyCore.Identifications.DescriptorSetIDs.SampledTexture
         },
-        DynamicStates = new []
+        DynamicStates = new[]
         {
             DynamicState.Viewport,
             DynamicState.Scissor
@@ -83,15 +59,54 @@ public static class RenderObjects
             LineWidth = 1f
         },
         RenderPass = RenderPassIDs.Main,
-        SampleCount = SampleCountFlags.None,
+        SampleCount = SampleCountFlags.Count1Bit,
         SubPass = 0,
         ColorBlendInfo = new ColorBlendInfo()
         {
-            
+            Attachments = new[]
+            {
+                new PipelineColorBlendAttachmentState
+                {
+                    BlendEnable = Vk.True,
+                    ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit |
+                                     ColorComponentFlags.ABit,
+                    SrcColorBlendFactor = BlendFactor.SrcAlpha,
+                    DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                    ColorBlendOp = BlendOp.Add,
+                    SrcAlphaBlendFactor = BlendFactor.One,
+                    DstAlphaBlendFactor = BlendFactor.Zero,
+                    AlphaBlendOp = BlendOp.Add
+                }
+            }
+        },
+        DepthStencilInfo = default,
+        VertexAttributeDescriptions = new VertexInputAttributeDescription[]
+        {
+            //location rectangle
+            new()
+            {
+                Binding = 0U,
+                Format = Format.R32G32B32A32Sfloat,
+                Location = 0U,
+                Offset = 0
+            },
+            //uv rectangle
+            new()
+            {
+                Binding = 0U,
+                Format = Format.R32G32B32A32Sfloat,
+                Location = 1U,
+                Offset = sizeof(float) * 4
+            },
+        },
+        VertexInputBindingDescriptions = new VertexInputBindingDescription[]
+        {
+            new()
+            {
+                Binding = 0,
+                Stride = sizeof(float) * 4 * 2,
+                InputRate = VertexInputRate.Instance
+            }
         }
-
     };
-
-
-
 }

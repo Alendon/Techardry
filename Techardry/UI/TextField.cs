@@ -1,13 +1,13 @@
+using System.Drawing;
 using MintyCore.Utils;
 using SixLabors.Fonts;
-using SixLabors.ImageSharp;
 
 namespace Techardry.UI;
 
 /// <summary>
 ///     Ui element for a text input
 /// </summary>
-public class TextField : Techardry.UI.TextBox
+public class TextField : TextBox
 {
     private readonly string _hint;
     private readonly TextInput _textInput;
@@ -16,7 +16,7 @@ public class TextField : Techardry.UI.TextBox
     /// <summary>
     ///     Constructor
     /// </summary>
-    /// <param name="layout"></param>
+    /// <param name="relativeLayout"></param>
     /// ///
     /// <param name="fontFamilyId">The font family to use for rendering</param>
     /// <param name="desiredFontSize">The desired size of the font used.</param>
@@ -24,9 +24,9 @@ public class TextField : Techardry.UI.TextBox
     /// <param name="horizontalAlignment">Which horizontal alignment the text should use</param>
     /// <param name="hint">Text which will be displayed if empty</param>
     // ReSharper disable once NotNullMemberIsNotInitialized
-    public TextField(RectangleF layout, Identification fontFamilyId, ushort desiredFontSize = ushort.MaxValue,
+    public TextField(RectangleF relativeLayout, Identification fontFamilyId, ushort desiredFontSize = ushort.MaxValue,
         bool useBorder = true, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Center,
-        string hint = "") : base(layout,
+        string hint = "") : base(relativeLayout,
         "To Measure |", fontFamilyId, desiredFontSize, useBorder, horizontalAlignment)
     {
         _textInput = new TextInput(false);

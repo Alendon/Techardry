@@ -1,25 +1,27 @@
-﻿using MintyCore;
+﻿using System.Drawing;
+using MintyCore;
 using MintyCore.ECS;
 using MintyCore.Modding;
 using MintyCore.Render;
 using MintyCore.Utils;
 using Silk.NET.Maths;
+using Silk.NET.Vulkan;
 using SixLabors.Fonts;
-using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using Techardry.Identifications;
 using Techardry.Render;
+using Image = SixLabors.ImageSharp.Image;
 
 namespace Techardry.UI;
 
 /// <summary>
 ///     Ui element representing the main menu
 /// </summary>
-public class MainMenu : ElementContainer
+public class MainMenu : ElementContainer, RootElement
 {
-    private readonly Image _background;
+    private readonly DescriptorSet _background;
     private readonly TextField _playerId;
     private readonly TextField _playerName;
 
@@ -28,9 +30,7 @@ public class MainMenu : ElementContainer
 
     private string _lastId = string.Empty;
     private string _lastPort = string.Empty;
-
-    private SizeF _pixelSize = new(VulkanEngine.SwapchainExtent.Width, VulkanEngine.SwapchainExtent.Height);
-
+    
     private ulong _playerIdValue;
     private ushort _targetPortValue;
 
@@ -39,7 +39,6 @@ public class MainMenu : ElementContainer
     /// </summary>
     public MainMenu() : base(new RectangleF(new PointF(0, 0), new SizeF(1, 1)))
     {
-        IsRootElement = true;
         Engine.Window!.WindowInstance.FramebufferResize += OnResize;
 
         var title = new TextBox(new RectangleF(0.3f, 0, 0.4f, 0.2f), "Main Menu", FontIDs.Akashi, useBorder: false);
@@ -83,26 +82,28 @@ public class MainMenu : ElementContainer
         createServer.OnLeftClickCb += OnCreateServer;
         AddElement(createServer);
 
-        _background = ImageHandler.GetImage(ImageIDs.MainMenuBackground);
+        _background = TextureHandler.GetTextureBindResourceSet(TextureIDs.MainMenuBackground);
     }
 
-    /// <inheritdoc />
-    public override Image<Rgba32>? Image
+    public override unsafe void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport)
     {
-        get
-        {
-            CombinedImage?.Mutate(context =>
-            {
-                ImageBrush brush = new(_background);
-                DrawingOptions options = new();
-                context.Fill(options, brush, new RectangleF(0, 0, CombinedImage.Width, CombinedImage.Height));
-            });
-            return base.Image;
-        }
-    }
+        var vertexBuffer = UiHelper.CreateVertexBuffer(AbsoluteLayout, new RectangleF(0, 0, 1, 1));
+        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiTexturePipeline);
+        var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiTexturePipeline);
 
-    /// <inheritdoc />
-    public override SizeF PixelSize => _pixelSize;
+        VulkanEngine.Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, pipeline);
+        VulkanEngine.Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1, _background,
+            0, null);
+        VulkanEngine.Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffer.Buffer, 0);
+        VulkanEngine.Vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
+        VulkanEngine.Vk.CmdSetViewport(commandBuffer, 0, 1, viewport);
+
+        VulkanEngine.Vk.CmdDraw(commandBuffer, 6, 1, 0, 0);
+
+        resourcesToDispose.Add(vertexBuffer);
+        
+        base.Draw(commandBuffer, resourcesToDispose, scissor, viewport);
+    }
 
     private void OnPlayLocal()
     {
@@ -191,15 +192,16 @@ public class MainMenu : ElementContainer
 
     private void OnResize(Vector2D<int> obj)
     {
-        _pixelSize = new SizeF(obj.X, obj.Y);
-        Resize();
+        PixelSize = new Size(obj.X, obj.Y);
+        
     }
 
-    /// <inheritdoc />
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        GC.SuppressFinalize(this);
-        base.Dispose();
         Engine.Window!.WindowInstance.FramebufferResize -= OnResize;
+        base.Dispose(disposing);
     }
+
+
+    public Size PixelSize { get; set; } = new((int)VulkanEngine.SwapchainExtent.Width, (int)VulkanEngine.SwapchainExtent.Height);
 }

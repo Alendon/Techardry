@@ -64,7 +64,7 @@ public partial class TechardryMod : IMod
     {
         Logger.WriteLog("Loading TechardryMod", LogImportance.Info, "Techardry");
 
-        RenderObjects.CreateRenderDescriptorLayout();
+        Voxels.RenderObjects.CreateRenderDescriptorLayout();
 
         InternalRegister();
 
@@ -97,8 +97,8 @@ public partial class TechardryMod : IMod
 
             if (mainMenu is null)
             {
-                mainMenu = UiHandler.GetRootElement(UiIDs.MainMenu);
-                mainMenu.Initialize();
+                mainMenu = UiHandler.GetRootElement(UiIDs.MainMenu) as Element;
+                mainMenu!.Initialize();
                 mainMenu.IsActive = true;
                 MainUiRenderer?.SetUiContext(mainMenu);
             }
@@ -111,7 +111,7 @@ public partial class TechardryMod : IMod
 
             if (!Engine.Timer.RenderUpdate(out _) || !VulkanEngine.PrepareDraw()) continue;
 
-            MainUiRenderer?.DrawUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
+            MainUiRenderer?.DrawUi();
 
             VulkanEngine.EndDraw();
         }
@@ -179,7 +179,7 @@ public partial class TechardryMod : IMod
 
             if (drawingEnable)
             {
-                MainUiRenderer?.DrawUi(MaterialHandler.GetMaterial(MaterialIDs.UiOverlay));
+                MainUiRenderer?.DrawUi();
                 VulkanEngine.EndDraw();
             }
 
@@ -203,7 +203,6 @@ public partial class TechardryMod : IMod
         if (!Engine.HeadlessModeActive)
         {
             MainUiRenderer = new UiRenderer();
-            MainUiRenderer.SetupMainUiRendering();
         }
     }
 
@@ -218,11 +217,10 @@ public partial class TechardryMod : IMod
         if (!Engine.HeadlessModeActive)
         {
             VulkanEngine.WaitForAll();
-            MainUiRenderer?.DestroyMainUiRendering();
         }
         
         InternalUnregister();
-        RenderObjects.DestroyRenderDescriptorLayout();
+        Voxels.RenderObjects.DestroyRenderDescriptorLayout();
     }
 
     public static TechardryMod? Instance { get; private set; }

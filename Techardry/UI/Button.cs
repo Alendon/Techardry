@@ -1,5 +1,6 @@
-﻿using JetBrains.Annotations;
-using SixLabors.ImageSharp;
+﻿using System.Drawing;
+using JetBrains.Annotations;
+using Silk.NET.Vulkan;
 using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
@@ -15,10 +16,9 @@ public class Button : Element
 {
     private readonly string _content;
     private readonly ushort _desiredFontSize;
-    private Image<Rgba32>? _image;
     private RectangleF _innerLayout;
     private bool _lastHoveredState;
-    private RectangleF _relativeLayout;
+    private float _borderWidth = 0.01f;
 
     /// <summary>
     ///     Create a new button
@@ -39,9 +39,6 @@ public class Button : Element
     public TextBox? TextBox { get; private set; }
 
 
-    /// <inheritdoc />
-    public override Image<Rgba32>? Image => _image;
-
     /// <summary>
     ///     Callback if the button is clicked
     /// </summary>
@@ -50,18 +47,10 @@ public class Button : Element
     /// <inheritdoc />
     public override void Initialize()
     {
-        _image = BorderBuilder.BuildBorderedImage((int)PixelSize.Width, (int)PixelSize.Height, Color.Transparent,
-            BorderHelper.GetDefaultBorderImages(), out _innerLayout);
-        _relativeLayout = new RectangleF
-        {
-            X = _innerLayout.X / PixelSize.Width,
-            Y = _innerLayout.Y / PixelSize.Height,
-            Width = _innerLayout.Width / PixelSize.Width,
-            Height = _innerLayout.Height / PixelSize.Height
-        };
-
         if (_content.Length != 0)
-            TextBox = new TextBox(_relativeLayout, _content, FontIDs.Akashi, useBorder: false,
+            TextBox = new TextBox(
+                new RectangleF(_borderWidth, _borderWidth, 1 - _borderWidth * 2, 1 - _borderWidth * 2),
+                _content, FontIDs.Akashi, useBorder: false,
                 desiredFontSize: _desiredFontSize)
             {
                 Parent = this
@@ -71,38 +60,37 @@ public class Button : Element
         TextBox?.Initialize();
     }
 
-    /// <inheritdoc />
-    public override void Resize()
+    public override void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport)
     {
-        _image?.Dispose();
-        TextBox?.Dispose();
-        TextBox = null;
-        Initialize();
+        var borderTextures = BorderHelper.GetDefaultBorderImages();
+        BorderBuilder.DrawBorder(commandBuffer, _borderWidth, Color.Blue, borderTextures,
+            resourcesToDispose,scissor, viewport);
+
+        if (TextBox is null) return;
+        
+        var childViewport = viewport;
+        childViewport.Width *= TextBox.RelativeLayout.Width;
+        childViewport.Height *= TextBox.RelativeLayout.Height;
+        childViewport.X += (int)(viewport.Width * TextBox.RelativeLayout.X);
+        childViewport.Y += (int)(viewport.Height * TextBox.RelativeLayout.Y);
+        
+        
+        TextBox.Draw(commandBuffer, resourcesToDispose, scissor, childViewport);
+        //Redraw = false;
     }
 
     /// <inheritdoc />
     public override void Update(float deltaTime)
     {
-        if(_image is null) return;
-        
-        HasChanged = _lastHoveredState != CursorHovering;
+        //Redraw = _lastHoveredState != CursorHovering;
         _lastHoveredState = CursorHovering;
-
-        var childChanged = TextBox?.HasChanged ?? false;
-
-        if (!HasChanged && !childChanged) return;
-
-        if (TextBox?.Image != null)
-        {
-            TextBox.DrawColor = CursorHovering ? Color.Green : Color.White;
-            TextBox.Update(deltaTime);
-            _image.Mutate(context => { context.DrawImage(TextBox.Image, (Point)_innerLayout.Location, 1); });
-        }
-        else
-        {
-            _image.Mutate(context => { context.Fill(CursorHovering ? Color.LightGray : Color.Gray, _innerLayout); });
-        }
     }
+
+    /*public override bool Redraw
+    {
+        get => (TextBox?.Redraw ?? false) || base.Redraw;
+        protected set => base.Redraw = value;
+    }*/
 
 
     /// <inheritdoc />
@@ -112,12 +100,9 @@ public class Button : Element
         OnLeftClickCb();
     }
 
-    /// <inheritdoc />
-    public override void Dispose()
+    protected override void Dispose(bool disposing)
     {
-        GC.SuppressFinalize(this);
         TextBox?.Dispose();
-        base.Dispose();
-        _image?.Dispose();
+        base.Dispose(disposing);
     }
 }

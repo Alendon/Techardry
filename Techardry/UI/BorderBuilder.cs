@@ -1,8 +1,11 @@
-﻿using System.Numerics;
+﻿using System.Drawing;
+using System.Numerics;
+using JetBrains.Annotations;
+using MintyCore.Registries;
+using MintyCore.Render;
 using MintyCore.Utils;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
+using Silk.NET.Vulkan;
+using Techardry.Identifications;
 
 namespace Techardry.UI;
 
@@ -11,63 +14,83 @@ namespace Techardry.UI;
 /// </summary>
 public static class BorderBuilder
 {
-    /// <summary>
-    ///     Build a border image
-    /// </summary>
-    /// <param name="width">Width of the image to create</param>
-    /// <param name="height">Height of the image to create</param>
-    /// <param name="fillColor">Color to fill the image with</param>
-    /// <param name="innerLayout">The layout of the image inside the border</param>
-    /// <returns>Created image with a border texture</returns>
-    public static Image<Rgba32> BuildBorderedImage(int width, int height, Rgba32 fillColor, BorderImages borderImages, out RectangleF innerLayout)
+    public static void DrawBorder(CommandBuffer cb, [ValueRange(0, 1)] float borderWidth,
+        Color? fillColor, BorderImages borderImages, IList<IDisposable> resourcesToDispose,
+        Rect2D scissor, Viewport viewport)
     {
-        Logger.AssertAndThrow(width > 0 && height > 0, "Image dimensions must be positive", "UI");
-        Image<Rgba32> image = new(width, height, fillColor);
+        Logger.AssertAndThrow(borderWidth is >= 0 and <= 1, "Border width must be in range 0-1", "UI");
 
-        var borderLeft = ImageHandler.GetImage(borderImages.Left);
-        var borderRight = ImageHandler.GetImage(borderImages.Right);
-        var borderTop = ImageHandler.GetImage(borderImages.Top);
-        var borderBottom = ImageHandler.GetImage(borderImages.Bottom);
+        BorderResources borderResources = new();
+        resourcesToDispose.Add(borderResources);
+        
+        var heightModifier = viewport.Width / viewport.Height;
 
-        innerLayout = new RectangleF(new PointF(borderLeft.Width, borderBottom.Height),
-            new SizeF(width - borderLeft.Width - borderRight.Width, height - borderBottom.Height - borderTop.Height));
+        var absolutBorderWidth = borderWidth;
+        var absolutBorderHeight = borderWidth * heightModifier;
+        
+        DrawBorderTexture(cb, borderImages.Left,
+            new RectangleF(new PointF(0, 0),
+                new SizeF(absolutBorderWidth, 1)), borderResources, scissor, viewport);
+        DrawBorderTexture(cb, borderImages.Right,
+            new RectangleF(new PointF(1 - absolutBorderWidth, 0),
+                new SizeF(absolutBorderWidth, 1)), borderResources, scissor, viewport);
+        DrawBorderTexture(cb, borderImages.Bottom,
+            new RectangleF(new PointF(0, 0),
+                new SizeF(1, absolutBorderHeight)), borderResources, scissor, viewport);
+        DrawBorderTexture(cb, borderImages.Top,
+            new RectangleF(new PointF(0, 1 - absolutBorderHeight),
+                new SizeF(1, absolutBorderHeight)), borderResources, scissor, viewport);
 
-        if (innerLayout.Width < 0 || innerLayout.Height < 0)
+        DrawBorderTexture(cb, borderImages.CornerLowerLeft,
+            new RectangleF(new PointF(0,0), new SizeF(absolutBorderWidth, absolutBorderHeight)), borderResources, scissor,
+            viewport);
+        DrawBorderTexture(cb, borderImages.CornerLowerRight,
+            new RectangleF(new PointF(1 - absolutBorderWidth, 0),
+                new SizeF(absolutBorderWidth, absolutBorderHeight)), borderResources, scissor, viewport);
+        DrawBorderTexture(cb, borderImages.CornerUpperLeft,
+            new RectangleF(new PointF(0, 1 - absolutBorderHeight),
+                new SizeF(absolutBorderWidth, absolutBorderHeight)), borderResources, scissor, viewport);
+        DrawBorderTexture(cb, borderImages.CornerUpperRight,
+            new RectangleF(new PointF(1 - absolutBorderWidth, 1 - absolutBorderHeight),
+                new SizeF(absolutBorderWidth, absolutBorderHeight)), borderResources, scissor, viewport);
+
+       
+    }
+
+
+    private static unsafe void DrawBorderTexture(CommandBuffer cb, Identification borderTextureId,
+        RectangleF drawingRect, BorderResources borderResources, Rect2D scissor,
+        Viewport viewport)
+    {
+        var textureDescriptor = TextureHandler.GetTextureBindResourceSet(borderTextureId);
+        var vertexBuffer = UiHelper.CreateVertexBuffer(drawingRect, new RectangleF(0, 0, 1, 1));
+        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiTexturePipeline);
+        var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiTexturePipeline);
+
+        VulkanEngine.Vk.CmdBindPipeline(cb, PipelineBindPoint.Graphics, pipeline);
+        VulkanEngine.Vk.CmdBindDescriptorSets(cb, PipelineBindPoint.Graphics, pipelineLayout, 0, 1, textureDescriptor,
+            0, null);
+        VulkanEngine.Vk.CmdBindVertexBuffers(cb, 0, 1, vertexBuffer.Buffer, 0);
+        VulkanEngine.Vk.CmdSetScissor(cb, 0,1,scissor);
+        VulkanEngine.Vk.CmdSetViewport(cb, 0, 1, viewport);
+        
+        VulkanEngine.Vk.CmdDraw(cb, 6, 1, 0, 0);
+
+        borderResources.Buffers.Add(vertexBuffer);
+    }
+
+
+    class BorderResources : IDisposable
+    {
+        public List<MemoryBuffer> Buffers = new();
+
+        public void Dispose()
         {
-            Logger.WriteLog("Border image does not fit into given dimensions", LogImportance.Error, "UI");
-            innerLayout = new RectangleF(Vector2.Zero, new SizeF(width, height));
-            return image;
+            foreach (var buffer in Buffers)
+            {
+                buffer.Dispose();
+            }
         }
-
-        image.Mutate(context =>
-        {
-            const float opacity = 1;
-
-            var cornerLl = ImageHandler.GetImage(borderImages.CornerLowerLeft);
-            var cornerUl = ImageHandler.GetImage(borderImages.CornerUpperLeft);
-            var cornerLr = ImageHandler.GetImage(borderImages.CornerLowerRight);
-            var cornerUr = ImageHandler.GetImage(borderImages.CornerUpperRight);
-
-            context.DrawImage(cornerUl, new Point(0, 0), opacity);
-            context.DrawImage(cornerLl, new Point(0, height - cornerLl.Height), opacity);
-            context.DrawImage(cornerUr, new Point(width - cornerUr.Width, 0), opacity);
-            context.DrawImage(cornerLr, new Point(width - cornerLr.Width, height - cornerLr.Width), opacity);
-
-            for (var y = cornerLl.Height; y < height - cornerUl.Height; y++)
-            {
-                context.DrawImage(borderLeft, new Point(0, y), opacity);
-                context.DrawImage(borderRight, new Point(width - borderRight.Width, y), opacity);
-            }
-
-            for (var x = cornerLl.Width; x < width - cornerLr.Width; x++)
-            {
-                context.DrawImage(borderTop, new Point(x, 0), opacity);
-                context.DrawImage(borderBottom, new Point(x, height - borderBottom.Height), opacity);
-            }
-        });
-
-
-        return image;
     }
 }
 
@@ -80,31 +103,37 @@ public struct BorderImages
     /// 
     /// </summary>
     public Identification Left;
+
     /// <summary>
     /// 
     /// </summary>
     public Identification Right;
+
     /// <summary>
     /// 
     /// </summary>
     public Identification Top;
+
     /// <summary>
     /// 
     /// </summary>
     public Identification Bottom;
-    
+
     /// <summary>
     /// 
     /// </summary>
     public Identification CornerUpperLeft;
+
     /// <summary>
     /// 
     /// </summary>
     public Identification CornerUpperRight;
+
     /// <summary>
     /// 
     /// </summary>
     public Identification CornerLowerLeft;
+
     /// <summary>
     /// 
     /// </summary>
