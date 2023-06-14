@@ -140,7 +140,8 @@ public class GraphicPipelines
                     MaxDepthBounds = 100,
                     StencilTestEnable = false,
                     DepthBoundsTestEnable = false
-                }
+                },
+                PushConstantRanges = Array.Empty<PushConstantRange>()
             };
             return pipelineDescription;
         }
@@ -278,7 +279,8 @@ public class GraphicPipelines
                     MaxDepthBounds = 1,
                     StencilTestEnable = false,
                     DepthBoundsTestEnable = false
-                }
+                },
+                PushConstantRanges = Array.Empty<PushConstantRange>()
             };
             return pipelineDescription;
         }
@@ -417,7 +419,8 @@ public class GraphicPipelines
                     MaxDepthBounds = 100,
                     StencilTestEnable = false,
                     DepthBoundsTestEnable = false
-                }
+                },
+                PushConstantRanges = Array.Empty<PushConstantRange>()
             };
             var uiVertInput =
                 new VertexInputAttributeDescription[attributes.Length];

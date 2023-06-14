@@ -30,7 +30,7 @@ public class MainMenu : ElementContainer, RootElement
 
     private string _lastId = string.Empty;
     private string _lastPort = string.Empty;
-    
+
     private ulong _playerIdValue;
     private ushort _targetPortValue;
 
@@ -72,7 +72,8 @@ public class MainMenu : ElementContainer, RootElement
         play.OnLeftClickCb += OnPlayLocal;
         AddElement(play);
 
-        var connectToServer = new Button(new RectangleF(0.4f, 0.5f, 0.2f, 0.1f), $"Connect to {Environment.NewLine}Server", fontSize);
+        var connectToServer = new Button(new RectangleF(0.4f, 0.5f, 0.2f, 0.1f),
+            $"Connect to {Environment.NewLine}Server", fontSize);
         connectToServer.IsActive = true;
         connectToServer.OnLeftClickCb += OnConnectToServer;
         AddElement(connectToServer);
@@ -85,23 +86,29 @@ public class MainMenu : ElementContainer, RootElement
         _background = TextureHandler.GetTextureBindResourceSet(TextureIDs.MainMenuBackground);
     }
 
-    public override unsafe void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor, Viewport viewport)
+    public override unsafe void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor,
+        Viewport viewport)
     {
-        var vertexBuffer = UiHelper.CreateVertexBuffer(AbsoluteLayout, new RectangleF(0, 0, 1, 1));
         var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiTexturePipeline);
         var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiTexturePipeline);
 
+        var pushConstants = stackalloc RectangleF[]
+        {
+            AbsoluteLayout,
+            new RectangleF(0, 0, 1, 1)
+        };
+
         VulkanEngine.Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, pipeline);
-        VulkanEngine.Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1, _background,
-            0, null);
-        VulkanEngine.Vk.CmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffer.Buffer, 0);
+        VulkanEngine.Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
+            _background, 0, null);
+        VulkanEngine.Vk.CmdPushConstants(commandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
+            (uint)sizeof(RectangleF), pushConstants);
         VulkanEngine.Vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
         VulkanEngine.Vk.CmdSetViewport(commandBuffer, 0, 1, viewport);
 
         VulkanEngine.Vk.CmdDraw(commandBuffer, 6, 1, 0, 0);
 
-        renderer.Disposables.Add(vertexBuffer);
-        
+
         base.Draw(commandBuffer, renderer, scissor, viewport);
     }
 
@@ -193,7 +200,6 @@ public class MainMenu : ElementContainer, RootElement
     private void OnResize(Vector2D<int> obj)
     {
         PixelSize = new Size(obj.X, obj.Y);
-        
     }
 
     protected override void Dispose(bool disposing)
@@ -203,5 +209,6 @@ public class MainMenu : ElementContainer, RootElement
     }
 
 
-    public Size PixelSize { get; set; } = new((int)VulkanEngine.SwapchainExtent.Width, (int)VulkanEngine.SwapchainExtent.Height);
+    public Size PixelSize { get; set; } =
+        new((int)VulkanEngine.SwapchainExtent.Width, (int)VulkanEngine.SwapchainExtent.Height);
 }

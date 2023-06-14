@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using System.Runtime.CompilerServices;
 using FontStashSharp.Interfaces;
 using MintyCore.Render;
 using MintyCore.Utils;
@@ -20,12 +21,6 @@ public class FontRenderer : IFontStashRenderer2
         _commandBuffer = commandBuffer;
         _viewport = viewport;
         _scissor = scissor;
-
-        /*foreach (var mesh in Meshes)
-        {
-            mesh.Dispose();
-        }
-        Meshes.Clear();*/
     }
 
     public void EndDraw()
@@ -35,12 +30,13 @@ public class FontRenderer : IFontStashRenderer2
         _scissor = default;
     }
 
-    public unsafe void DrawQuad(object textureObj, ref VertexPositionColorTexture topLeft, ref VertexPositionColorTexture topRight,
+    public unsafe void DrawQuad(object textureObj, ref VertexPositionColorTexture topLeft,
+        ref VertexPositionColorTexture topRight,
         ref VertexPositionColorTexture bottomLeft, ref VertexPositionColorTexture bottomRight)
     {
         Logger.AssertAndThrow(_commandBuffer.Handle != default, "CommandBuffer is not set", "FontRenderer");
-        
-        if(textureObj is not FontTextureWrapper textureWrapper)
+
+        if (textureObj is not FontTextureWrapper textureWrapper)
             throw new ArgumentException("Texture is not a FontTextureWrapper", nameof(textureObj));
 
         var vertices = (stackalloc Vertex[]
@@ -67,7 +63,7 @@ public class FontRenderer : IFontStashRenderer2
         
         VulkanEngine.Vk.CmdSetScissor(_commandBuffer, 0, 1, _scissor);
         VulkanEngine.Vk.CmdSetViewport(_commandBuffer, 0, 1, _viewport);
-        
+
         VulkanEngine.Vk.CmdDraw(_commandBuffer, 6, 1, 0, 0);
     }
 

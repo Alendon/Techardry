@@ -1,7 +1,5 @@
 ﻿using System.Drawing;
 using System.Numerics;
-using FontStashSharp;
-using FontStashSharp.Interfaces;
 using JetBrains.Annotations;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;

@@ -7,8 +7,10 @@ struct rect {
     float h;
 };
 
-layout (location = 0) in vec4 in_Location;
-layout (location = 1) in vec4 in_Color;
+layout ( push_constant) uniform PushConstants {
+    vec4 location;
+    vec4 color;
+} pushConstants;
 
 layout (location = 0) out vec4 out_Color;
 
@@ -16,12 +18,12 @@ vec2 getVertex();
 
 void main()
 {
-    out_Color = in_Color;
+    out_Color = pushConstants.color;
     gl_Position = vec4(getVertex(), 0.f, 1.f);
 }
 
 vec2 getVertex() {
-    rect r = rect(in_Location.x, in_Location.y, in_Location.z, in_Location.w);
+    rect r = rect(pushConstants.location.x, pushConstants.location.y, pushConstants.location.z, pushConstants.location.w);
 
     vec2 vertex;
     

@@ -109,32 +109,15 @@ public static class RenderObjects
             }
         },
         DepthStencilInfo = default,
-        VertexAttributeDescriptions = new VertexInputAttributeDescription[]
-        {
-            //location rectangle
-            new()
-            {
-                Binding = 0U,
-                Format = Format.R32G32B32A32Sfloat,
-                Location = 0U,
-                Offset = 0
-            },
-            //uv rectangle
-            new()
-            {
-                Binding = 0U,
-                Format = Format.R32G32B32A32Sfloat,
-                Location = 1U,
-                Offset = sizeof(float) * 4
-            },
-        },
-        VertexInputBindingDescriptions = new VertexInputBindingDescription[]
+        VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
+        VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
+        PushConstantRanges = new PushConstantRange[]
         {
             new()
             {
-                Binding = 0,
-                Stride = sizeof(float) * 4 * 2,
-                InputRate = VertexInputRate.Instance
+                Offset = 0,
+                Size = sizeof(float) * 4 * 2,
+                StageFlags = ShaderStageFlags.VertexBit
             }
         }
     };
@@ -202,32 +185,15 @@ public static class RenderObjects
             }
         },
         DepthStencilInfo = default,
-        VertexAttributeDescriptions = new VertexInputAttributeDescription[]
-        {
-            //location rectangle
-            new()
-            {
-                Binding = 0U,
-                Format = Format.R32G32B32A32Sfloat,
-                Location = 0U,
-                Offset = 0
-            },
-            //color
-            new()
-            {
-                Binding = 0U,
-                Format = Format.R32G32B32A32Sfloat,
-                Location = 1U,
-                Offset = sizeof(float) * 4
-            },
-        },
-        VertexInputBindingDescriptions = new VertexInputBindingDescription[]
+        VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
+        VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
+        PushConstantRanges = new PushConstantRange[]
         {
             new()
             {
-                Binding = 0,
-                Stride = sizeof(float) * 4 * 2,
-                InputRate = VertexInputRate.Instance
+                Offset = 0,
+                Size = sizeof(float) * 4 * 2,
+                StageFlags = ShaderStageFlags.VertexBit
             }
         }
     };
@@ -302,6 +268,7 @@ public static class RenderObjects
         VertexInputBindingDescriptions = new[]
         {
             Vertex.GetVertexBinding()
-        }
+        },
+        PushConstantRanges = Array.Empty<PushConstantRange>()
     };
 }

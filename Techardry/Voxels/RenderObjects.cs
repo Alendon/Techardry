@@ -240,7 +240,8 @@ public static class RenderObjects
                 },
                 DepthStencilInfo = default,
                 VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
-                VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>()
+                VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
+                PushConstantRanges = Array.Empty<PushConstantRange>()
             };
         }
     }
@@ -381,7 +382,8 @@ public static class RenderObjects
                     MaxDepthBounds = 1,
                     StencilTestEnable = false,
                     DepthBoundsTestEnable = false
-                }
+                },
+                PushConstantRanges = Array.Empty<PushConstantRange>()
             };
             return pipelineDescription;
         }
