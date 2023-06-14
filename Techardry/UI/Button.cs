@@ -5,6 +5,7 @@ using SixLabors.ImageSharp.Drawing.Processing;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using Techardry.Identifications;
+using Techardry.Render;
 
 namespace Techardry.UI;
 
@@ -60,14 +61,14 @@ public class Button : Element
         TextBox?.Initialize();
     }
 
-    public override void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport)
+    public override void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor, Viewport viewport)
     {
         var borderTextures = BorderHelper.GetDefaultBorderImages();
 
         var baseColor = CursorHovering ? Color.Gray : Color.DarkGray;
         
         BorderBuilder.DrawBorder(commandBuffer, _borderWidth, baseColor, borderTextures,
-            resourcesToDispose,scissor, viewport);
+            renderer,scissor, viewport);
 
         if (TextBox is null) return;
         
@@ -78,7 +79,7 @@ public class Button : Element
         childViewport.Y += (int)(viewport.Height * TextBox.RelativeLayout.Y);
         
         
-        TextBox.Draw(commandBuffer, resourcesToDispose, scissor, childViewport);
+        TextBox.Draw(commandBuffer, renderer, scissor, childViewport);
         //Redraw = false;
     }
 

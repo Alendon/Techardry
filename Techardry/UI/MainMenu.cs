@@ -72,7 +72,7 @@ public class MainMenu : ElementContainer, RootElement
         play.OnLeftClickCb += OnPlayLocal;
         AddElement(play);
 
-        var connectToServer = new Button(new RectangleF(0.4f, 0.5f, 0.2f, 0.1f), "Connect to Server", fontSize);
+        var connectToServer = new Button(new RectangleF(0.4f, 0.5f, 0.2f, 0.1f), $"Connect to {Environment.NewLine}Server", fontSize);
         connectToServer.IsActive = true;
         connectToServer.OnLeftClickCb += OnConnectToServer;
         AddElement(connectToServer);
@@ -85,7 +85,7 @@ public class MainMenu : ElementContainer, RootElement
         _background = TextureHandler.GetTextureBindResourceSet(TextureIDs.MainMenuBackground);
     }
 
-    public override unsafe void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport)
+    public override unsafe void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor, Viewport viewport)
     {
         var vertexBuffer = UiHelper.CreateVertexBuffer(AbsoluteLayout, new RectangleF(0, 0, 1, 1));
         var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiTexturePipeline);
@@ -100,9 +100,9 @@ public class MainMenu : ElementContainer, RootElement
 
         VulkanEngine.Vk.CmdDraw(commandBuffer, 6, 1, 0, 0);
 
-        resourcesToDispose.Add(vertexBuffer);
+        renderer.Disposables.Add(vertexBuffer);
         
-        base.Draw(commandBuffer, resourcesToDispose, scissor, viewport);
+        base.Draw(commandBuffer, renderer, scissor, viewport);
     }
 
     private void OnPlayLocal()

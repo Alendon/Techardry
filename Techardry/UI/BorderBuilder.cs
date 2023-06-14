@@ -6,6 +6,7 @@ using MintyCore.Render;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
+using Techardry.Render;
 
 namespace Techardry.UI;
 
@@ -15,13 +16,13 @@ namespace Techardry.UI;
 public static class BorderBuilder
 {
     public static void DrawBorder(CommandBuffer cb, [ValueRange(0, 1)] float borderWidth,
-        Color? fillColor, BorderImages borderImages, IList<IDisposable> resourcesToDispose,
+        Color? fillColor, BorderImages borderImages, UiRenderer renderer,
         Rect2D scissor, Viewport viewport)
     {
         Logger.AssertAndThrow(borderWidth is >= 0 and <= 1, "Border width must be in range 0-1", "UI");
 
         BorderResources borderResources = new();
-        resourcesToDispose.Add(borderResources);
+        renderer.Disposables.Add(borderResources);
         
         var heightModifier = viewport.Width / viewport.Height;
 

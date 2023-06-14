@@ -29,10 +29,10 @@
 
     <ItemGroup>
       <PackageReference Include="DotNext">
-        <Version>4.12.0</Version>
+        <Version>4.12.3</Version>
       </PackageReference>
       <PackageReference Include="DotNext.Threading">
-        <Version>4.12.0</Version>
+        <Version>4.12.3</Version>
       </PackageReference>
       <PackageReference Include="FontStashSharp">
         <Version>1.2.8</Version>

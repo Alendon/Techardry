@@ -2,6 +2,7 @@
 using JetBrains.Annotations;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
+using Techardry.Render;
 
 namespace Techardry.UI;
 
@@ -34,7 +35,7 @@ public class ElementContainer : Element
         protected set => _redraw = value;
     }*/
 
-    public override void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport)
+    public override void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor, Viewport viewport)
     {
         foreach (var childElement in GetChildElements())
         {
@@ -43,7 +44,7 @@ public class ElementContainer : Element
             childViewport.Height *= childElement.RelativeLayout.Height;
             childViewport.X += (int)(viewport.Width * childElement.RelativeLayout.X);
             childViewport.Y += (int)(viewport.Height * childElement.RelativeLayout.Y);
-            childElement.Draw(commandBuffer, resourcesToDispose, scissor, childViewport);
+            childElement.Draw(commandBuffer, renderer, scissor, childViewport);
         }
     }
 

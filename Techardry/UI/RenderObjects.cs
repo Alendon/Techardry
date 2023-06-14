@@ -14,12 +14,34 @@ public static class RenderObjects
 
     [RegisterShader("ui_texture_vertex_shader", "ui/ui_texture_vert.spv")]
     public static ShaderInfo UiTextureVertexShader => new(ShaderStageFlags.VertexBit);
-    
+
     [RegisterShader("ui_color_fragment_shader", "ui/ui_color_frag.spv")]
     public static ShaderInfo UiColorFragmentShader => new(ShaderStageFlags.FragmentBit);
 
     [RegisterShader("ui_color_vertex_shader", "ui/ui_color_vert.spv")]
     public static ShaderInfo UiColorVertexShader => new(ShaderStageFlags.VertexBit);
+    
+    [RegisterShader("ui_font_fragment_shader", "ui/ui_font_frag.spv")]
+    public static ShaderInfo UiFontFragmentShader => new(ShaderStageFlags.FragmentBit);
+    
+    [RegisterShader("ui_font_vertex_shader", "ui/ui_font_vert.spv")]
+    public static ShaderInfo UiFontVertexShader => new(ShaderStageFlags.VertexBit);
+
+    [RegisterDescriptorSet("ui_font_texture")]
+    public static DescriptorSetInfo UiFontTexture => new()
+    {
+        Bindings = new DescriptorSetLayoutBinding[]
+        {
+            new()
+            {
+                Binding = 0,
+                DescriptorType = DescriptorType.CombinedImageSampler,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.FragmentBit
+            }
+        },
+        DescriptorSetsPerPool = 64
+    };
 
     [RegisterGraphicsPipeline("ui_texture_pipeline")]
     public static GraphicsPipelineDescription UiTexturePipeline => new()
@@ -116,7 +138,7 @@ public static class RenderObjects
             }
         }
     };
-    
+
     [RegisterGraphicsPipeline("ui_color_pipeline")]
     public static GraphicsPipelineDescription UiColorPipeline => new()
     {
@@ -207,6 +229,79 @@ public static class RenderObjects
                 Stride = sizeof(float) * 4 * 2,
                 InputRate = VertexInputRate.Instance
             }
+        }
+    };
+
+    [RegisterGraphicsPipeline("ui_font_pipeline")]
+    public static GraphicsPipelineDescription UiFontPipeline => new()
+    {
+        Flags = 0,
+        Scissors = new[]
+        {
+            new Rect2D()
+            {
+                Offset = new Offset2D(0, 0),
+                Extent = VulkanEngine.SwapchainExtent
+            }
+        },
+        Shaders = new[]
+        {
+            ShaderIDs.UiFontVertexShader,
+            ShaderIDs.UiFontFragmentShader
+        },
+        Topology = PrimitiveTopology.TriangleList,
+        Viewports = new[]
+        {
+            new Viewport()
+            {
+                Height = VulkanEngine.SwapchainExtent.Height,
+                Width = VulkanEngine.SwapchainExtent.Width,
+                MaxDepth = 1f
+            }
+        },
+        DescriptorSets = new[]
+        {
+            DescriptorSetIDs.UiFontTexture
+        },
+        DynamicStates = new[]
+        {
+            DynamicState.Viewport,
+            DynamicState.Scissor
+        },
+        RasterizationInfo = new RasterizationInfo()
+        {
+            //TODO set the correct culling mode
+            CullMode = CullModeFlags.None,
+            FrontFace = FrontFace.Clockwise,
+            PolygonMode = PolygonMode.Fill,
+            LineWidth = 1f
+        },
+        RenderPass = RenderPassIDs.Main,
+        SampleCount = SampleCountFlags.Count1Bit,
+        SubPass = 0,
+        ColorBlendInfo = new ColorBlendInfo()
+        {
+            Attachments = new[]
+            {
+                new PipelineColorBlendAttachmentState
+                {
+                    BlendEnable = Vk.True,
+                    ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit |
+                                     ColorComponentFlags.ABit,
+                    SrcColorBlendFactor = BlendFactor.SrcAlpha,
+                    DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                    ColorBlendOp = BlendOp.Add,
+                    SrcAlphaBlendFactor = BlendFactor.One,
+                    DstAlphaBlendFactor = BlendFactor.Zero,
+                    AlphaBlendOp = BlendOp.Add
+                }
+            }
+        },
+        DepthStencilInfo = default,
+        VertexAttributeDescriptions = Vertex.GetVertexAttributes(),
+        VertexInputBindingDescriptions = new[]
+        {
+            Vertex.GetVertexBinding()
         }
     };
 }

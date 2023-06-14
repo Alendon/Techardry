@@ -1,8 +1,12 @@
 ﻿using System.Drawing;
+using System.Numerics;
+using FontStashSharp;
 using JetBrains.Annotations;
+using MintyCore.Render;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using SixLabors.Fonts;
+using Techardry.Render;
 
 namespace Techardry.UI;
 
@@ -109,16 +113,20 @@ public class TextBox : Element
         HasChanged = true;
     }
 
-    public override void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissors, Viewport viewports)
+    public override void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissors, Viewport viewports)
     {
         if (_useBorder)
         {
             var borderTextures = BorderHelper.GetDefaultBorderImages();
 
             BorderBuilder.DrawBorder(commandBuffer, 0.05f, _fillColor, borderTextures,
-                resourcesToDispose, scissors, viewports);
+                renderer, scissors, viewports);
         } 
         //TODO implement through string drawing
+        
+        Vector2 scale = Vector2.One / new Vector2(viewports.Width, viewports.Height);
+        
+        renderer.DrawString(Content, (int)(1 * viewports.Height), commandBuffer, viewports, scissors, new Vector2(-1,-1), FSColor.Blue, scale: scale);
     }
 
     /// <inheritdoc />

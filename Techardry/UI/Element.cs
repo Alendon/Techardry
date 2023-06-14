@@ -1,9 +1,11 @@
 ﻿using System.Drawing;
 using System.Numerics;
 using FontStashSharp;
+using FontStashSharp.Interfaces;
 using JetBrains.Annotations;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
+using Techardry.Render;
 
 namespace Techardry.UI;
 
@@ -27,29 +29,9 @@ public abstract class Element : IDisposable
     /// </summary>
     //public virtual bool Redraw { get; protected set; } = true;
 
-    public abstract void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport);
+    public abstract void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor, Viewport viewport);
 
-    public virtual void DrawString(string text, Identification font, CommandBuffer commandBuffer, Vector2 position,
-        FSColor color, Vector2? scale = null, float rotation = 0f, Vector2 origin = default, float layerDepth = 0f,
-        float characterSpacing = 0f, float lineSpacing = 0f, TextStyle textStyle = TextStyle.None,
-        FontSystemEffect effect = FontSystemEffect.None, int effectAmount = 0)
-    {
-        /*SpriteFontBase fotn = FontSystem.GetFont(font);
-        FontSystem a;
-        IFontStashRenderer2 renderer2 = FontSystem.GetRenderer2(font);
-        renderer2.prepareDraw(commandBuffer);
-        
-        fotn.DrawText(renderer2, text, position, color, scale, rotation, origin, layerDepth, characterSpacing,
-            lineSpacing, textStyle, effect, effectAmount);
-        
-        //This line actually draws the text
-        //the DrawText method only prepares the draw and records the needed draw information
-        //This method combines those information to execute a single draw call
-        renderer2.EndDraw(commandBuffer);    
-            */
-
-        Console.WriteLine("Oh no, drawing strings on ui elements is not implemented yet");
-    }
+    
 
     public virtual bool HasChanged { get; protected set; }
 
