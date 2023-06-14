@@ -50,8 +50,19 @@ public class FontRenderer : IFontStashRenderer2
             new Vertex(bottomLeft.Position, bottomLeft.Color.ToVector3(), Vector3.UnitZ, bottomLeft.TextureCoordinate),
         });
 
-        var mesh = MeshHandler.CreateDynamicMesh(vertices, 6);
-        Meshes.Add(mesh);
+        var pushConstants = stackalloc float[4 * 3];
+        pushConstants[0] = bottomLeft.Position.X;
+        pushConstants[1] = bottomRight.Position.X;
+        pushConstants[2] = topLeft.Position.Y;
+        pushConstants[3] = bottomLeft.Position.Y;
+        
+        pushConstants[4] = bottomLeft.TextureCoordinate.X;
+        pushConstants[5] = bottomRight.TextureCoordinate.X;
+        pushConstants[6] = topLeft.TextureCoordinate.Y;
+        pushConstants[7] = bottomLeft.TextureCoordinate.Y;
+        
+        Unsafe.As<float, Vector4>(ref pushConstants[8]) = bottomLeft.Color.ToVector4();
+
 
         var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiFontPipeline);
         var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiFontPipeline);
@@ -59,10 +70,10 @@ public class FontRenderer : IFontStashRenderer2
         VulkanEngine.Vk.CmdBindPipeline(_commandBuffer, PipelineBindPoint.Graphics, pipeline);
         VulkanEngine.Vk.CmdBindDescriptorSets(_commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
             textureWrapper.SampledImageDescriptorSet, 0, null);
-        VulkanEngine.Vk.CmdBindVertexBuffers(_commandBuffer, 0, 1, mesh.MemoryBuffer.Buffer, 0);
-        
         VulkanEngine.Vk.CmdSetScissor(_commandBuffer, 0, 1, _scissor);
         VulkanEngine.Vk.CmdSetViewport(_commandBuffer, 0, 1, _viewport);
+        VulkanEngine.Vk.CmdPushConstants(_commandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,  sizeof(float) * 4 * 3,
+            pushConstants);
 
         VulkanEngine.Vk.CmdDraw(_commandBuffer, 6, 1, 0, 0);
     }

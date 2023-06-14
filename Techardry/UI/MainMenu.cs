@@ -102,7 +102,7 @@ public class MainMenu : ElementContainer, RootElement
         VulkanEngine.Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
             _background, 0, null);
         VulkanEngine.Vk.CmdPushConstants(commandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
-            (uint)sizeof(RectangleF), pushConstants);
+            (uint)sizeof(RectangleF) * 2, pushConstants);
         VulkanEngine.Vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
         VulkanEngine.Vk.CmdSetViewport(commandBuffer, 0, 1, viewport);
 

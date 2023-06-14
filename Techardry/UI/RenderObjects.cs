@@ -264,11 +264,16 @@ public static class RenderObjects
             }
         },
         DepthStencilInfo = default,
-        VertexAttributeDescriptions = Vertex.GetVertexAttributes(),
-        VertexInputBindingDescriptions = new[]
+        VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
+        VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
+        PushConstantRanges = new PushConstantRange[]
         {
-            Vertex.GetVertexBinding()
-        },
-        PushConstantRanges = Array.Empty<PushConstantRange>()
+            new()
+            {
+                Offset = 0,
+                Size = sizeof(float) * 4 * 3,
+                StageFlags = ShaderStageFlags.VertexBit
+            }
+        }
     };
 }

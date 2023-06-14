@@ -13,6 +13,6 @@
     "shaders",
     "shaders/ui"
   ],
-  "ShaderDebugging": true,
+  "ShaderDebugging": false,
   "ResourceFolder": "Resources"
 }
