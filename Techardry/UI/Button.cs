@@ -63,7 +63,10 @@ public class Button : Element
     public override void Draw(CommandBuffer commandBuffer, IList<IDisposable> resourcesToDispose, Rect2D scissor, Viewport viewport)
     {
         var borderTextures = BorderHelper.GetDefaultBorderImages();
-        BorderBuilder.DrawBorder(commandBuffer, _borderWidth, Color.Blue, borderTextures,
+
+        var baseColor = CursorHovering ? Color.Gray : Color.DarkGray;
+        
+        BorderBuilder.DrawBorder(commandBuffer, _borderWidth, baseColor, borderTextures,
             resourcesToDispose,scissor, viewport);
 
         if (TextBox is null) return;

@@ -27,6 +27,11 @@ public static class BorderBuilder
 
         var absolutBorderWidth = borderWidth;
         var absolutBorderHeight = borderWidth * heightModifier;
+
+        if (fillColor is not null)
+        {
+            FillWithColor(cb, fillColor.Value, borderResources, scissor, viewport);
+        }
         
         DrawBorderTexture(cb, borderImages.Left,
             new RectangleF(new PointF(0, 0),
@@ -76,6 +81,21 @@ public static class BorderBuilder
         
         VulkanEngine.Vk.CmdDraw(cb, 6, 1, 0, 0);
 
+        borderResources.Buffers.Add(vertexBuffer);
+    }
+    
+    private static void FillWithColor(CommandBuffer cb, Color color, BorderResources borderResources, Rect2D scissor, Viewport viewport)
+    {
+        var vertexBuffer = UiHelper.CreateVertexBuffer(new RectangleF(0, 0, 1, 1), color);
+        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiColorPipeline);
+
+        VulkanEngine.Vk.CmdBindPipeline(cb, PipelineBindPoint.Graphics, pipeline);
+        VulkanEngine.Vk.CmdBindVertexBuffers(cb, 0, 1, vertexBuffer.Buffer, 0);
+        VulkanEngine.Vk.CmdSetScissor(cb, 0,1,scissor);
+        VulkanEngine.Vk.CmdSetViewport(cb, 0, 1, viewport);
+        
+        VulkanEngine.Vk.CmdDraw(cb, 6, 1, 0, 0);
+        
         borderResources.Buffers.Add(vertexBuffer);
     }
 
