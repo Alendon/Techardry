@@ -18,6 +18,7 @@ public class Button : Element, IBorderElement
     private RectangleF _innerLayout;
     private bool _lastHoveredState;
     private float _borderWidth;
+    private bool _borderActive = true;
 
     /// <summary>
     ///     Create a new button
@@ -48,12 +49,16 @@ public class Button : Element, IBorderElement
     public override void Initialize()
     {
         if (_content.Length != 0)
+        {
+            var offsetX = BorderActive ? BorderWidth : 0;
+            var offsetY = BorderActive ? GetRelativeBorderHeightByWidth(BorderWidth, this) : 0;
             TextBox = new TextBox(
-                new RectangleF(BorderWidth, BorderWidth, 1 - BorderWidth * 2, 1 - BorderWidth * 2),
+                new RectangleF(offsetX, offsetY, 1 - offsetX * 2, 1 - offsetY * 2),
                 _content, desiredFontSize: _desiredFontSize, borderActive: false)
             {
                 Parent = this
             };
+        }
 
         HasChanged = true;
         TextBox?.Initialize();
@@ -63,8 +68,9 @@ public class Button : Element, IBorderElement
     {
         if(TextBox is not null)
         {
-            var borderHeight = GetRelativeBorderHeightByWidth(BorderWidth, this);
-            TextBox.RelativeLayout = new RectangleF(BorderWidth, borderHeight, 1 - BorderWidth * 2, 1 - borderHeight * 2);
+            var offsetX = BorderActive ? BorderWidth : 0;
+            var offsetY = BorderActive ? GetRelativeBorderHeightByWidth(BorderWidth, this) : 0;
+            TextBox.RelativeLayout = new RectangleF(offsetX, offsetY, 1 - offsetX * 2, 1 - offsetY * 2);
             TextBox.OnResize();
         }
         base.OnResize();
@@ -72,11 +78,12 @@ public class Button : Element, IBorderElement
 
     public override void Draw(UiRenderer renderer, Rect2D scissor, Viewport viewport)
     {
-        var borderTextures = GetDefaultBorderImages();
-
-        var baseColor = CursorHovering ? Color.Gray : Color.DarkGray;
-        
-        BorderBuilder.DrawBorder(renderer, BorderWidth, baseColor, borderTextures,scissor, viewport);
+        if(BorderActive)
+        {
+            var borderTextures = GetDefaultBorderImages();
+            var baseColor = CursorHovering ? Color.Gray : Color.DarkGray;
+            BorderBuilder.DrawBorder(renderer, BorderWidth, baseColor, borderTextures, scissor, viewport);
+        }
 
         if (TextBox is null) return;
         
@@ -109,8 +116,15 @@ public class Button : Element, IBorderElement
         base.Dispose(disposing);
     }
 
-    //TODO implement a logic to actually respond if the border is active
-    public bool BorderActive { get; set; } = true;
+    public bool BorderActive
+    {
+        get => _borderActive;
+        set
+        {
+            _borderActive = value;
+            OnResize();
+        }
+    }
 
     public float BorderWidth
     {
