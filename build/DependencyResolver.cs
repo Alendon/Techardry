@@ -3,16 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using JetBrains.Annotations;
+using NuGet.Versioning;
 using Nuke.Common;
 
 class DependencyResolver
 {
     readonly JsonDocument DependencyTree;
     readonly string Mod;
-    readonly List<string> ModDependencies;
+    readonly List<(string packageName, NuGetVersion? version)> ModDependencies;
     readonly JsonElement DependencyRoot;
 
-    public DependencyResolver(JsonDocument dependencyTree, string mod, List<string> modDependencies)
+    public DependencyResolver(JsonDocument dependencyTree, string mod, List<(string packageName, NuGetVersion? version)> modDependencies)
     {
         DependencyTree = dependencyTree;
         Mod = mod;
@@ -51,7 +52,7 @@ class DependencyResolver
                     continue;
 
                 //Dependencies to other mods are handled by the mod manager
-                if (ModDependencies.Any(x => x.Equals(dependency)))
+                if (ModDependencies.Any(x => x.packageName.Equals(dependency)))
                     continue;
                 
                 toProcess.Enqueue(dependency);
@@ -77,10 +78,6 @@ class DependencyResolver
         {
             dependencies = dependencyTree
                 .EnumerateObject()
-                .Where(x =>
-                {
-                    return true;
-                })
                 .Select(x => x.Name)
                 .ToArray();
         }
