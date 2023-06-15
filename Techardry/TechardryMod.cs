@@ -93,6 +93,10 @@ public partial class TechardryMod : IMod
                 mainMenu = UiHandler.GetRootElement(UiIDs.MainMenu) as Element;
                 mainMenu!.Initialize();
                 mainMenu.IsActive = true;
+            }
+
+            if (MainUiRenderer?.GetUiContext() != mainMenu)
+            {
                 MainUiRenderer?.SetUiContext(mainMenu);
             }
 

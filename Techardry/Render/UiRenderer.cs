@@ -65,6 +65,11 @@ public class UiRenderer : IDisposable
     {
         _rootElement = rootUiElement;
     }
+    
+    public Element? GetUiContext()
+    {
+        return _rootElement;
+    }
 
     public void DrawUi()
     {

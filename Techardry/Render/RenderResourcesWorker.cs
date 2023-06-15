@@ -82,6 +82,7 @@ public class RenderResourcesWorker
         _world.ChunkManager.ChunkUpdated -= ChunkManager_ChunkUpdated;
 
         _chunkRemoveQueue.Clear();
+        _isRunning = false;
         _workerThread?.Join();
 
         foreach (var buffer in _chunkBuffers)

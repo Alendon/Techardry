@@ -365,6 +365,7 @@ public class ChunkManager : IDisposable
             _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
             chunkEntry.Chunk.Dispose();
         }
+        _chunks.Clear();
     }
 
     internal void AddChunk(Int3 chunkPosition)
