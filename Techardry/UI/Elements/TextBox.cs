@@ -10,8 +10,6 @@ using Techardry.UI.Interfaces;
 
 namespace Techardry.UI.Elements;
 
-//TODO implement a dynamic offset, so that the text dont stick directly to the edges
-
 /// <summary>
 ///     Ui element to display a simple text
 /// </summary>
