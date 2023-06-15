@@ -4,6 +4,7 @@ using JetBrains.Annotations;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Render;
+using Techardry.UI.Interfaces;
 
 namespace Techardry.UI;
 
@@ -27,9 +28,7 @@ public abstract class Element : IDisposable
     /// </summary>
     //public virtual bool Redraw { get; protected set; } = true;
 
-    public abstract void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor, Viewport viewport);
-
-    
+    public abstract void Draw(UiRenderer renderer, Rect2D scissor, Viewport viewport);
 
     public virtual bool HasChanged { get; protected set; }
 
@@ -43,7 +42,7 @@ public abstract class Element : IDisposable
     ///     Values needs to be in Range 0f-1f
     ///     <remarks>The (0,0) coordinate is the lower left corner</remarks>
     /// </summary>
-    public RectangleF RelativeLayout { get; }
+    public RectangleF RelativeLayout { get; set; }
 
     /// <summary>
     ///     The absolute layout of the element
@@ -54,13 +53,43 @@ public abstract class Element : IDisposable
     {
         get
         {
-            if (this is RootElement) return new RectangleF(0, 0, 1, 1);
+            if (this is IRootElement) return new RectangleF(0, 0, 1, 1);
             Logger.AssertAndThrow(Parent is not null, "Cannot get absolute layout of element as parent is null", "UI");
             return new RectangleF(Parent.AbsoluteLayout.X + Parent.AbsoluteLayout.Width * RelativeLayout.X,
                 Parent.AbsoluteLayout.Y + Parent.AbsoluteLayout.Height * RelativeLayout.Y,
                 Parent.AbsoluteLayout.Width * RelativeLayout.Width, Parent.AbsoluteLayout.Height * RelativeLayout.Height);
         }
     }
+
+    public Size RootPixelSize
+    {
+        get
+        {
+            var current = this;
+            while (current is not IRootElement)
+            {
+                if (current.Parent is null)
+                {
+                    Logger.WriteLog("Cannot get root pixel size of element, as no root element was found", LogImportance.Error, "UI");
+                    return new Size(0, 0);
+                }
+                
+                current = current.Parent;
+            }
+
+            return (current as IRootElement)!.PixelSize;
+        }
+    }
+
+    public Size ElementPixelSize
+    {
+        get
+        {
+            var rootSize = RootPixelSize;
+            return new Size((int) (rootSize.Width * AbsoluteLayout.Width), (int) (rootSize.Height * AbsoluteLayout.Height));
+        }
+    }
+    
 
     /// <summary>
     ///     Whether or not the cursor is hovering over the element
@@ -85,6 +114,15 @@ public abstract class Element : IDisposable
     public virtual void Update(float deltaTime)
     {
     }
+
+    /// <summary>
+    ///     Triggered when the window or the parent element is resized
+    /// </summary>
+    public virtual void OnResize()
+    {
+        
+    }
+
 
     /// <summary>
     ///     Initialize the element

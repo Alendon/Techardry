@@ -1,14 +1,10 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
-using System.Numerics;
+﻿using System.Numerics;
 using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
 using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.CollisionDetection.SweepTasks;
 using BepuPhysics.Constraints;
-using MintyCore.Components.Client;
-using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Physics;
 using MintyCore.Utils;

@@ -1,9 +1,9 @@
-﻿using MintyCore.Registries;
-using Techardry.Registries;
+﻿using Techardry.Registries;
+using Techardry.UI.Elements;
 
 namespace Techardry.UI;
 
-public class Prefabs
+public static class Prefabs
 {
     [RegisterUiPrefab("main_menu_prefab")]
     internal static PrefabElementInfo MainMenuPrefabElement => new()

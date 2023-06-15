@@ -1,9 +1,5 @@
-﻿using System.IO.Compression;
-using System.Numerics;
-using FontStashSharp;
-using JetBrains.Annotations;
+﻿using JetBrains.Annotations;
 using MintyCore;
-using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
@@ -12,13 +8,11 @@ using MintyCore.Render;
 using MintyCore.Utils;
 using MintyCore.Utils.Maths;
 using Silk.NET.Vulkan;
-using Techardry.Components.Client;
 using Techardry.Entities;
 using Techardry.Identifications;
 using Techardry.Registries;
 using Techardry.Render;
 using Techardry.UI;
-using Techardry.Voxels;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
 using TextureIDs = Techardry.Identifications.TextureIDs;
 
@@ -29,12 +23,11 @@ namespace Techardry;
 public partial class TechardryMod : IMod
 {
     public ushort ModId { get; set; }
-    public string ModName => "Techardry";
+    private string ModName => "Techardry";
 
     public int ServerRenderDistance { get; set; } = 8;
     
     public static UiRenderer? MainUiRenderer { get; private set; }
-    public static FontSystem? FontSystem { get; private set; }
 
     public void Dispose()
     {
@@ -117,6 +110,9 @@ public partial class TechardryMod : IMod
         }
 
         MainUiRenderer?.SetUiContext(null);
+        VulkanEngine.WaitForAll();
+        
+        MainUiRenderer?.Dispose();
     }
 
     private static void RunHeadless()

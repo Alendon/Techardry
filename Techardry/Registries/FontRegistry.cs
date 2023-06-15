@@ -1,11 +1,8 @@
 ﻿using JetBrains.Annotations;
-using MintyCore;
 using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
-using MintyCore.Registries;
 using MintyCore.Utils;
 using Techardry.Identifications;
-using Techardry.UI;
 
 namespace Techardry.Registries;
 
@@ -48,9 +45,7 @@ public class FontRegistry : IRegistry
     /// <inheritdoc />
     public void UnRegister(Identification objectId)
     {
-        if (Engine.HeadlessModeActive)
-            return;
-        FontHandler.RemoveFont(objectId);
+
     }
 
     /// <inheritdoc />
@@ -70,7 +65,6 @@ public class FontRegistry : IRegistry
     /// <inheritdoc />
     public void Clear()
     {
-        FontHandler.Clear();
         ClearRegistryEvents();
     }
 
@@ -85,35 +79,12 @@ public class FontRegistry : IRegistry
 
     /// <summary>
     /// Register a font family
-    /// Used by the source generator for <see cref="RegisterFontFamilyAttribute"/>
-    /// </summary>
-    /// <param name="id">Id of the font</param>
-    /// <param name="fontInfo">Placeholder info</param>
-    [RegisterMethod(ObjectRegistryPhase.Main, RegisterMethodOptions.HasFile)]
-    public static void RegisterFontFamily(Identification id, FontInfo fontInfo)
-    {
-        if (Engine.HeadlessModeActive)
-            return;
-        FontHandler.LoadFont(id);
-    }
-
-    /// <summary>
-    /// Register a font family
     /// Used by the source generator
     /// </summary>
     /// <param name="id">Id of the font</param>
     [RegisterMethod(ObjectRegistryPhase.Main, RegisterMethodOptions.HasFile)]
-    public static void RegisterFontFamilyFile(Identification id)
+    public static void RegisterFont(Identification id)
     {
-        if (Engine.HeadlessModeActive)
-            return;
-        FontHandler.LoadFont(id);
-    }
-}
 
-/// <summary>
-/// Placeholder struct to be able to register fonts in code
-/// </summary>
-public struct FontInfo
-{
+    }
 }

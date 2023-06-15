@@ -7,21 +7,19 @@ using MintyCore.Utils;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using SixLabors.Fonts;
-using SixLabors.ImageSharp.Drawing.Processing;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
 using Techardry.Identifications;
 using Techardry.Render;
-using Image = SixLabors.ImageSharp.Image;
+using Techardry.UI.Interfaces;
+using static Techardry.UI.UiHelper;
 
-namespace Techardry.UI;
+namespace Techardry.UI.Elements;
 
 /// <summary>
 ///     Ui element representing the main menu
 /// </summary>
-public class MainMenu : ElementContainer, RootElement
+public class MainMenu : ElementContainer, IRootElement
 {
-    private readonly DescriptorSet _background;
+    private readonly Identification _background;
     private readonly TextField _playerId;
     private readonly TextField _playerName;
 
@@ -41,75 +39,67 @@ public class MainMenu : ElementContainer, RootElement
     {
         Engine.Window!.WindowInstance.FramebufferResize += OnResize;
 
-        var title = new TextBox(new RectangleF(0.3f, 0, 0.4f, 0.2f), "Main Menu", FontIDs.Akashi, useBorder: false);
+        var title = new TextBox(new RectangleF(0.3f, 0, 0.4f, 0.2f), "Main Menu", borderActive: false);
         title.IsActive = true;
         AddElement(title);
 
         const ushort fontSize = 35;
+        
+        var absoluteBorderWidth = 0.01f;
 
-        _targetAddress = new TextField(new RectangleF(0.1f, 0.4f, 0.25f, 0.1f), FontIDs.Akashi,
+        _targetAddress = new TextField(new RectangleF(0.2f, 0.7f, 0.25f, 0.1f), 
             horizontalAlignment: HorizontalAlignment.Left, hint: "Target address", desiredFontSize: fontSize);
-        _targetAddress.IsActive = true;
         AddElement(_targetAddress);
+        _targetAddress.IsActive = true;
+        _targetAddress.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, _targetAddress);
 
-        _targetPort = new TextField(new RectangleF(0.1f, 0.5f, 0.25f, 0.1f), FontIDs.Akashi,
+        _targetPort = new TextField(new RectangleF(0.2f, 0.8f, 0.25f, 0.1f), 
             horizontalAlignment: HorizontalAlignment.Left, hint: "Target port", desiredFontSize: fontSize);
-        _targetPort.IsActive = true;
         AddElement(_targetPort);
+        _targetPort.IsActive = true;
+        _targetPort.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, _targetPort);
 
-        _playerName = new TextField(new RectangleF(0.65f, 0.4f, 0.25f, 0.1f), FontIDs.Akashi,
+        _playerName = new TextField(new RectangleF(0.55f, 0.7f, 0.25f, 0.1f), 
             horizontalAlignment: HorizontalAlignment.Left, hint: "Player name", desiredFontSize: fontSize);
-        _playerName.IsActive = true;
         AddElement(_playerName);
+        _playerName.IsActive = true;
+        _playerName.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, _playerName);
 
-        _playerId = new TextField(new RectangleF(0.65f, 0.5f, 0.25f, 0.1f), FontIDs.Akashi,
+        _playerId = new TextField(new RectangleF(0.55f, 0.8f, 0.25f, 0.1f), 
             horizontalAlignment: HorizontalAlignment.Left, hint: "Player id", desiredFontSize: fontSize);
-        _playerId.IsActive = true;
         AddElement(_playerId);
+        _playerId.IsActive = true;
+        _playerId.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, _playerId);
 
-        var play = new Button(new RectangleF(0.4f, 0.4f, 0.2f, 0.1f), "Play Local", fontSize);
+        var play = new Button(new RectangleF(0.35f, 0.3f, 0.3f, 0.1f), "Play Local", fontSize);
+        AddElement(play);
         play.IsActive = true;
         play.OnLeftClickCb += OnPlayLocal;
-        AddElement(play);
+        play.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, play);
 
-        var connectToServer = new Button(new RectangleF(0.4f, 0.5f, 0.2f, 0.1f),
-            $"Connect to {Environment.NewLine}Server", fontSize);
+        var connectToServer = new Button(new RectangleF(0.35f, 0.45f, 0.3f, 0.1f),
+            "Connect to Server", fontSize);
+        AddElement(connectToServer);
         connectToServer.IsActive = true;
         connectToServer.OnLeftClickCb += OnConnectToServer;
-        AddElement(connectToServer);
+        connectToServer.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, connectToServer);
 
-        var createServer = new Button(new RectangleF(0.4f, 0.8f, 0.2f, 0.1f), "Create Server", fontSize);
+        var createServer = new Button(new RectangleF(0.35f, 0.55f, 0.3f, 0.1f), "Create Server", fontSize);
+        AddElement(createServer);
         createServer.IsActive = true;
         createServer.OnLeftClickCb += OnCreateServer;
-        AddElement(createServer);
+        createServer.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, createServer);
 
-        _background = TextureHandler.GetTextureBindResourceSet(TextureIDs.MainMenuBackground);
+        _background = TextureIDs.MainMenuBackground;
     }
 
-    public override unsafe void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor,
+    public override void Draw(UiRenderer renderer, Rect2D scissor,
         Viewport viewport)
     {
-        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiTexturePipeline);
-        var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiTexturePipeline);
 
-        var pushConstants = stackalloc RectangleF[]
-        {
-            AbsoluteLayout,
-            new RectangleF(0, 0, 1, 1)
-        };
+        renderer.DrawTexture(_background, AbsoluteLayout, new RectangleF(0, 0, 1, 1), scissor, viewport);
 
-        VulkanEngine.Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, pipeline);
-        VulkanEngine.Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
-            _background, 0, null);
-        VulkanEngine.Vk.CmdPushConstants(commandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
-            (uint)sizeof(RectangleF) * 2, pushConstants);
-        VulkanEngine.Vk.CmdSetScissor(commandBuffer, 0, 1, scissor);
-        VulkanEngine.Vk.CmdSetViewport(commandBuffer, 0, 1, viewport);
-
-        VulkanEngine.Vk.CmdDraw(commandBuffer, 6, 1, 0, 0);
-
-
-        base.Draw(commandBuffer, renderer, scissor, viewport);
+        base.Draw( renderer, scissor, viewport);
     }
 
     private void OnPlayLocal()

@@ -32,19 +32,19 @@ vec2 getVertex() {
             vertex = vec2(r.x, r.y);
             break;
         case 1:
-            vertex = vec2(r.x, r.y + r.h);
+            vertex = vec2(r.x + r.w, r.y + r.h);
             break;
         case 2:
-            vertex = vec2(r.x + r.w, r.y + r.h);
+            vertex = vec2(r.x, r.y + r.h);
             break;
         case 3:
             vertex = vec2(r.x, r.y );
             break;
         case 4:
-            vertex = vec2(r.x + r.w, r.y + r.h);
+            vertex = vec2(r.x + r.w, r.y );
             break;
         case 5:
-            vertex = vec2(r.x + r.w, r.y );
+            vertex = vec2(r.x + r.w, r.y + r.h);
             break;
         default:
             return vec2(0.f, 0.f);

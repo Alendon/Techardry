@@ -2,7 +2,7 @@ using System.Drawing;
 using MintyCore.Utils;
 using SixLabors.Fonts;
 
-namespace Techardry.UI;
+namespace Techardry.UI.Elements;
 
 /// <summary>
 ///     Ui element for a text input
@@ -20,14 +20,14 @@ public class TextField : TextBox
     /// ///
     /// <param name="fontFamilyId">The font family to use for rendering</param>
     /// <param name="desiredFontSize">The desired size of the font used.</param>
-    /// <param name="useBorder">Whether or not a border should be drawn around the element</param>
+    /// <param name="borderActive">Whether or not a border should be drawn around the element</param>
     /// <param name="horizontalAlignment">Which horizontal alignment the text should use</param>
     /// <param name="hint">Text which will be displayed if empty</param>
     // ReSharper disable once NotNullMemberIsNotInitialized
-    public TextField(RectangleF relativeLayout, Identification fontFamilyId, ushort desiredFontSize = ushort.MaxValue,
-        bool useBorder = true, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Center,
-        string hint = "") : base(relativeLayout,
-        "To Measure |", fontFamilyId, desiredFontSize, useBorder, horizontalAlignment)
+    public TextField(RectangleF relativeLayout, ushort desiredFontSize = ushort.MaxValue,
+        bool borderActive = true, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Center,
+        string hint = "", float borderWidth = 0.05f) : base(relativeLayout,
+        "To Measure |", desiredFontSize, borderActive, horizontalAlignment, borderWidth: borderWidth)
     {
         _textInput = new TextInput(false);
         FillColor = Color.Gray;
@@ -37,7 +37,7 @@ public class TextField : TextBox
     /// <summary>
     ///     The inputted text
     ///     Use this to access/set the inputted text
-    ///     May differ to <see cref="Techardry.UI.TextBox.Content" />
+    ///     May differ to <see cref="TextBox.Content" />
     /// </summary>
     public string InputText
     {

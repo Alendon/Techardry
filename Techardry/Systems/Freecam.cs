@@ -3,12 +3,9 @@ using System.Numerics;
 using MintyCore;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
-using MintyCore.Registries;
 using MintyCore.SystemGroups;
 using MintyCore.Utils;
-using Silk.NET.Input;
 using Techardry.Components.Client;
-using SystemIDs = Techardry.Identifications.SystemIDs;
 
 namespace Techardry.Systems;
 

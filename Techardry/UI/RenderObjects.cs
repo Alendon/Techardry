@@ -81,8 +81,7 @@ public static class RenderObjects
         },
         RasterizationInfo = new RasterizationInfo()
         {
-            //TODO set the correct culling mode
-            CullMode = CullModeFlags.None,
+            CullMode = CullModeFlags.BackBit,
             FrontFace = FrontFace.Clockwise,
             PolygonMode = PolygonMode.Fill,
             LineWidth = 1f
@@ -157,8 +156,7 @@ public static class RenderObjects
         },
         RasterizationInfo = new RasterizationInfo()
         {
-            //TODO set the correct culling mode
-            CullMode = CullModeFlags.None,
+            CullMode = CullModeFlags.BackBit,
             FrontFace = FrontFace.Clockwise,
             PolygonMode = PolygonMode.Fill,
             LineWidth = 1f
@@ -236,8 +234,7 @@ public static class RenderObjects
         },
         RasterizationInfo = new RasterizationInfo()
         {
-            //TODO set the correct culling mode
-            CullMode = CullModeFlags.None,
+            CullMode = CullModeFlags.BackBit,
             FrontFace = FrontFace.Clockwise,
             PolygonMode = PolygonMode.Fill,
             LineWidth = 1f

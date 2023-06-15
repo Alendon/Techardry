@@ -1,14 +1,16 @@
-﻿using System.Numerics;
+﻿using System.Drawing;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using DotNext.Collections.Generic;
 using FontStashSharp;
-using FontStashSharp.Interfaces;
-using FontStashSharp.Rasterizers.StbTrueTypeSharp;
+using JetBrains.Annotations;
 using MintyCore.Modding;
 using MintyCore.Render;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
 using Techardry.UI;
+using Techardry.UI.Interfaces;
 using RenderPassIDs = MintyCore.Identifications.RenderPassIDs;
 
 namespace Techardry.Render;
@@ -16,11 +18,15 @@ namespace Techardry.Render;
 /// <summary>
 ///     The main UI renderer
 /// </summary>
-public class UiRenderer
+[PublicAPI]
+public class UiRenderer : IDisposable
 {
     private Element? _rootElement;
 
     private uint FrameIndex => VulkanEngine.ImageIndex;
+
+    public Size RenderSize => (_rootElement as IRootElement)?.PixelSize ?? Size.Empty;
+    public CommandBuffer CommandBuffer { get; private set; }
 
     private List<IDisposable>?[] _disposables = new List<IDisposable>?[VulkanEngine.SwapchainImageCount];
 
@@ -66,22 +72,23 @@ public class UiRenderer
         VulkanEngine.SetActiveRenderPass(RenderPassHandler.GetRenderPass(RenderPassIDs.Main),
             SubpassContents.SecondaryCommandBuffers);
 
-        var cb = VulkanEngine.GetSecondaryCommandBuffer();
-        DrawToScreen(cb);
-        
+        CommandBuffer = VulkanEngine.GetSecondaryCommandBuffer();
+        DrawToScreen();
+
         var singleTimeCb = VulkanEngine.GetSingleTimeCommandBuffer();
         _fontRenderers[FrameIndex].FontTextureManager.ManagedTextures.ForEach(x => x.ApplyChanges(singleTimeCb));
         VulkanEngine.ExecuteSingleTimeCommandBuffer(singleTimeCb);
-        
-        VulkanEngine.ExecuteSecondary(cb);
+
+        VulkanEngine.ExecuteSecondary(CommandBuffer);
+        CommandBuffer = default;
     }
 
     public List<IDisposable> Disposables { get; private set; } = new();
 
-    private void DrawToScreen(CommandBuffer cb)
+    private void DrawToScreen()
     {
         _disposables[FrameIndex]?.ForEach(x => x.Dispose());
-        if (_rootElement is null || _rootElement is not RootElement root) return;
+        if (_rootElement is null || _rootElement is not IRootElement root) return;
 
         var viewport = new Viewport()
         {
@@ -102,13 +109,21 @@ public class UiRenderer
             }
         };
 
-        _rootElement.Draw(cb, this, scissor, viewport);
+        _rootElement.Draw(this, scissor, viewport);
 
         _disposables[FrameIndex] = Disposables;
         Disposables = new List<IDisposable>();
     }
 
-    public virtual void DrawString(string text, int fontSize, CommandBuffer commandBuffer, Viewport viewport,
+    public Bounds MeasureString(string text, int fontSize, Vector2 position, Vector2? scale = null,
+        float characterSpacing = 0f, float lineSpacing = 0f, FontSystemEffect effect = FontSystemEffect.None,
+        int effectAmount = 0)
+    {
+        var font = _fontSystems[FrameIndex].GetFont(fontSize);
+        return font.TextBounds(text, position, scale, characterSpacing, lineSpacing, effect, effectAmount);
+    }
+
+    public void DrawString(string text, int fontSize, Viewport viewport,
         Rect2D scissor, Vector2 position,
         FSColor color, Vector2? scale = null, float rotation = 0f, Vector2 origin = default, float layerDepth = 0f,
         float characterSpacing = 0f, float lineSpacing = 0f, TextStyle textStyle = TextStyle.None,
@@ -117,9 +132,80 @@ public class UiRenderer
         var font = _fontSystems[FrameIndex].GetFont(fontSize);
         var renderer = _fontRenderers[FrameIndex];
 
-        renderer.PrepareNextDraw(commandBuffer, viewport, scissor);
+        renderer.PrepareNextDraw(CommandBuffer, viewport, scissor);
         font.DrawText(renderer, text, position, color, scale, rotation, origin, layerDepth, characterSpacing,
             lineSpacing, textStyle, effect, effectAmount);
         renderer.EndDraw();
+    }
+
+    public unsafe void DrawTexture(Identification textureId,
+        RectangleF drawingRect, RectangleF uvRect, Rect2D scissor, Viewport viewport)
+    {
+        var textureDescriptor = TextureHandler.GetTextureBindResourceSet(textureId);
+        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiTexturePipeline);
+        var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiTexturePipeline);
+
+        VulkanEngine.Vk.CmdBindPipeline(CommandBuffer, PipelineBindPoint.Graphics, pipeline);
+        VulkanEngine.Vk.CmdBindDescriptorSets(CommandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
+            textureDescriptor,
+            0, null);
+        VulkanEngine.Vk.CmdSetScissor(CommandBuffer, 0, 1, scissor);
+        VulkanEngine.Vk.CmdSetViewport(CommandBuffer, 0, 1, viewport);
+
+        var pushConstantValues = (stackalloc RectangleF[]
+        {
+            drawingRect,
+            uvRect
+        });
+        VulkanEngine.Vk.CmdPushConstants(CommandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
+            (uint)(sizeof(RectangleF) * 2), pushConstantValues);
+
+        VulkanEngine.Vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
+    }
+
+    public unsafe void FillColor(Color color,
+        Rect2D scissor, Viewport viewport)
+    {
+        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiColorPipeline);
+        var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiColorPipeline);
+
+        var pushConstants = stackalloc float[4 * 2];
+        Unsafe.AsRef<RectangleF>(pushConstants) = new RectangleF(0, 0, 1, 1);
+        Unsafe.AsRef<Vector4>(pushConstants + 4) =
+            new Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
+
+        VulkanEngine.Vk.CmdBindPipeline(CommandBuffer, PipelineBindPoint.Graphics, pipeline);
+        VulkanEngine.Vk.CmdPushConstants(CommandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
+            sizeof(float) * 4 * 2, pushConstants);
+        VulkanEngine.Vk.CmdSetScissor(CommandBuffer, 0, 1, scissor);
+        VulkanEngine.Vk.CmdSetViewport(CommandBuffer, 0, 1, viewport);
+
+        VulkanEngine.Vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
+    }
+
+    public void Dispose()
+    {
+        _rootElement?.Dispose();
+
+        foreach (var fontSystem in _fontSystems.AsSpan())
+        {
+            foreach (var fontAtlas in fontSystem.Atlases)
+            {
+                FontTextureWrapper? wrapper = fontAtlas.Texture as FontTextureWrapper;
+                wrapper?.Dispose();
+            }
+
+            fontSystem.Dispose();
+        }
+
+        foreach (var disposableList in _disposables)
+        {
+            foreach (var disposable in disposableList ?? Enumerable.Empty<IDisposable>())
+            {
+                disposable.Dispose();
+            }
+
+            disposableList?.Clear();
+        }
     }
 }

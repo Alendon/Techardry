@@ -32,19 +32,19 @@ vec2 getVertex() {
         case 0:
             vertex = vec2(r.x, r.y);
             break;
-        case 1:
+        case 2:
             vertex = vec2(r.x, r.y + r.h);
             break;
-        case 2:
+        case 1:
             vertex = vec2(r.x + r.w, r.y + r.h);
             break;
         case 3:
             vertex = vec2(r.x, r.y );
             break;
-        case 4:
+        case 5:
             vertex = vec2(r.x + r.w, r.y + r.h);
             break;
-        case 5:
+        case 4:
             vertex = vec2(r.x + r.w, r.y );
             break;
         default:
@@ -63,14 +63,14 @@ vec2 getUv(){
         case 0:
             return vec2(r.x, r.y + r.h);
         case 1:
-            return vec2(r.x, r.y);
-        case 2:
             return vec2(r.x + r.w, r.y);
+        case 2:
+            return vec2(r.x, r.y);
         case 3:
             return vec2(r.x, r.y + r.h);
         case 4:
-            return vec2(r.x + r.w, r.y);
-        case 5:
             return vec2(r.x + r.w, r.y + r.h);
+        case 5:
+            return vec2(r.x + r.w, r.y);
     }
 }

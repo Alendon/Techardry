@@ -78,5 +78,17 @@
         "File": "capsule.obj"
       }
     ]
+  },
+  {
+    "FullRegistryClassName": "Techardry.Registries.FontRegistry",
+    "RegisterMethodName": "RegisterFont",
+    "RegistryId": "font",
+    "RegistryPhase": 2,
+    "ToRegister": [
+      {
+        "Id": "akashi",
+        "File": "akashi.ttf"
+      }
+    ]
   }
 ]

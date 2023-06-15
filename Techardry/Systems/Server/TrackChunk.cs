@@ -1,5 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using MintyCore.Components.Common;
+﻿using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Registries;
 using MintyCore.SystemGroups;

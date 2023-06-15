@@ -4,6 +4,8 @@ using JetBrains.Annotations;
 using MintyCore;
 using MintyCore.Utils;
 using Silk.NET.Input;
+using Techardry.UI.Elements;
+using Techardry.UI.Interfaces;
 
 namespace Techardry.UI;
 
@@ -13,9 +15,9 @@ namespace Techardry.UI;
 [PublicAPI]
 public static class UiHandler
 {
-    private static readonly Dictionary<Identification, Identification> _uiRootElementCreators = new();
-    private static readonly Dictionary<Identification, RootElement> _uiRootElements = new();
-    private static readonly Dictionary<Identification, Func<Element>> _elementPrefabs = new();
+    private static readonly Dictionary<Identification, Identification> UiRootElementCreators = new();
+    private static readonly Dictionary<Identification, IRootElement> UiRootElements = new();
+    private static readonly Dictionary<Identification, Func<Element>> ElementPrefabs = new();
 
     private static bool _lastLeftMouseState;
     private static bool _lastRightMouseState;
@@ -30,23 +32,23 @@ public static class UiHandler
     /// <param name="element"></param>
     public static void AddRootElement(Identification id, Identification element)
     {
-        _uiRootElementCreators.Add(id, element);
+        UiRootElementCreators.Add(id, element);
     }
 
     internal static void AddElementPrefab(Identification id, Func<Element> prefab)
     {
-        _elementPrefabs.Add(id, prefab);
+        ElementPrefabs.Add(id, prefab);
     }
 
     internal static void SetElementPrefab(Identification prefabId, Func<Element> prefabCreator)
     {
-        _elementPrefabs.Remove(prefabId);
+        ElementPrefabs.Remove(prefabId);
         AddElementPrefab(prefabId, prefabCreator);
     }
 
     internal static void SetRootElement(Identification elementId, Identification rootElement)
     {
-        _uiRootElements.Remove(elementId);
+        UiRootElements.Remove(elementId);
         AddRootElement(elementId, rootElement);
     }
 
@@ -55,9 +57,9 @@ public static class UiHandler
     /// </summary>
     /// <param name="id"></param>
     /// <returns></returns>
-    public static RootElement GetRootElement(Identification id)
+    public static IRootElement GetRootElement(Identification id)
     {
-        return _uiRootElements[id];
+        return UiRootElements[id];
     }
 
     /// <summary>
@@ -67,7 +69,7 @@ public static class UiHandler
     /// <returns></returns>
     public static Element CreateElement(Identification id)
     {
-        return _elementPrefabs[id]();
+        return ElementPrefabs[id]();
     }
 
 
@@ -80,7 +82,7 @@ public static class UiHandler
 
         try
         {
-            foreach (var rootElement in _uiRootElements.Values)
+            foreach (var rootElement in UiRootElements.Values)
             {
                 if (rootElement is not Element element) throw new Exception();
                 UpdateElement(element, rootElement.PixelSize);
@@ -152,7 +154,7 @@ public static class UiHandler
 
     internal static void Clear()
     {
-        foreach (var rootElement in _uiRootElements.Values)
+        foreach (var rootElement in UiRootElements.Values)
         {
             if (rootElement is Element element)
             {
@@ -160,29 +162,29 @@ public static class UiHandler
             }
         }
 
-        _uiRootElementCreators.Clear();
-        _uiRootElements.Clear();
-        _elementPrefabs.Clear();
+        UiRootElementCreators.Clear();
+        UiRootElements.Clear();
+        ElementPrefabs.Clear();
     }
 
     internal static void RemoveElement(Identification objectId)
     {
-        _elementPrefabs.Remove(objectId);
-        if (_uiRootElements.Remove(objectId, out var rootElement) && rootElement is Element element)
+        ElementPrefabs.Remove(objectId);
+        if (UiRootElements.Remove(objectId, out var rootElement) && rootElement is Element element)
         {
             element.Dispose();
         }
-        _uiRootElementCreators.Remove(objectId);
+        UiRootElementCreators.Remove(objectId);
     }
 
     internal static void CreateRootElements()
     {
-        foreach (var (elementId, creatorId) in _uiRootElementCreators)
+        foreach (var (elementId, creatorId) in UiRootElementCreators)
         {
-            if (_uiRootElements.ContainsKey(elementId)) continue;
+            if (UiRootElements.ContainsKey(elementId)) continue;
             var element = CreateElement(creatorId);
-            if (element is not RootElement rootElement) throw new Exception("Root elements must be of type RootElement");
-            _uiRootElements.Add(elementId, rootElement);
+            if (element is not IRootElement rootElement) throw new Exception("Root elements must be of type RootElement");
+            UiRootElements.Add(elementId, rootElement);
         }
     }
 }

@@ -3,8 +3,9 @@ using JetBrains.Annotations;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Render;
+using Techardry.UI.Interfaces;
 
-namespace Techardry.UI;
+namespace Techardry.UI.Elements;
 
 /// <summary>
 ///     A generic element which can contain multiple child elements
@@ -27,7 +28,6 @@ public class ElementContainer : Element
     {
     }
 
-    private bool _redraw = true;
     
     /*public override bool Redraw
     {
@@ -35,7 +35,7 @@ public class ElementContainer : Element
         protected set => _redraw = value;
     }*/
 
-    public override void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor, Viewport viewport)
+    public override void Draw(UiRenderer renderer, Rect2D scissor, Viewport viewport)
     {
         foreach (var childElement in GetChildElements())
         {
@@ -44,7 +44,7 @@ public class ElementContainer : Element
             childViewport.Height *= childElement.RelativeLayout.Height;
             childViewport.X += (int)(viewport.Width * childElement.RelativeLayout.X);
             childViewport.Y += (int)(viewport.Height * childElement.RelativeLayout.Y);
-            childElement.Draw(commandBuffer, renderer, scissor, childViewport);
+            childElement.Draw(renderer, scissor, childViewport);
         }
     }
 
@@ -52,21 +52,20 @@ public class ElementContainer : Element
     ///     Add a new child element
     /// </summary>
     /// <param name="element">Element to add as a child</param>
+    [PublicAPI]
     public void AddElement(Element element)
     {
-        if (element is RootElement)
+        if (element is IRootElement)
             Logger.WriteLog("Root element can not be added as a child", LogImportance.Exception, "UI");
 
         if (!RelativeLayout.Contains(element.RelativeLayout))
         {
-            Logger.WriteLog("Element to add is not inside parent bounds", LogImportance.Error, "UI");
-            return;
+            Logger.WriteLog("Element to add is not inside parent bounds", LogImportance.Warning, "UI");
         }
 
         if (_containingElements.Any(childElement => element.RelativeLayout.IntersectsWith(childElement.RelativeLayout)))
         {
-            Logger.WriteLog("Element to add overlaps with existing element", LogImportance.Error, "UI");
-            return;
+            Logger.WriteLog("Element to add overlaps with existing element", LogImportance.Warning, "UI");
         }
 
         _containingElements.Add(element);
@@ -88,5 +87,14 @@ public class ElementContainer : Element
         }
         
         base.Dispose(disposing);
+    }
+
+    public override void OnResize()
+    {
+        base.OnResize();
+        foreach (var childElement in GetChildElements())
+        {
+            childElement.OnResize();
+        }
     }
 }

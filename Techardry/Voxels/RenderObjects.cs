@@ -1,5 +1,4 @@
 ﻿using System.Numerics;
-using System.Runtime.CompilerServices;
 using MintyCore.Registries;
 using MintyCore.Render;
 using MintyCore.Utils;

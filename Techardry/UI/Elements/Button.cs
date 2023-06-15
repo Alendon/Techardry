@@ -1,25 +1,23 @@
 ﻿using System.Drawing;
 using JetBrains.Annotations;
 using Silk.NET.Vulkan;
-using SixLabors.ImageSharp.Drawing.Processing;
-using SixLabors.ImageSharp.PixelFormats;
-using SixLabors.ImageSharp.Processing;
-using Techardry.Identifications;
 using Techardry.Render;
+using Techardry.UI.Interfaces;
+using static Techardry.UI.UiHelper;
 
-namespace Techardry.UI;
+namespace Techardry.UI.Elements;
 
 /// <summary>
 ///     Simple button ui element
 /// </summary>
 [PublicAPI]
-public class Button : Element
+public class Button : Element, IBorderElement
 {
     private readonly string _content;
     private readonly ushort _desiredFontSize;
     private RectangleF _innerLayout;
     private bool _lastHoveredState;
-    private float _borderWidth = 0.01f;
+    private float _borderWidth;
 
     /// <summary>
     ///     Create a new button
@@ -28,10 +26,11 @@ public class Button : Element
     /// <param name="content">Optional string to display inside of the button</param>
     /// <param name="desiredFontSize">Font size of the optional string</param>
     // ReSharper disable once NotNullMemberIsNotInitialized
-    public Button(RectangleF layout, string content = "", ushort desiredFontSize = ushort.MaxValue) : base(layout)
+    public Button(RectangleF layout, string content = "", ushort desiredFontSize = ushort.MaxValue, float borderWidth = 0.05f) : base(layout)
     {
         _content = content;
         _desiredFontSize = desiredFontSize;
+        BorderWidth = borderWidth;
     }
 
     /// <summary>
@@ -50,9 +49,8 @@ public class Button : Element
     {
         if (_content.Length != 0)
             TextBox = new TextBox(
-                new RectangleF(_borderWidth, _borderWidth, 1 - _borderWidth * 2, 1 - _borderWidth * 2),
-                _content, FontIDs.Akashi, useBorder: false,
-                desiredFontSize: _desiredFontSize)
+                new RectangleF(BorderWidth, BorderWidth, 1 - BorderWidth * 2, 1 - BorderWidth * 2),
+                _content, desiredFontSize: _desiredFontSize, borderActive: false)
             {
                 Parent = this
             };
@@ -61,14 +59,24 @@ public class Button : Element
         TextBox?.Initialize();
     }
 
-    public override void Draw(CommandBuffer commandBuffer, UiRenderer renderer, Rect2D scissor, Viewport viewport)
+    public override void OnResize()
     {
-        var borderTextures = BorderHelper.GetDefaultBorderImages();
+        if(TextBox is not null)
+        {
+            var borderHeight = GetRelativeBorderHeightByWidth(BorderWidth, this);
+            TextBox.RelativeLayout = new RectangleF(BorderWidth, borderHeight, 1 - BorderWidth * 2, 1 - borderHeight * 2);
+            TextBox.OnResize();
+        }
+        base.OnResize();
+    }
+
+    public override void Draw(UiRenderer renderer, Rect2D scissor, Viewport viewport)
+    {
+        var borderTextures = GetDefaultBorderImages();
 
         var baseColor = CursorHovering ? Color.Gray : Color.DarkGray;
         
-        BorderBuilder.DrawBorder(commandBuffer, _borderWidth, baseColor, borderTextures,
-            renderer,scissor, viewport);
+        BorderBuilder.DrawBorder(renderer, BorderWidth, baseColor, borderTextures,scissor, viewport);
 
         if (TextBox is null) return;
         
@@ -79,23 +87,14 @@ public class Button : Element
         childViewport.Y += (int)(viewport.Height * TextBox.RelativeLayout.Y);
         
         
-        TextBox.Draw(commandBuffer, renderer, scissor, childViewport);
-        //Redraw = false;
+        TextBox.Draw(renderer, scissor, childViewport);
     }
 
     /// <inheritdoc />
     public override void Update(float deltaTime)
     {
-        //Redraw = _lastHoveredState != CursorHovering;
         _lastHoveredState = CursorHovering;
     }
-
-    /*public override bool Redraw
-    {
-        get => (TextBox?.Redraw ?? false) || base.Redraw;
-        protected set => base.Redraw = value;
-    }*/
-
 
     /// <inheritdoc />
     public override void OnLeftClick()
@@ -108,5 +107,18 @@ public class Button : Element
     {
         TextBox?.Dispose();
         base.Dispose(disposing);
+    }
+
+    //TODO implement a logic to actually respond if the border is active
+    public bool BorderActive { get; set; } = true;
+
+    public float BorderWidth
+    {
+        get => _borderWidth;
+        set
+        {
+            _borderWidth = value; 
+            OnResize();
+        }
     }
 }
