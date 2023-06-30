@@ -124,7 +124,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                     vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
                     result.uv = mod(vec2(hitPos.y, hitPos.z), 1.);
 
-                    if (ray.direction.x > 0){
+                    if (originalRay.direction.x > 0){
                         result.normal = vec3(-1, 0, 0);
                     }
                     else {
@@ -140,7 +140,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                     vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
                     result.uv = mod(vec2(hitPos.x, hitPos.z), 1.);
 
-                    if (ray.direction.y > 0){
+                    if (originalRay.direction.y > 0){
                         result.normal = vec3(0, -1, 0);
                     }
                     else {
@@ -156,7 +156,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                     vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
                     result.uv = mod(vec2(hitPos.x, hitPos.y), 1.);
 
-                    if (ray.direction.z > 0){
+                    if (originalRay.direction.z > 0){
                         result.normal = vec3(0, 0, -1);
                     }
                     else {

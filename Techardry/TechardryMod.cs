@@ -25,7 +25,7 @@ public partial class TechardryMod : IMod
     public ushort ModId { get; set; }
     private string ModName => "Techardry";
 
-    public int ServerRenderDistance { get; set; } = 8;
+    public int ServerRenderDistance { get; set; } = 2;
     
     public static UiRenderer? MainUiRenderer { get; private set; }
 

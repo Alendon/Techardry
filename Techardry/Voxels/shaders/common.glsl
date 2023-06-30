@@ -63,4 +63,12 @@ float intersectBoundingBox(in Ray ray, in AABB aabb, float currentT){
     return FloatMax;
 }
 
+Result resultEmpty(){
+    return Result(0, vec3(0, 0, 0), vec2(0, 0), FloatMax, -1, false, vec3(0, 0, 1));
+}
+
+bool resultHit(Result result){
+    return !floatEquals(result.t, FloatMax);
+}
+
 #endif // COMMON_GLSL
