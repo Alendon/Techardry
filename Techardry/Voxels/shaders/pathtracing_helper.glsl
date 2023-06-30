@@ -3,11 +3,11 @@
 
 #include "master_bvh.glsl"
 
-vec3 sunDirection = normalize(vec3(1, -1, 0));
+vec3 sunDirection = normalize(vec3(1, -1, 0.2));
 
 bool sunVisible(vec3 position){
     Ray ray;
-    ray.origin = position + 0.001 * sunDirection;
+    ray.origin = position + 0.001 * -sunDirection;
     ray.direction = -sunDirection;
     ray.inverseDirection = 1 / ray.direction;
     
