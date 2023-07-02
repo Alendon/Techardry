@@ -1,6 +1,9 @@
 #ifndef MASTER_BVH_GLSL
 #define MASTER_BVH_GLSL
 
+#define INVALID_TREE_TYPE 0
+#define VOXEL_OCTREE_TYPE 1
+
 #include "common.glsl"
 #include "voxel_octree.glsl"
 
@@ -14,8 +17,26 @@ layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_MASTER_BVH_INDIC
     int indices[];
 } masterBvhIndices;
 
+layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_OCTREE_BINDING) readonly buffer UniformTree
+{
+    uint treeType;
+    uint data[];
+} trees[];
+
 bool bvhNode_IsLeaf(in BvhNode node);
 AABB bvhNode_GetAABB(in BvhNode node);
+
+void raycast_tree(in Ray ray, in int tree, inout Result result){
+    switch(trees[tree].treeType){
+        case VOXEL_OCTREE_TYPE:
+            raycastChunk(ray, tree, result);
+            break;
+        default:
+        case INVALID_TREE_TYPE:
+            result.fail = true;
+            break;
+    }
+}
 
 void raycast(in Ray ray, inout Result result){
 
@@ -28,7 +49,9 @@ void raycast(in Ray ray, inout Result result){
         if(bvhNode_IsLeaf(masterBvh.nodes[nodeIndex])){
             for(int i = 0; i < masterBvh.nodes[nodeIndex].count; i++){
                 int tree = masterBvhIndices.indices[masterBvh.nodes[nodeIndex].leftFirst + i];
-                raycastChunk(ray, tree, result);
+                raycast_tree(ray, tree, result);
+                if(result.fail) 
+                    return;
             }
 
             if(stackIndex == 0) break;

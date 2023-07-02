@@ -361,6 +361,7 @@ public class RenderResourcesWorker
 
         Unsafe.AsRef<OctreeHeader>(data.ToPointer()) = new OctreeHeader
         {
+            TreeType = TreeType.Octree,
             NodeCount = octree.NodeCount,
             treeMin = position
         };
@@ -745,7 +746,8 @@ public class RenderResourcesWorker
     [StructLayout(LayoutKind.Explicit)]
     private struct OctreeHeader
     {
-        [UsedImplicitly] [FieldOffset(0)] public uint NodeCount;
-        [UsedImplicitly] [FieldOffset(4)] public Int3 treeMin;
+        [UsedImplicitly] [FieldOffset(0)] public TreeType TreeType;
+        [UsedImplicitly] [FieldOffset(4)] public uint NodeCount;
+        [UsedImplicitly] [FieldOffset(8)] public Int3 treeMin;
     }
 }
