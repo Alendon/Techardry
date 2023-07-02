@@ -3,6 +3,10 @@
 
 #include "master_bvh.glsl"
 
+#ifndef M_PI
+#define M_PI 3.1415926535897932384626433832795
+#endif // M_PI
+
 vec3 sunDirection = normalize(vec3(1, -1, 0.2));
 
 bool sunVisible(vec3 position){
@@ -18,30 +22,36 @@ bool sunVisible(vec3 position){
     return !hit;
 }
 
-float random(vec2 st) {
-    return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+vec2 get_random_numbers(inout uvec2 seed) {
+    // This is PCG2D: https://jcgt.org/published/0009/03/02/
+    seed = 1664525u * seed + 1013904223u;
+    seed.x += 1664525u * seed.y;
+    seed.y += 1664525u * seed.x;
+    seed ^= (seed >> 16u);
+    seed.x += 1664525u * seed.y;
+    seed.y += 1664525u * seed.x;
+    seed ^= (seed >> 16u);
+    // Convert to float. The constant here is 2^-32.
+    return vec2(seed) * 2.32830643654e-10;
 }
 
-vec3 randomDirectionInHemisphere(vec3 normal, vec2 randomSeed) {
-    vec3 randomPoint;
-    float iteration = 0.0;
-    do {
-        // Generiere zufälligen Punkt in Einheitswürfel
-        randomPoint = vec3(random(randomSeed + vec2(iteration)), random(randomSeed + vec2(1.0 + iteration, 0.0)), random(randomSeed + vec2(0.0, 1.0 + iteration))) * 2.0 - vec3(1.0);
-
-        iteration += 1.0;
-
-        // Wiederhole, bis Punkt innerhalb der Einheitskugel liegt
-    } while (dot(randomPoint, randomPoint) > 1.0);
-
-    // Wenn Punkt in der unteren Hemisphäre liegt, invertiere ihn
-    if (dot(randomPoint, normal) < 0.0) {
-        randomPoint = -randomPoint;
-    }
-
-    return normalize(randomPoint);
+// Given uniform random numbers u_0, u_1 in [0,1)^2, this function returns a
+// uniformly distributed point on the unit sphere (i.e. a random direction)
+// (omega)
+vec3 sample_sphere(vec2 random_numbers) {
+    float z = 2.0 * random_numbers[1] - 1.0;
+    float phi = 2.0 * M_PI * random_numbers[0];
+    float x = cos(phi) * sqrt(1.0 - z * z);
+    float y = sin(phi) * sqrt(1.0 - z * z);
+    return vec3(x, y, z);
 }
 
+vec3 sample_hemisphere(vec2 random_numbers, vec3 normal) {
+    vec3 direction = sample_sphere(random_numbers);
+    if (dot(normal, direction) < 0.0)
+    direction -= 2.0 * dot(normal, direction) * normal;
+    return direction;
+}
 
 
 

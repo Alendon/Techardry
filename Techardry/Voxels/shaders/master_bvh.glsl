@@ -73,5 +73,11 @@ AABB bvhNode_GetAABB(in BvhNode node){
     return AABB(vec3(node.minX, node.minY, node.minZ), vec3(node.maxX, node.maxY, node.maxZ));
 }
 
+vec3 resultGetColor(in Result result){
+    uint voxel = voxelNode_GetDataIndex(result.tree, result.nodeIndex);
+    vec3 texStart = vec3(voxelData_GetTextureStartX(result.tree, voxel) / TextureSize, voxelData_GetTextureStartY(result.tree, voxel) / TextureSize, voxelData_GetTextureArrayIndex(result.tree, voxel));
+    vec2 texSize = vec2(voxelData_GetTextureSizeX(result.tree, voxel) / TextureSize, voxelData_GetTextureSizeY(result.tree, voxel) / TextureSize);
+    return texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
+}
 
 #endif // MASTER_BVH_GLSL

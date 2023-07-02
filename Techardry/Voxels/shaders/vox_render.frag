@@ -5,6 +5,22 @@
 #define MaxDepth 10
 #define FloatMax 1e+30
 #define BvhStackSize 64
+#define TextureSize 128.
+#define SampleCount 4
+#define MaxPathLength 8
+
+
+layout (location = 0) in vec3 in_position;
+layout (location = 0) out vec3 out_color;
+
+layout (push_constant) uniform PushConstants {
+    uint frame;
+} pushConstants;
+
+layout (set = 1, binding = 0) uniform sampler2DArray tex;
+
+layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
+layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
 
 #define CAMERA_DATA_SET 0
 #include "camera.glsl"
@@ -16,28 +32,15 @@
 
 #include "master_bvh.glsl"
 #include "pathtracing_helper.glsl"
-#define TextureSize 128.
 
 //shader in/output
-layout (location = 0) in vec3 in_position;
-layout (location = 0) out vec3 out_color;
 
 
-
-layout (set = 1, binding = 0) uniform sampler2DArray tex;
-
-layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
-layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
-
-vec3 pathtrace(Ray ray) {
+vec3 pathtrace(Ray ray, inout uvec2 randomSeed) {
     vec3 color = vec3(0);
     vec3 attenuation = vec3(1);
     
-    //create random seed based on ray.origin and ray.direction
-    vec2 randomSeed = vec2(dot(ray.origin, ray.direction), dot(ray.origin, ray.direction) + 1);
-    randomSeed = vec2(dot(vec2(random(randomSeed)), vec2(random(randomSeed + 1))), dot(vec2(random(randomSeed + 2)), vec2(random(randomSeed + 3))));
-    
-    #define MAX_BOUNCES 4
+    #define MAX_BOUNCES MaxPathLength
     for(int i = 0; i < MAX_BOUNCES; i++){
         Result result = resultEmpty();
         raycast(ray, result);
@@ -52,12 +55,7 @@ vec3 pathtrace(Ray ray) {
         vec3 hitPos = ray.origin + ray.direction * result.t;
         vec3 hitNormal = result.normal;
         
-        uint voxel = voxelNode_GetDataIndex(result.tree, result.nodeIndex);
-
-        vec3 texStart = vec3(voxelData_GetTextureStartX(result.tree, voxel) / TextureSize, voxelData_GetTextureStartY(result.tree, voxel) / TextureSize, voxelData_GetTextureArrayIndex(result.tree, voxel));
-
-        vec2 texSize = vec2(voxelData_GetTextureSizeX(result.tree, voxel) / TextureSize, voxelData_GetTextureSizeY(result.tree, voxel) / TextureSize);
-        vec3 albedo = texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
+        vec3 albedo = resultGetColor(result);
 
         if(sunVisible(hitPos))
         {
@@ -67,8 +65,8 @@ vec3 pathtrace(Ray ray) {
         
         attenuation *= albedo;
         
-        ray.direction = randomDirectionInHemisphere(hitNormal, randomSeed);
-        randomSeed = vec2(randomSeed.x + 1, randomSeed.y + 1);
+        ray.direction = sample_hemisphere(get_random_numbers(randomSeed), hitNormal);
+        
         ray.origin = hitPos + ray.direction * 0.001;
     }
     
@@ -94,13 +92,18 @@ void main()
     float y = screenPos.y * angle;
 
     vec3 direction = normalize(forward + x * right + y * upward);
-
-    #define maxBounces 10
-
+    
     Ray ray;
     ray.origin = camPos;
     ray.direction = normalize(direction);
     ray.inverseDirection = 1 / ray.direction;
 
-    out_color = pathtrace(ray);
+    uvec2 randomSeed = uvec2(gl_FragCoord.xy) * 4241 ^ uvec2(pushConstants.frame * 4637, pushConstants.frame * 4759); 
+
+    out_color = vec3(0);
+    for (int i = 0; i < SampleCount; i++)
+    {
+        out_color += pathtrace(ray, randomSeed);
+    }
+    out_color /= float(SampleCount);
 }

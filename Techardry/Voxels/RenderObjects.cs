@@ -240,7 +240,15 @@ public static class RenderObjects
                 DepthStencilInfo = default,
                 VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
                 VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
-                PushConstantRanges = Array.Empty<PushConstantRange>()
+                PushConstantRanges = new []
+                {
+                    new PushConstantRange()
+                    {
+                        StageFlags = ShaderStageFlags.FragmentBit,
+                        Offset = 0,
+                        Size = sizeof(uint)
+                    }
+                }
             };
         }
     }

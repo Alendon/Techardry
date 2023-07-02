@@ -81,6 +81,8 @@ public sealed partial class VoxelRender : ARenderSystem
 
         base.PreExecuteMainThread();
     }
+    
+    private static uint _frame = 0;
 
     protected override unsafe void Execute()
     {
@@ -154,6 +156,12 @@ public sealed partial class VoxelRender : ARenderSystem
         vk.CmdBindDescriptorSets(CommandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0,
             (uint)descriptorSets.Length,
             descriptorSets, 0, (uint*)null);
+
+        Span<uint> pushConstant = stackalloc uint[]
+        {
+            _frame++
+        };
+        vk.CmdPushConstants(CommandBuffer, pipelineLayout, ShaderStageFlags.FragmentBit, 0, sizeof(uint), pushConstant);
 
         vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
     }
