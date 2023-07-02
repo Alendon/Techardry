@@ -20,13 +20,27 @@ layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_MASTER_BVH_INDIC
 layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_OCTREE_BINDING) readonly buffer UniformTree
 {
     uint treeType;
+    //deconstruct the inverse transform mat4 into 16 floats
+    float inverseTransformMatrix[16];
     uint data[];
 } trees[];
 
 bool bvhNode_IsLeaf(in BvhNode node);
 AABB bvhNode_GetAABB(in BvhNode node);
+mat4 getTreeInverseTransform(int tree);
 
 void raycast_tree(in Ray ray, in int tree, inout Result result){
+    //transform the ray into the tree's local space
+    mat4 inverseTransform = getTreeInverseTransform(tree);
+    
+    vec4 rayOrigin = inverseTransform * vec4(ray.origin, 1);
+    vec4 rayDirection = inverseTransform * vec4(ray.direction, 0);
+    
+    ray.origin = rayOrigin.xyz;
+    ray.direction = normalize(rayDirection.xyz);
+    ray.inverseDirection = 1.0 / ray.direction;
+    
+    
     switch(trees[tree].treeType){
         case VOXEL_OCTREE_TYPE:
             raycastChunk(ray, tree, result);
@@ -101,6 +115,15 @@ vec3 resultGetColor(in Result result){
     vec3 texStart = vec3(voxelData_GetTextureStartX(result.tree, voxel) / TextureSize, voxelData_GetTextureStartY(result.tree, voxel) / TextureSize, voxelData_GetTextureArrayIndex(result.tree, voxel));
     vec2 texSize = vec2(voxelData_GetTextureSizeX(result.tree, voxel) / TextureSize, voxelData_GetTextureSizeY(result.tree, voxel) / TextureSize);
     return texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
+}
+
+mat4 getTreeInverseTransform(int tree){
+    return mat4(
+        trees[nonuniformEXT(tree)].inverseTransformMatrix[0], trees[nonuniformEXT(tree)].inverseTransformMatrix[1], trees[nonuniformEXT(tree)].inverseTransformMatrix[2], trees[nonuniformEXT(tree)].inverseTransformMatrix[3],
+        trees[nonuniformEXT(tree)].inverseTransformMatrix[4], trees[nonuniformEXT(tree)].inverseTransformMatrix[5], trees[nonuniformEXT(tree)].inverseTransformMatrix[6], trees[nonuniformEXT(tree)].inverseTransformMatrix[7],
+        trees[nonuniformEXT(tree)].inverseTransformMatrix[8], trees[nonuniformEXT(tree)].inverseTransformMatrix[9], trees[nonuniformEXT(tree)].inverseTransformMatrix[10], trees[nonuniformEXT(tree)].inverseTransformMatrix[11],
+        trees[nonuniformEXT(tree)].inverseTransformMatrix[12], trees[nonuniformEXT(tree)].inverseTransformMatrix[13], trees[nonuniformEXT(tree)].inverseTransformMatrix[14], trees[nonuniformEXT(tree)].inverseTransformMatrix[15]
+    );
 }
 
 #endif // MASTER_BVH_GLSL

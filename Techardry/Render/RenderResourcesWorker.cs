@@ -103,7 +103,7 @@ public class RenderResourcesWorker
         while (_isRunning)
         {
             UpdateDescriptorPools();
-            
+
             bool structureChanged = false;
 
             //The returned keys are a copy of the actual keys, so we can safely iterate over them
@@ -113,7 +113,7 @@ public class RenderResourcesWorker
             var stagingBufferSpan = stagingBuffers.AsSpan();
 
             int i = 0;
-            while(_chunkUpdateQueue.TryDequeue(out var position))
+            while (_chunkUpdateQueue.TryDequeue(out var position))
             {
                 if (!UpdateChunkData(position, cb, out var memoryBuffer, out var stagingBuffer))
                 {
@@ -156,7 +156,7 @@ public class RenderResourcesWorker
 
             ValidateChunkPositions();
 
-            while(_chunkRemoveQueue.TryDequeue(out var position))
+            while (_chunkRemoveQueue.TryDequeue(out var position))
             {
                 DestroyChunkData(position);
 
@@ -169,7 +169,7 @@ public class RenderResourcesWorker
             if (!UpdateMasterBvh(out var masterBvhBuffer, out var bvhIndexBuffer))
             {
                 //Clear resources as no chunks exists atm
-                using(_lock.AcquireWriteLock())
+                using (_lock.AcquireWriteLock())
                 {
                     //the current render data is already empty
                     if (_currentRenderData.UsedBuffers.Count == 0) continue;
@@ -204,7 +204,7 @@ public class RenderResourcesWorker
 
             renderData.AddUse();
 
-            using(_lock.AcquireWriteLock())
+            using (_lock.AcquireWriteLock())
             {
                 var oldRenderData = _currentRenderData;
                 _currentRenderData = renderData;
@@ -297,7 +297,7 @@ public class RenderResourcesWorker
     {
         buffer = default;
         stagingBuffer = default;
-        
+
         if (!_world.ChunkManager.TryGetChunk(position, out var chunk)) return false;
 
         uint bufferSize;
@@ -309,7 +309,7 @@ public class RenderResourcesWorker
                 //add the current chunk to the remove queue. This makes sure that the chunk is no longer present
                 //if it wasn't added in the first place it will be ignored
                 _chunkRemoveQueue.TryEnqueue(position);
-                
+
                 return false;
             }
 
@@ -358,13 +358,12 @@ public class RenderResourcesWorker
         );
 
         var data = MemoryManager.Map(stagingBuffer.Memory);
+        ref OctreeHeader header = ref Unsafe.AsRef<OctreeHeader>(data.ToPointer());
 
-        Unsafe.AsRef<OctreeHeader>(data.ToPointer()) = new OctreeHeader
-        {
-            TreeType = TreeType.Octree,
-            NodeCount = octree.NodeCount,
-            treeMin = position
-        };
+        header.TreeType = TreeType.Octree;
+        header.NodeCount = octree.NodeCount;
+        Matrix4x4.Invert(Matrix4x4.CreateTranslation(position.X * VoxelOctree.Dimensions,
+            position.Y * VoxelOctree.Dimensions, position.Z * VoxelOctree.Dimensions), out header.InverseTransform);
 
         var srcNodes = octree.Nodes.AsSpan(0, (int)octree.NodeCount);
         var dstNodes = new Span<VoxelOctree.Node>((void*)(data + headerSize), srcNodes.Length);
@@ -429,7 +428,7 @@ public class RenderResourcesWorker
     internal bool TryGetRenderResources(out DescriptorSet renderDescriptorSet)
     {
         _frameRenderDat[VulkanEngine.ImageIndex].RemoveUse();
-        
+
         renderDescriptorSet = default;
 
         RenderData current;
@@ -447,7 +446,6 @@ public class RenderResourcesWorker
 
         _frameRenderDat[VulkanEngine.ImageIndex] = current;
 
-        
 
         if (current.RenderDescriptor is null) return false;
 
@@ -556,7 +554,7 @@ public class RenderResourcesWorker
                     "RenderResourcesWorker");
                 continue;
             }
-            
+
             VulkanUtils.Assert(VulkanEngine.Vk.ResetDescriptorPool(VulkanEngine.Device, poolInfo.pool, 0));
             _availableDescriptorPools.Add(poolInfo);
         }
@@ -569,7 +567,7 @@ public class RenderResourcesWorker
             var (pool, _) = _availableDescriptorPools[i];
             VulkanEngine.Vk.DestroyDescriptorPool(VulkanEngine.Device, pool, VulkanEngine.AllocationCallback);
         }
-        
+
         _availableDescriptorPools.RemoveRange(0, _availableDescriptorPools.Count - maxAvailablePools);
     }
 
@@ -577,7 +575,7 @@ public class RenderResourcesWorker
     {
         var power = uint.Log2(bufferCount) + 1;
         var alignedCount = 1u << (int)power;
-        
+
         var poolIndex = _availableDescriptorPools.FindIndex(x => x.size >= alignedCount);
         if (poolIndex != -1)
         {
@@ -585,6 +583,7 @@ public class RenderResourcesWorker
             _availableDescriptorPools.RemoveAt(poolIndex);
             return poolInfo;
         }
+
         DescriptorPoolSize bufferSize = new DescriptorPoolSize
         {
             DescriptorCount = alignedCount,
@@ -598,24 +597,25 @@ public class RenderResourcesWorker
             PoolSizeCount = 1,
             PPoolSizes = &bufferSize
         };
-        
-        VulkanUtils.Assert(VulkanEngine.Vk.CreateDescriptorPool(VulkanEngine.Device, poolCreateInfo, VulkanEngine.AllocationCallback, out var pool));
+
+        VulkanUtils.Assert(VulkanEngine.Vk.CreateDescriptorPool(VulkanEngine.Device, poolCreateInfo,
+            VulkanEngine.AllocationCallback, out var pool));
         return (pool, alignedCount);
     }
-    
+
     private unsafe DescriptorSet AllocateDescriptorSet(uint bufferCount)
     {
         var (pool, size) = GetDescriptorPool(bufferCount + 2);
 
         var layout = RenderObjects.RenderDescriptorLayout;
-        
+
         var variableDescriptorCountAllocateInfo = new DescriptorSetVariableDescriptorCountAllocateInfo
         {
             SType = StructureType.DescriptorSetVariableDescriptorCountAllocateInfo,
             DescriptorSetCount = 1,
             PDescriptorCounts = &bufferCount
         };
-        
+
         var descriptorSetAllocateInfo = new DescriptorSetAllocateInfo
         {
             SType = StructureType.DescriptorSetAllocateInfo,
@@ -624,9 +624,10 @@ public class RenderResourcesWorker
             PSetLayouts = &layout,
             PNext = &variableDescriptorCountAllocateInfo
         };
-        
-        VulkanUtils.Assert(VulkanEngine.Vk.AllocateDescriptorSets(VulkanEngine.Device, descriptorSetAllocateInfo, out var descriptorSet));
-        
+
+        VulkanUtils.Assert(VulkanEngine.Vk.AllocateDescriptorSets(VulkanEngine.Device, descriptorSetAllocateInfo,
+            out var descriptorSet));
+
         _usedDescriptorPools.Add(descriptorSet, (pool, size));
         return descriptorSet;
     }
@@ -660,7 +661,7 @@ public class RenderResourcesWorker
         public required List<BufferWrapper> UsedBuffers { get; init; }
         public BufferWrapper? MasterBvhBuffer { get; init; }
         public BufferWrapper? MasterBvhIndexBuffer { get; init; }
-        
+
         public RenderDescriptorWrapper? RenderDescriptor { get; init; }
 
 
@@ -725,7 +726,7 @@ public class RenderResourcesWorker
         {
             Set = set;
             _useCount = 1;
-            
+
             _worker = parentWorker;
         }
 
@@ -747,7 +748,7 @@ public class RenderResourcesWorker
     private struct OctreeHeader
     {
         [UsedImplicitly] [FieldOffset(0)] public TreeType TreeType;
-        [UsedImplicitly] [FieldOffset(4)] public uint NodeCount;
-        [UsedImplicitly] [FieldOffset(8)] public Int3 treeMin;
+        [UsedImplicitly] [FieldOffset(sizeof(TreeType))] public Matrix4x4 InverseTransform;
+        [UsedImplicitly] [FieldOffset(sizeof(TreeType) + sizeof(float) * 4 * 4)] public uint NodeCount;
     }
 }

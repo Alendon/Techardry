@@ -6,10 +6,9 @@
 layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_OCTREE_BINDING) readonly buffer ChunkOctree
 {
     uint treeType;
+    //deconstruct the inverse transform mat4 into 16 floats
+    float inverseTransformMatrix[16];
     uint nodeCount;
-    int minX;
-    int minY;
-    int minZ;
     uint data[];
 } chunkOctrees[];
 
@@ -35,26 +34,25 @@ uint voxelData_GetTextureSizeY(uint tree, uint voxelIndex);
 
 void raycastChunk(in Ray ray, int tree, inout Result result){
 
-    vec3 treeMin = vec3(chunkOctrees[nonuniformEXT(tree)].minX, chunkOctrees[nonuniformEXT(tree)].minY, chunkOctrees[nonuniformEXT(tree)].minZ) * Dimensions;
+    vec3 treeMin = vec3(0);
     vec3 treeMax = treeMin + Dimensions;
 
     int childIndexModifier = 0;
-    ray.direction = normalize(ray.direction);
     Ray originalRay = ray;
 
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
     if (ray.direction.x < 0){
-        ray.origin.x =  treeMin.x * 2 + Dimensions - ray.origin.x;
+        ray.origin.x =  Dimensions - ray.origin.x;
         ray.direction.x = -ray.direction.x;
         childIndexModifier |= 4;
     }
     if (ray.direction.y < 0){
-        ray.origin.y = treeMin.y * 2 + Dimensions - ray.origin.y;
+        ray.origin.y = Dimensions - ray.origin.y;
         ray.direction.y = -ray.direction.y;
         childIndexModifier |= 2;
     }
     if (ray.direction.z < 0){
-        ray.origin.z = treeMin.z * 2 + Dimensions - ray.origin.z;
+        ray.origin.z = Dimensions - ray.origin.z;
         ray.direction.z = -ray.direction.z;
         childIndexModifier |= 1;
     }
@@ -88,10 +86,10 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
     while (stackIndex >= 0){
 
         counter++;
-        if(counter > 1000){
+        if (counter > 1000){
             result.tree = tree;
             result.fail = true;
-            result.failColor = vec3(0,1,0);
+            result.failColor = vec3(0, 1, 0);
             return;
         }
 
@@ -242,77 +240,77 @@ int octree_GetNextNode(vec3 tm, ivec3 c){
 int octree_GetNextChildIndex(int currentChildIndex, vec3 t0, vec3 t1, vec3 tm){
     switch (currentChildIndex){
         case -1:{
-                    return octree_GetFirstNode(t0, tm);
-                }
+            return octree_GetFirstNode(t0, tm);
+        }
         case 0:{
-                    return octree_GetNextNode(vec3(tm.x, tm.y, tm.z), ivec3(4, 2, 1));
-                }
+            return octree_GetNextNode(vec3(tm.x, tm.y, tm.z), ivec3(4, 2, 1));
+        }
         case 1:{
-                    return octree_GetNextNode(vec3(tm.x, tm.y, t1.z), ivec3(5, 3, 8));
-                }
+            return octree_GetNextNode(vec3(tm.x, tm.y, t1.z), ivec3(5, 3, 8));
+        }
         case 2:{
-                    return octree_GetNextNode(vec3(tm.x, t1.y, tm.z), ivec3(6, 8, 3));
-                }
+            return octree_GetNextNode(vec3(tm.x, t1.y, tm.z), ivec3(6, 8, 3));
+        }
         case 3:{
-                    return octree_GetNextNode(vec3(tm.x, t1.y, t1.z), ivec3(7, 8, 8));
-                }
+            return octree_GetNextNode(vec3(tm.x, t1.y, t1.z), ivec3(7, 8, 8));
+        }
         case 4:{
-                    return octree_GetNextNode(vec3(t1.x, tm.y, tm.z), ivec3(8, 6, 5));
-                }
+            return octree_GetNextNode(vec3(t1.x, tm.y, tm.z), ivec3(8, 6, 5));
+        }
         case 5:{
-                    return octree_GetNextNode(vec3(t1.x, tm.y, t1.z), ivec3(8, 7, 8));
-                }
+            return octree_GetNextNode(vec3(t1.x, tm.y, t1.z), ivec3(8, 7, 8));
+        }
         case 6:{
-                    return octree_GetNextNode(vec3(t1.x, t1.y, tm.z), ivec3(8, 8, 7));
-                }
+            return octree_GetNextNode(vec3(t1.x, t1.y, tm.z), ivec3(8, 8, 7));
+        }
         default :{
-                    return 8;
-                }
+            return 8;
+        }
     }
 }
 
 void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out vec3 childT1){
     switch (childIndex){
         case 0:{
-                   childT0 = vec3(t0.x, t0.y, t0.z);
-                   childT1 = vec3(tm.x, tm.y, tm.z);
-                   break;
-               }
+            childT0 = vec3(t0.x, t0.y, t0.z);
+            childT1 = vec3(tm.x, tm.y, tm.z);
+            break;
+        }
         case 1:{
-                   childT0 = vec3(t0.x, t0.y, tm.z);
-                   childT1 = vec3(tm.x, tm.y, t1.z);
-                   break;
-               }
+            childT0 = vec3(t0.x, t0.y, tm.z);
+            childT1 = vec3(tm.x, tm.y, t1.z);
+            break;
+        }
         case 2:{
-                   childT0 = vec3(t0.x, tm.y, t0.z);
-                   childT1 = vec3(tm.x, t1.y, tm.z);
-                   break;
-               }
+            childT0 = vec3(t0.x, tm.y, t0.z);
+            childT1 = vec3(tm.x, t1.y, tm.z);
+            break;
+        }
         case 3:{
-                   childT0 = vec3(t0.x, tm.y, tm.z);
-                   childT1 = vec3(tm.x, t1.y, t1.z);
-                   break;
-               }
+            childT0 = vec3(t0.x, tm.y, tm.z);
+            childT1 = vec3(tm.x, t1.y, t1.z);
+            break;
+        }
         case 4:{
-                   childT0 = vec3(tm.x, t0.y, t0.z);
-                   childT1 = vec3(t1.x, tm.y, tm.z);
-                   break;
-               }
+            childT0 = vec3(tm.x, t0.y, t0.z);
+            childT1 = vec3(t1.x, tm.y, tm.z);
+            break;
+        }
         case 5:{
-                   childT0 = vec3(tm.x, t0.y, tm.z);
-                   childT1 = vec3(t1.x, tm.y, t1.z);
-                   break;
-               }
+            childT0 = vec3(tm.x, t0.y, tm.z);
+            childT1 = vec3(t1.x, tm.y, t1.z);
+            break;
+        }
         case 6:{
-                   childT0 = vec3(tm.x, tm.y, t0.z);
-                   childT1 = vec3(t1.x, t1.y, tm.z);
-                   break;
-               }
+            childT0 = vec3(tm.x, tm.y, t0.z);
+            childT1 = vec3(t1.x, t1.y, tm.z);
+            break;
+        }
         case 7:{
-                   childT0 = vec3(tm.x, tm.y, tm.z);
-                   childT1 = vec3(t1.x, t1.y, t1.z);
-                   break;
-               }
+            childT0 = vec3(tm.x, tm.y, tm.z);
+            childT1 = vec3(t1.x, t1.y, t1.z);
+            break;
+        }
     }
 }
 
@@ -324,25 +322,25 @@ uint voxelNode_GetChildren(uint tree, uint nodeIndex, uint childIndex){
 }
 #undef Node_Children_Offset
 
-    #define Node_DataIndex_Offset 1
+#define Node_DataIndex_Offset 1
 uint voxelNode_GetDataIndex(uint tree, uint nodeIndex){
     return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
 }
 #undef Node_DataIndex_Offset
 
-    #define Node_Index_Offset 2
+#define Node_Index_Offset 2
 uint voxelNode_GetNodeIndex(uint tree, uint nodeIndex){
     return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Index_Offset];
 }
 #undef Node_Index_Offset
 
-    #define Node_ParentIndex_Offset 3
+#define Node_ParentIndex_Offset 3
 uint voxelNode_GetParentIndex(uint tree, uint nodeIndex){
     return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
 }
 #undef Node_ParentIndex_Offset
 
-    #define Node_AdditionalData_Offset 4
+#define Node_AdditionalData_Offset 4
 
 uint voxelNode_GetParentChildIndex(uint tree, uint nodeIndex){
     return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0x7;
@@ -354,7 +352,7 @@ bool voxelNode_IsLeaf(uint tree, uint nodeIndex){
 }
 
 uint voxelNode_GetDepth(uint tree, uint nodeIndex){
-    return (chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0xF0 ) >> 4;
+    return (chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0xF0) >> 4;
 }
 
 bool voxelNode_IsEmpty(uint tree, uint nodeIndex){
@@ -363,44 +361,44 @@ bool voxelNode_IsEmpty(uint tree, uint nodeIndex){
 #undef Node_AdditionalData_Offset
 
 
-    #define VoxelSize 6
+#define VoxelSize 6
 
-    #define Voxel_Color_Offset 0
+#define Voxel_Color_Offset 0
 uint voxelData_GetColor(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
     return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
 }
 #undef Voxel_Color_Offset
 
-    #define Voxel_TextureStartX_Offset 1
+#define Voxel_TextureStartX_Offset 1
 uint voxelData_GetTextureStartX(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
     return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
 }
 #undef Voxel_TextureStartX_Offset
 
-    #define Voxel_TextureStartY_Offset 2
+#define Voxel_TextureStartY_Offset 2
 uint voxelData_GetTextureStartY(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
     return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
 }
 #undef Voxel_TextureStartY_Offset
 
-    #define Voxel_ArrayIndex_Offset 3
+#define Voxel_ArrayIndex_Offset 3
 uint voxelData_GetTextureArrayIndex(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
     return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
 }
 #undef Voxel_ArrayIndex_Offset
 
-    #define Voxel_TextureSizeX_Offset 4
+#define Voxel_TextureSizeX_Offset 4
 uint voxelData_GetTextureSizeX(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
     return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
 }
 #undef Voxel_TextureSizeX_Offset
 
-    #define Voxel_TextureSizeY_Offset 5
+#define Voxel_TextureSizeY_Offset 5
 uint voxelData_GetTextureSizeY(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
     return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];
@@ -409,4 +407,4 @@ uint voxelData_GetTextureSizeY(uint tree, uint voxelIndex){
 #undef VoxelSize
 #undef NodeSize
 
-#endif // VOXEL_OCTREE_GLSL
+#endif// VOXEL_OCTREE_GLSL
