@@ -1,5 +1,5 @@
-﻿using System.Runtime.InteropServices;
-using Silk.NET.Maths;
+﻿using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Techardry.Voxels;
 
@@ -11,8 +11,8 @@ public struct VoxelRenderData
 
     [FieldOffset(sizeof(int))]
     //Third component represents array index
-    public Vector3D<uint> TextureStart;
+    public Vector2 TextureStart;
     
-    [FieldOffset(sizeof(int) * 4)]
-    public Vector2D<uint> TextureSize;
+    [FieldOffset(sizeof(int) * 3)]
+    public Vector2 TextureSize;
 }

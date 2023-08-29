@@ -33,6 +33,8 @@ void raycast_tree(in Ray ray, in int tree, inout Result result){
     //transform the ray into the tree's local space
     mat4 inverseTransform = getTreeInverseTransform(tree);
     
+    Ray originalRay = ray;
+    
     vec4 rayOrigin = inverseTransform * vec4(ray.origin, 1);
     vec4 rayDirection = inverseTransform * vec4(ray.direction, 0);
     
@@ -43,7 +45,7 @@ void raycast_tree(in Ray ray, in int tree, inout Result result){
     
     switch(trees[tree].treeType){
         case VOXEL_OCTREE_TYPE:
-            raycastChunk(ray, tree, result);
+            raycastChunk(ray, originalRay, tree, result);
             break;
         default:
         case INVALID_TREE_TYPE:
@@ -112,9 +114,10 @@ AABB bvhNode_GetAABB(in BvhNode node){
 
 vec3 resultGetColor(in Result result){
     uint voxel = voxelNode_GetDataIndex(result.tree, result.nodeIndex);
-    vec3 texStart = vec3(voxelData_GetTextureStartX(result.tree, voxel) / TextureSize, voxelData_GetTextureStartY(result.tree, voxel) / TextureSize, voxelData_GetTextureArrayIndex(result.tree, voxel));
-    vec2 texSize = vec2(voxelData_GetTextureSizeX(result.tree, voxel) / TextureSize, voxelData_GetTextureSizeY(result.tree, voxel) / TextureSize);
-    return texture(tex, texStart + vec3(result.uv * texSize, 0)).rgb;
+    vec2 texStart = vec2(voxelData_GetTextureStartX(result.tree, voxel), voxelData_GetTextureStartY(result.tree, voxel));
+    vec2 texSize = vec2(voxelData_GetTextureSizeX(result.tree, voxel), voxelData_GetTextureSizeY(result.tree, voxel));
+    vec2 texEnd = texStart + texSize;
+    return texture(tex, mix(texStart, texEnd, result.uv)).rgb;
 }
 
 mat4 getTreeInverseTransform(int tree){

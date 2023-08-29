@@ -26,19 +26,17 @@ bool voxelNode_IsLeaf(uint tree, uint nodeIndex);
 uint voxelNode_GetDepth(uint tree, uint nodeIndex);
 bool voxelNode_IsEmpty(uint tree, uint nodeIndex);
 uint voxelData_GetColor(uint tree, uint voxelIndex);
-uint voxelData_GetTextureStartX(uint tree, uint voxelIndex);
-uint voxelData_GetTextureStartY(uint tree, uint voxelIndex);
-uint voxelData_GetTextureArrayIndex(uint tree, uint voxelIndex);
-uint voxelData_GetTextureSizeX(uint tree, uint voxelIndex);
-uint voxelData_GetTextureSizeY(uint tree, uint voxelIndex);
+float voxelData_GetTextureStartX(uint tree, uint voxelIndex);
+float voxelData_GetTextureStartY(uint tree, uint voxelIndex);
+float voxelData_GetTextureSizeX(uint tree, uint voxelIndex);
+float voxelData_GetTextureSizeY(uint tree, uint voxelIndex);
 
-void raycastChunk(in Ray ray, int tree, inout Result result){
+void raycastChunk(in Ray ray, in Ray originalRay, int tree, inout Result result){
 
     vec3 treeMin = vec3(0);
     vec3 treeMax = treeMin + Dimensions;
 
     int childIndexModifier = 0;
-    Ray originalRay = ray;
 
     //This algorithm only works with positive direction values. Those adjustements fixes negative directions
     if (ray.direction.x < 0){
@@ -114,57 +112,37 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                 continue;
             }
             else {
-                if (t0.x > t0.y && t0.x > t0.z && t0.x < result.t){
-
-                    result.t = t0.x;
-                    result.nodeIndex = node;
-                    result.tree = tree;
-
-                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
-                    result.uv = mod(vec2(hitPos.y, hitPos.z), 1.);
-
-                    if (originalRay.direction.x > 0){
-                        result.normal = vec3(-1, 0, 0);
-                    }
-                    else {
-                        result.normal = vec3(1, 0, 0);
-                    }
+                
+                float T = max(max(t0.x, t0.y), t0.z);
+                if (T > result.t){
+                    return;
                 }
-                else if (t0.y > t0.x && t0.y > t0.z && t0.y < result.t){
-
-                    result.t = t0.y;
-                    result.nodeIndex = node;
-                    result.tree = tree;
-
-                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
-                    result.uv = mod(vec2(hitPos.x, hitPos.z), 1.);
-
-                    if (originalRay.direction.y > 0){
-                        result.normal = vec3(0, -1, 0);
-                    }
-                    else {
-                        result.normal = vec3(0, 1, 0);
-                    }
-                }
-                else if (t0.z > t0.x && t0.z > t0.y && t0.z < result.t){
-
-                    result.t = t0.z;
-                    result.nodeIndex = node;
-                    result.tree = tree;
-
-                    vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
-                    result.uv = mod(vec2(hitPos.x, hitPos.y), 1.);
-
-                    if (originalRay.direction.z > 0){
-                        result.normal = vec3(0, 0, -1);
-                    }
-                    else {
-                        result.normal = vec3(0, 0, 1);
-
-                        result.uv.r = abs(result.uv.r - 1);
-                    }
+                
+                result.tree = tree;
+                result.nodeIndex = node;
+                result.t = T;
+                
+                vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
+                if (T == t0.x) {
+                    result.normal = originalRay.direction.x > 0.0 ? vec3(-1, 0, 0) : vec3(1, 0, 0);
+                } else if (T == t0.y) {
+                    result.normal = originalRay.direction.y > 0.0 ? vec3(0, -1, 0) : vec3(0, 1, 0);
+                } else {
+                    result.normal = originalRay.direction.z > 0.0 ? vec3(0, 0, -1) : vec3(0, 0, 1);
                 }
 
+                // UV-Koordinaten berechnen
+                vec2 uv;
+                if (result.normal.x != 0.0) {
+                    result.uv = hitPos.yz;
+                } else if (result.normal.y != 0.0) {
+                    result.uv = hitPos.xz;
+                } else {
+                    result.uv = hitPos.xy;
+                }
+                // UV-Koordinaten auf [0, 1] skalieren
+                result.uv = fract(result.uv);
+                
                 return;
             }
         }
@@ -361,7 +339,7 @@ bool voxelNode_IsEmpty(uint tree, uint nodeIndex){
 #undef Node_AdditionalData_Offset
 
 
-#define VoxelSize 6
+#define VoxelSize 5
 
 #define Voxel_Color_Offset 0
 uint voxelData_GetColor(uint tree, uint voxelIndex){
@@ -371,37 +349,30 @@ uint voxelData_GetColor(uint tree, uint voxelIndex){
 #undef Voxel_Color_Offset
 
 #define Voxel_TextureStartX_Offset 1
-uint voxelData_GetTextureStartX(uint tree, uint voxelIndex){
+float voxelData_GetTextureStartX(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset];
+    return uintBitsToFloat(chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset]);
 }
 #undef Voxel_TextureStartX_Offset
 
 #define Voxel_TextureStartY_Offset 2
-uint voxelData_GetTextureStartY(uint tree, uint voxelIndex){
+float voxelData_GetTextureStartY(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset];
+    return uintBitsToFloat(chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset]);
 }
 #undef Voxel_TextureStartY_Offset
 
-#define Voxel_ArrayIndex_Offset 3
-uint voxelData_GetTextureArrayIndex(uint tree, uint voxelIndex){
+#define Voxel_TextureSizeX_Offset 3
+float voxelData_GetTextureSizeX(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_ArrayIndex_Offset];
-}
-#undef Voxel_ArrayIndex_Offset
-
-#define Voxel_TextureSizeX_Offset 4
-uint voxelData_GetTextureSizeX(uint tree, uint voxelIndex){
-    uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset];
+    return uintBitsToFloat(chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset]);
 }
 #undef Voxel_TextureSizeX_Offset
 
-#define Voxel_TextureSizeY_Offset 5
-uint voxelData_GetTextureSizeY(uint tree, uint voxelIndex){
+#define Voxel_TextureSizeY_Offset 4
+float voxelData_GetTextureSizeY(uint tree, uint voxelIndex){
     uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset];
+    return uintBitsToFloat(chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset]);
 }
 #undef Voxel_TextureSizeY_Offset
 #undef VoxelSize

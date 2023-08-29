@@ -1,7 +1,10 @@
-﻿using JetBrains.Annotations;
+﻿using System.Numerics;
+using System.Runtime.CompilerServices;
+using JetBrains.Annotations;
 using MintyCore.Identifications;
 using MintyCore.Render;
 using MintyCore.Utils;
+using RectpackSharp;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 
@@ -24,20 +27,33 @@ public static class TextureAtlasHandler
 
         (Identification id, Texture tex)[] textures =
             (from textureId in textureIds select (textureId, TextureHandler.GetTexture(textureId))).ToArray();
+        
+        var rectangles = new PackingRectangle[textures.Length];
+        for (var i = 0; i < textures.Length; i++)
+        {
+            var (_, tex) = textures[i];
 
-        textures.AsSpan().Sort((texture, texture1) =>
-            -(texture.tex.Width * texture.tex.Height).CompareTo(texture1.tex.Width * texture1.tex.Height));
+            rectangles[i] = new PackingRectangle()
+            {
+                Id = i,
+                Height = tex.Height,
+                Width = tex.Width
+            };
+        }
+
+        RectanglePacker.Pack(rectangles, out var bounds, PackingHints.MostlySquared);
+        
 
         var atlasDescription = new TextureDescription()
         {
             Depth = 1,
             Format = textures[0].tex.Format,
-            Height = textures[0].tex.Height,
-            Width = textures[0].tex.Width,
-            Type = ImageType.ImageType2D,
+            Height = bounds.Height,
+            Width = bounds.Width,
+            Type = ImageType.Type2D,
             Usage = TextureUsage.Sampled,
-            SampleCount = SampleCountFlags.SampleCount1Bit,
-            ArrayLayers = (uint) textures.Length,
+            SampleCount = SampleCountFlags.Count1Bit,
+            ArrayLayers = 1,
             MipLevels = 1
         };
 
@@ -46,14 +62,18 @@ public static class TextureAtlasHandler
         var atlas = Texture.Create(ref atlasDescription);
 
         var cb = VulkanEngine.GetSingleTimeCommandBuffer();
+        
+        var oldDstLayout = atlas.GetImageLayout(0, 0);
+        atlas.TransitionImageLayout(cb, 0, 1, 0, 1, ImageLayout.TransferDstOptimal);
 
-        for (var index = 0u; index < textures.Length; index++)
+        for (var index = 0u; index < rectangles.Length; index++)
         {
-            var texture = textures[index];
+            var rectangle = rectangles[index];
+            var (id, texture) = textures[rectangle.Id];
 
             var srcSubresourceLayers = new ImageSubresourceLayers()
             {
-                AspectMask = ImageAspectFlags.ImageAspectColorBit,
+                AspectMask = ImageAspectFlags.ColorBit,
                 LayerCount = 1,
                 MipLevel = 0,
                 BaseArrayLayer = 0
@@ -61,37 +81,33 @@ public static class TextureAtlasHandler
 
             var dstSubresourceLayers = new ImageSubresourceLayers()
             {
-                AspectMask = ImageAspectFlags.ImageAspectColorBit,
+                AspectMask = ImageAspectFlags.ColorBit,
                 LayerCount = 1,
                 MipLevel = 0,
-                BaseArrayLayer = index
+                BaseArrayLayer = 0
             };
 
             var copy = new ImageCopy()
             {
-                Extent = new Extent3D(texture.tex.Width, texture.tex.Height, 1),
+                Extent = new Extent3D(texture.Width, texture.Height, texture.Depth),
                 SrcOffset = new Offset3D(0, 0, 0),
-                DstOffset = new Offset3D(0, 0, 0),
+                DstOffset = new Offset3D((int)rectangle.X, (int)rectangle.Y, 0),
                 SrcSubresource = srcSubresourceLayers,
                 DstSubresource = dstSubresourceLayers
             };
 
-            var oldSrcLayout = texture.tex.GetImageLayout(0, 0);
-            texture.tex.TransitionImageLayout(cb, 0, 1, 0, 1, ImageLayout.TransferSrcOptimal);
+            var oldSrcLayout = texture.GetImageLayout(0, 0);
+            texture.TransitionImageLayout(cb, 0, 1, 0, 1, ImageLayout.TransferSrcOptimal);
 
-            var oldDstLayout = atlas.GetImageLayout(0, index);
-            atlas.TransitionImageLayout(cb, 0, 1, index, 1, ImageLayout.TransferDstOptimal);
-
-
-            VulkanEngine.Vk.CmdCopyImage(cb, texture.tex.Image, ImageLayout.TransferSrcOptimal, atlas.Image,
+            VulkanEngine.Vk.CmdCopyImage(cb, texture.Image, ImageLayout.TransferSrcOptimal, atlas.Image,
                 ImageLayout.TransferDstOptimal, 1, copy);
 
-            texture.tex.TransitionImageLayout(cb, 0, 1, 0, 1, oldSrcLayout);
-            atlas.TransitionImageLayout(cb, 0, 1, index, 1, oldDstLayout);
+            texture.TransitionImageLayout(cb, 0, 1, 0, 1, oldSrcLayout);
 
-            textureLocationInfos[texture.id] = new AtlasLocationInfo(Vector2D<uint>.Zero,
-                new Vector2D<uint>(texture.tex.Width, texture.tex.Height), index);
+            textureLocationInfos[id] = new AtlasLocationInfo(new Vector2(rectangle.X / (float)bounds.Width, rectangle.Y/ (float)bounds.Height),
+                new Vector2(rectangle.Width / (float)bounds.Width, rectangle.Height/ (float)bounds.Height));
         }
+        atlas.TransitionImageLayout(cb, 0, 1, 0, 1, oldDstLayout);
 
         VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
 
@@ -114,13 +130,13 @@ public static class TextureAtlasHandler
             PNext = null,
             SubresourceRange =
             {
-                AspectMask = ImageAspectFlags.ImageAspectColorBit,
+                AspectMask = ImageAspectFlags.ColorBit,
                 LayerCount = atlas.ArrayLayers,
                 BaseArrayLayer = 0,
                 LevelCount = atlas.MipLevels,
                 BaseMipLevel = 0
             },
-            ViewType = ImageViewType.ImageViewType2DArray
+            ViewType = ImageViewType.Type2D
         };
 
         VulkanEngine.Vk.CreateImageView(VulkanEngine.Device, imageViewCreateInfo, VulkanEngine.AllocationCallback,
@@ -131,15 +147,15 @@ public static class TextureAtlasHandler
         {
             SType = StructureType.SamplerCreateInfo,
             Flags = 0,
-            MagFilter = Filter.Linear,
-            MinFilter = Filter.Linear,
+            MagFilter = Filter.Nearest,
+            MinFilter = Filter.Nearest,
             MipmapMode = SamplerMipmapMode.Linear,
-            AddressModeU = SamplerAddressMode.Repeat,
-            AddressModeV = SamplerAddressMode.Repeat,
-            AddressModeW = SamplerAddressMode.Repeat,
+            AddressModeU = SamplerAddressMode.ClampToEdge,
+            AddressModeV = SamplerAddressMode.ClampToEdge,
+            AddressModeW = SamplerAddressMode.ClampToEdge,
             MipLodBias = 0,
-            AnisotropyEnable = true,
-            MaxAnisotropy = 16,
+            AnisotropyEnable = false,
+            MaxAnisotropy = 1,
             CompareEnable = false,
             CompareOp = CompareOp.Never,
             MinLod = 0,
@@ -240,4 +256,4 @@ public static class TextureAtlasHandler
     }
 }
 
-public record struct AtlasLocationInfo([UsedImplicitly] Vector2D<uint> Position, Vector2D<uint> Size, uint ArrayIndex);
+public record struct AtlasLocationInfo([UsedImplicitly] Vector2 Position, Vector2 Size);

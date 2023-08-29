@@ -5,9 +5,8 @@
 #define MaxDepth 10
 #define FloatMax 1e+30
 #define BvhStackSize 64
-#define TextureSize 128.
 #define SampleCount 4
-#define MaxPathLength 8
+#define MaxPathLength 4
 
 
 layout (location = 0) in vec3 in_position;
@@ -17,7 +16,7 @@ layout (push_constant) uniform PushConstants {
     uint frame;
 } pushConstants;
 
-layout (set = 1, binding = 0) uniform sampler2DArray tex;
+layout (set = 1, binding = 0) uniform sampler2D tex;
 
 layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
 layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
@@ -50,7 +49,6 @@ vec3 pathtrace(Ray ray, inout uvec2 randomSeed) {
         }
         
         if(!resultHit(result)) break;
-        
         
         vec3 hitPos = ray.origin + ray.direction * result.t;
         vec3 hitNormal = result.normal;
