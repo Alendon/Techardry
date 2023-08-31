@@ -1,5 +1,8 @@
-﻿using JetBrains.Annotations;
+﻿using System.Numerics;
+using JetBrains.Annotations;
 using MintyCore;
+using MintyCore.Components.Client;
+using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
@@ -18,7 +21,6 @@ using TextureIDs = Techardry.Identifications.TextureIDs;
 
 namespace Techardry;
 
-[RootMod]
 [UsedImplicitly]
 public partial class TechardryMod : IMod
 {
@@ -68,13 +70,13 @@ public partial class TechardryMod : IMod
             if (!found) throw new Exception();
             world!.EntityManager.CreateEntity(ArchetypeIDs.TestCamera, player, new Archetypes.PlayerSetup());
 
-            /*var box = world.EntityManager.CreateEntity(ArchetypeIDs.TestRender, null);
+            var box = world.EntityManager.CreateEntity(ArchetypeIDs.TestRender, null);
             var render = world.EntityManager.GetComponent<InstancedRenderAble>(box);
             render.MaterialMeshCombination = InstancedRenderDataIDs.DualBlock;
             world.EntityManager.SetComponent(box, render);
-            var scale = world.EntityManager.GetComponent<Scale>(box);
-            scale.Value = new Vector3(16, 16, 16);
-            world.EntityManager.SetComponent(box, scale);*/
+            var position = world.EntityManager.GetComponent<Position>(box);
+            position.Value = new Vector3(0, 18, 0);
+            world.EntityManager.SetComponent(box, position);
         };
     }
 

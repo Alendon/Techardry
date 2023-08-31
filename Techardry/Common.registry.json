@@ -1,10 +1,7 @@
 [
   {
-    "FullRegistryClassName": "MintyCore.Registries.TextureRegistry",
-    "RegisterMethodName": "RegisterTexture",
-    "RegistryId": "texture",
-    "RegistryPhase": 2,
-    "ToRegister": [
+    "RegisterMethodInfo": "MintyCore.Registries.TextureRegistry_RegisterTexture",
+    "Entries": [
       {
         "Id": "dirt",
         "File": "dirt.png"
@@ -52,11 +49,8 @@
     ]
   },
   {
-    "FullRegistryClassName": "MintyCore.Registries.MeshRegistry",
-    "RegisterMethodName": "RegisterMesh",
-    "RegistryId": "mesh",
-    "RegistryPhase": 2,
-    "ToRegister": [
+    "RegisterMethodInfo": "MintyCore.Registries.MeshRegistry_RegisterMesh",
+    "Entries": [
       {
         "Id": "suzanne",
         "File": "suzanne.obj"
@@ -80,11 +74,8 @@
     ]
   },
   {
-    "FullRegistryClassName": "Techardry.Registries.FontRegistry",
-    "RegisterMethodName": "RegisterFont",
-    "RegistryId": "font",
-    "RegistryPhase": 2,
-    "ToRegister": [
+    "RegisterMethodInfo": "Techardry.Registries.FontRegistry_RegisterFont",
+    "Entries": [
       {
         "Id": "akashi",
         "File": "akashi.ttf"

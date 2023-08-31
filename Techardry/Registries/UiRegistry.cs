@@ -111,35 +111,7 @@ public class UiRegistry : IRegistry
             return;
         UiHandler.AddRootElement(id, info.RootElementPrefab);
     }
-
-
-    /// <summary>
-    /// Set/override a previous registered ui prefab
-    /// This method is used by the source generator for the auto registry
-    /// </summary>
-    /// <param name="prefabId"></param>
-    /// <param name="prefabElementInfo"></param>
-    [RegisterMethod(ObjectRegistryPhase.Post, RegisterMethodOptions.UseExistingId)]
-    public static void SetUiPrefab(Identification prefabId, PrefabElementInfo prefabElementInfo)
-    {
-        if (Engine.HeadlessModeActive)
-            return;
-        UiHandler.SetElementPrefab(prefabId, prefabElementInfo.PrefabCreator);
-    }
-
-    /// <summary>
-    /// Set/override a previous registered ui root element
-    /// This method is used by the source generator for the auto registry
-    /// </summary>
-    /// <param name="elementId"></param>
-    /// <param name="info"></param>
-    [RegisterMethod(ObjectRegistryPhase.Post, RegisterMethodOptions.UseExistingId)]
-    public static void SetRootElement(Identification elementId, RootElementInfo info)
-    {
-        if (Engine.HeadlessModeActive)
-            return;
-        UiHandler.SetRootElement(elementId, info.RootElementPrefab);
-    }
+    
 }
 
 /// <summary>
