@@ -12,7 +12,7 @@
       <PackageReference Include="DotNext" Version="4.12.3" />
       <PackageReference Include="DotNext.Threading" Version="4.12.3" />
       <PackageReference Include="FontStashSharp" Version="1.2.8" />
-      <PackageReference Include="MintyCore" Version="0.4.1" />
+      <PackageReference Include="MintyCore" Version="0.5.0-alpha2" />
     </ItemGroup>
 
 </Project>

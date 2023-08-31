@@ -144,7 +144,7 @@ void raycastChunk(in Ray ray, int tree, inout Result result){
                 } else if (result.normal.y != 0.0) {
                     result.uv = hitPos.xz;
                 } else {
-                    result.uv = hitPos.xy;
+                    result.uv = hitPos.yx;
                 }
                 // UV-Koordinaten auf [0, 1] skalieren
                 result.uv = fract(result.uv);
