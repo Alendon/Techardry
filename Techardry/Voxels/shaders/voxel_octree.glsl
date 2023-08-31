@@ -8,6 +8,8 @@ layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_OCTREE_BINDING) 
     uint treeType;
     //deconstruct the inverse transform mat4 into 16 floats
     float inverseTransformMatrix[16];
+    float transformMatrix[16];
+    float transposedNormalMatrix[9];
     uint nodeCount;
     uint data[];
 } chunkOctrees[];
@@ -31,8 +33,10 @@ float voxelData_GetTextureStartY(uint tree, uint voxelIndex);
 float voxelData_GetTextureSizeX(uint tree, uint voxelIndex);
 float voxelData_GetTextureSizeY(uint tree, uint voxelIndex);
 
-void raycastChunk(in Ray ray, in Ray originalRay, int tree, inout Result result){
+void raycastChunk(in Ray ray, int tree, inout Result result){
 
+    Ray originalRay = ray;
+    
     vec3 treeMin = vec3(0);
     vec3 treeMax = treeMin + Dimensions;
 
@@ -113,25 +117,27 @@ void raycastChunk(in Ray ray, in Ray originalRay, int tree, inout Result result)
             }
             else {
                 
-                float T = max(max(t0.x, t0.y), t0.z);
-                if (T > result.t){
+                float localT = max(max(t0.x, t0.y), t0.z);
+                float globalT = tToWorldSpace(localT, ray.direction, tree);
+                if (globalT > result.t){
                     return;
                 }
                 
                 result.tree = tree;
                 result.nodeIndex = node;
-                result.t = T;
+                result.t = globalT;
                 
-                vec3 hitPos = originalRay.origin + originalRay.direction * result.t;
-                if (T == t0.x) {
+                if (localT == t0.x) {
                     result.normal = originalRay.direction.x > 0.0 ? vec3(-1, 0, 0) : vec3(1, 0, 0);
-                } else if (T == t0.y) {
+                } else if (localT == t0.y) {
                     result.normal = originalRay.direction.y > 0.0 ? vec3(0, -1, 0) : vec3(0, 1, 0);
                 } else {
                     result.normal = originalRay.direction.z > 0.0 ? vec3(0, 0, -1) : vec3(0, 0, 1);
                 }
+                result.normal = normalToWorldSpace(result.normal, tree);
 
                 // UV-Koordinaten berechnen
+                vec3 hitPos = originalRay.origin + originalRay.direction * localT;
                 vec2 uv;
                 if (result.normal.x != 0.0) {
                     result.uv = hitPos.yz;

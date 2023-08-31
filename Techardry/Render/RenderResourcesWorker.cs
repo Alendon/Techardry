@@ -362,8 +362,17 @@ public class RenderResourcesWorker
 
         header.TreeType = TreeType.Octree;
         header.NodeCount = octree.NodeCount;
-        Matrix4x4.Invert(Matrix4x4.CreateTranslation(position.X * VoxelOctree.Dimensions,
-            position.Y * VoxelOctree.Dimensions, position.Z * VoxelOctree.Dimensions), out header.InverseTransform);
+
+        header.Transform = Matrix4x4.CreateTranslation(position.X * VoxelOctree.Dimensions,
+            position.Y * VoxelOctree.Dimensions, position.Z * VoxelOctree.Dimensions);
+        
+        Matrix4x4.Invert(header.Transform, out header.InverseTransform);
+
+        fixed(float* normalPtr = header.TransposedNormalMatrix)
+        {
+            var normalMatrix = new Span<float>(normalPtr, 9);
+            TransposedNormalMatrix(header.InverseTransform, normalMatrix);
+        }
 
         var srcNodes = octree.Nodes.AsSpan(0, (int)octree.NodeCount);
         var dstNodes = new Span<VoxelOctree.Node>((void*)(data + headerSize), srcNodes.Length);
@@ -375,6 +384,23 @@ public class RenderResourcesWorker
         srcData.CopyTo(dstData);
 
         MemoryManager.UnMap(stagingBuffer.Memory);
+    }
+
+    private static void TransposedNormalMatrix(Matrix4x4 inverseTransform, Span<float> normalMatrix)
+    {
+        Logger.AssertAndThrow(normalMatrix.Length == 9, "Normal matrix must have a length of 9", "RenderResourcesWorker");
+        
+        normalMatrix[0] = inverseTransform.M11;
+        normalMatrix[1] = inverseTransform.M21;
+        normalMatrix[2] = inverseTransform.M31;
+        
+        normalMatrix[3] = inverseTransform.M12;
+        normalMatrix[4] = inverseTransform.M22;
+        normalMatrix[5] = inverseTransform.M32;
+        
+        normalMatrix[6] = inverseTransform.M13;
+        normalMatrix[7] = inverseTransform.M23;
+        normalMatrix[8] = inverseTransform.M33;
     }
 
     private static void CalculateOctreeBufferSize(VoxelOctree octree, out uint bufferSize)
@@ -745,10 +771,15 @@ public class RenderResourcesWorker
     }
 
     [StructLayout(LayoutKind.Explicit)]
-    private struct OctreeHeader
+    private unsafe struct OctreeHeader
     {
+        private const int Mat4X4Size = 4 * 4 * sizeof(float);
+        private const int Mat3X3Size = 3 * 3 * sizeof(float);
+        
         [UsedImplicitly] [FieldOffset(0)] public TreeType TreeType;
         [UsedImplicitly] [FieldOffset(sizeof(TreeType))] public Matrix4x4 InverseTransform;
-        [UsedImplicitly] [FieldOffset(sizeof(TreeType) + sizeof(float) * 4 * 4)] public uint NodeCount;
+        [UsedImplicitly] [FieldOffset(sizeof(TreeType) + Mat4X4Size)] public Matrix4x4 Transform;
+        [UsedImplicitly] [FieldOffset(sizeof(TreeType) + 2 * Mat4X4Size)] public fixed float TransposedNormalMatrix[9];
+        [UsedImplicitly] [FieldOffset(sizeof(TreeType) + 2 * Mat4X4Size + Mat3X3Size) ] public uint NodeCount;
     }
 }

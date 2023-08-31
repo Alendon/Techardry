@@ -71,4 +71,49 @@ bool resultHit(Result result){
     return !floatEquals(result.t, FloatMax);
 }
 
+//This is the general layout / header of all trees which are contained in the master bvh
+layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_OCTREE_BINDING) readonly buffer UniformTree
+{
+    uint treeType;
+//deconstruct the inverse transform mat4 into 16 floats
+    float inverseTransformMatrix[16];
+    float transformMatrix[16];
+    float transposedNormalMatrix[9];
+    uint data[];
+} trees[];
+
+mat4 getTreeInverseTransform(int tree){
+    return mat4(
+    trees[nonuniformEXT(tree)].inverseTransformMatrix[0], trees[nonuniformEXT(tree)].inverseTransformMatrix[1], trees[nonuniformEXT(tree)].inverseTransformMatrix[2], trees[nonuniformEXT(tree)].inverseTransformMatrix[3],
+    trees[nonuniformEXT(tree)].inverseTransformMatrix[4], trees[nonuniformEXT(tree)].inverseTransformMatrix[5], trees[nonuniformEXT(tree)].inverseTransformMatrix[6], trees[nonuniformEXT(tree)].inverseTransformMatrix[7],
+    trees[nonuniformEXT(tree)].inverseTransformMatrix[8], trees[nonuniformEXT(tree)].inverseTransformMatrix[9], trees[nonuniformEXT(tree)].inverseTransformMatrix[10], trees[nonuniformEXT(tree)].inverseTransformMatrix[11],
+    trees[nonuniformEXT(tree)].inverseTransformMatrix[12], trees[nonuniformEXT(tree)].inverseTransformMatrix[13], trees[nonuniformEXT(tree)].inverseTransformMatrix[14], trees[nonuniformEXT(tree)].inverseTransformMatrix[15]
+    );
+}
+
+mat4 getTreeTransform(int tree){
+    return mat4(
+    trees[nonuniformEXT(tree)].transformMatrix[0], trees[nonuniformEXT(tree)].transformMatrix[1], trees[nonuniformEXT(tree)].transformMatrix[2], trees[nonuniformEXT(tree)].transformMatrix[3],
+    trees[nonuniformEXT(tree)].transformMatrix[4], trees[nonuniformEXT(tree)].transformMatrix[5], trees[nonuniformEXT(tree)].transformMatrix[6], trees[nonuniformEXT(tree)].transformMatrix[7],
+    trees[nonuniformEXT(tree)].transformMatrix[8], trees[nonuniformEXT(tree)].transformMatrix[9], trees[nonuniformEXT(tree)].transformMatrix[10], trees[nonuniformEXT(tree)].transformMatrix[11],
+    trees[nonuniformEXT(tree)].transformMatrix[12], trees[nonuniformEXT(tree)].transformMatrix[13], trees[nonuniformEXT(tree)].transformMatrix[14], trees[nonuniformEXT(tree)].transformMatrix[15]
+    );
+}
+
+mat3 getTreeTransposedNormalMatrix(int tree){
+    return mat3(
+    trees[nonuniformEXT(tree)].transposedNormalMatrix[0], trees[nonuniformEXT(tree)].transposedNormalMatrix[1], trees[nonuniformEXT(tree)].transposedNormalMatrix[2],
+    trees[nonuniformEXT(tree)].transposedNormalMatrix[3], trees[nonuniformEXT(tree)].transposedNormalMatrix[4], trees[nonuniformEXT(tree)].transposedNormalMatrix[5],
+    trees[nonuniformEXT(tree)].transposedNormalMatrix[6], trees[nonuniformEXT(tree)].transposedNormalMatrix[7], trees[nonuniformEXT(tree)].transposedNormalMatrix[8]
+    );
+}
+
+vec3 normalToWorldSpace(vec3 normal, int tree){
+    return normalize(getTreeTransposedNormalMatrix(tree) * normal);
+}
+
+float tToWorldSpace(float t, vec3 rayDirection, int tree){
+    return t * length(getTreeTransform(tree) * vec4(rayDirection, 0));
+}
+
 #endif // COMMON_GLSL
