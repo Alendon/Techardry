@@ -7,7 +7,7 @@
 #define M_PI 3.1415926535897932384626433832795
 #endif // M_PI
 
-vec3 sunDirection = normalize(vec3(1, -1, 0.2));
+vec3 sunDirection = normalize(vec3(0.5, 1, 0.2));
 
 bool sunVisible(vec3 position){
     Ray ray;
