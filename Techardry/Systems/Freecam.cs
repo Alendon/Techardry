@@ -18,13 +18,13 @@ public partial class Freecam : ASystem
     internal static Vector3 Input = Vector3.Zero;
     private static readonly float Speed = 10f;
 
-    private static float _yaw = 0f;
-    private static float _pitch = 0f;
+    private static float _yaw;
+    private static float _pitch;
+    
+    const float MaxPitch = 1.5f;
 
     private static readonly float mouseSensitiveity = 0.5f;
     
-    private Stopwatch _stopwatch = new();
-
     public override void Setup(SystemManager systemManager)
     {
         _cameraQuery.Setup(this);
@@ -47,10 +47,8 @@ public partial class Freecam : ASystem
 
             if (Engine.Window is {MouseLocked: true})
             {
-                float deltaTime = (float) _stopwatch.Elapsed.TotalSeconds;
-                _stopwatch.Restart();
-                _yaw += -InputHandler.MouseDelta.X * mouseSensitiveity * deltaTime;
-                _pitch += -Math.Clamp(InputHandler.MouseDelta.Y * mouseSensitiveity * deltaTime, -85f, 85);
+                _yaw += -InputHandler.MouseDelta.X * mouseSensitiveity;
+                _pitch += -Math.Clamp(InputHandler.MouseDelta.Y * mouseSensitiveity, -MaxPitch, MaxPitch);
             }
 
             var rotation = Quaternion.CreateFromYawPitchRoll(_yaw, _pitch, 0f);
