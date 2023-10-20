@@ -26,10 +26,10 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
     /// How often the tree can be subdivided.
     /// This results from the logarithm of the maximum total dimension with the base 2.
     /// </summary>
-    public const int MaximumTotalDivision = 10;
+    public const int MaximumTotalDivision = 10; // Math.Log2(MaximumTotalDimension);
 
-    public const int MaximumLevelCount = MaximumTotalDivision + 1;
-
+    public const int MaximumLevelCount = MaximumTotalDivision + 1; // 10 Divisions + 1 Root
+    
     public const int Dimensions = 16;
 
     public const int ChildCount = 8;
@@ -50,7 +50,7 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
     /// 2 => 0.25 x 0.25 x 0.25
     /// etc..
     /// </summary>
-    public const int MaxSplitCount = 6;
+    public const int MaxSplitCount = 6; // MaximumTotalDivision - SizeOneDepth;
 
     /// <summary>
     /// Maximum depth of the octree.

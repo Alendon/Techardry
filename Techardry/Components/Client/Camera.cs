@@ -140,12 +140,12 @@ public struct Camera : IComponent
     public bool Deserialize(DataReader reader, IWorld world, Entity entity)
     {
         bool success = true;
-        success &= reader.TryGetFloat(out var Fov);
-        success &= reader.TryGetVector3(out var PositionOffset);
-        success &= reader.TryGetVector3(out var Forward);
-        success &= reader.TryGetVector3(out var Upward);
-        success &= reader.TryGetFloat(out var Yaw);
-        success &= reader.TryGetFloat(out var Pitch);
+        success &= reader.TryGetFloat(out Fov);
+        success &= reader.TryGetVector3(out PositionOffset);
+        success &= reader.TryGetVector3(out Forward);
+        success &= reader.TryGetVector3(out Upward);
+        success &= reader.TryGetFloat(out Yaw);
+        success &= reader.TryGetFloat(out Pitch);
         
         return success;
     }

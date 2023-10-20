@@ -20,7 +20,7 @@ public partial class InputCamera : ASystem
     [ComponentQuery] private ComponentQuery<(Camera, InputComponent)> _cameraQuery = new();
 
     private static Vector3 Input = Vector3.Zero;
-    private const float mouseSensitiveity = 0.5f;
+    private const float mouseSensitiveity = 0.3f;
     private Stopwatch _stopwatch = Stopwatch.StartNew();
     
     public override void Setup(SystemManager systemManager)
