@@ -1,9 +1,9 @@
 ﻿using MintyCore.Registries;
 using MintyCore.Render;
+using MintyCore.Render.Managers;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
-using RenderPassIDs = MintyCore.Identifications.RenderPassIDs;
 
 namespace Techardry.UI;
 
@@ -44,85 +44,89 @@ public static class RenderObjects
     };
 
     [RegisterGraphicsPipeline("ui_texture_pipeline")]
-    public static GraphicsPipelineDescription UiTexturePipeline => new()
+    public static GraphicsPipelineDescription UiTexturePipeline(IVulkanEngine vulkanEngine)
     {
-        Flags = 0,
-        Scissors = new[]
+        return new GraphicsPipelineDescription
         {
-            new Rect2D()
+            Flags = 0,
+            Scissors = new[]
             {
-                Offset = new Offset2D(0, 0),
-                Extent = VulkanEngine.SwapchainExtent
-            }
-        },
-        Shaders = new[]
-        {
-            ShaderIDs.UiTextureVertexShader,
-            ShaderIDs.UiTextureFragmentShader
-        },
-        Topology = PrimitiveTopology.TriangleList,
-        Viewports = new[]
-        {
-            new Viewport()
-            {
-                Height = VulkanEngine.SwapchainExtent.Height,
-                Width = VulkanEngine.SwapchainExtent.Width,
-                MaxDepth = 1f
-            }
-        },
-        DescriptorSets = new[]
-        {
-            MintyCore.Identifications.DescriptorSetIDs.SampledTexture
-        },
-        DynamicStates = new[]
-        {
-            DynamicState.Viewport,
-            DynamicState.Scissor
-        },
-        RasterizationInfo = new RasterizationInfo()
-        {
-            CullMode = CullModeFlags.BackBit,
-            FrontFace = FrontFace.Clockwise,
-            PolygonMode = PolygonMode.Fill,
-            LineWidth = 1f
-        },
-        RenderPass = RenderPassIDs.Main,
-        SampleCount = SampleCountFlags.Count1Bit,
-        SubPass = 0,
-        ColorBlendInfo = new ColorBlendInfo()
-        {
-            Attachments = new[]
-            {
-                new PipelineColorBlendAttachmentState
+                new Rect2D()
                 {
-                    BlendEnable = Vk.True,
-                    ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit | ColorComponentFlags.BBit |
-                                     ColorComponentFlags.ABit,
-                    SrcColorBlendFactor = BlendFactor.SrcAlpha,
-                    DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
-                    ColorBlendOp = BlendOp.Add,
-                    SrcAlphaBlendFactor = BlendFactor.One,
-                    DstAlphaBlendFactor = BlendFactor.Zero,
-                    AlphaBlendOp = BlendOp.Add
+                    Offset = new Offset2D(0, 0),
+                    Extent = vulkanEngine.SwapchainExtent
+                }
+            },
+            Shaders = new[]
+            {
+                ShaderIDs.UiTextureVertexShader,
+                ShaderIDs.UiTextureFragmentShader
+            },
+            Topology = PrimitiveTopology.TriangleList,
+            Viewports = new[]
+            {
+                new Viewport()
+                {
+                    Height = vulkanEngine.SwapchainExtent.Height,
+                    Width = vulkanEngine.SwapchainExtent.Width,
+                    MaxDepth = 1f
+                }
+            },
+            DescriptorSets = new[]
+            {
+                MintyCore.Identifications.DescriptorSetIDs.SampledTexture
+            },
+            DynamicStates = new[]
+            {
+                DynamicState.Viewport,
+                DynamicState.Scissor
+            },
+            RasterizationInfo = new RasterizationInfo()
+            {
+                CullMode = CullModeFlags.BackBit,
+                FrontFace = FrontFace.Clockwise,
+                PolygonMode = PolygonMode.Fill,
+                LineWidth = 1f
+            },
+            RenderPass = RenderPassIDs.ColorOnly,
+            SampleCount = SampleCountFlags.Count1Bit,
+            SubPass = 0,
+            ColorBlendInfo = new ColorBlendInfo()
+            {
+                Attachments = new[]
+                {
+                    new PipelineColorBlendAttachmentState
+                    {
+                        BlendEnable = Vk.True,
+                        ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit |
+                                         ColorComponentFlags.BBit |
+                                         ColorComponentFlags.ABit,
+                        SrcColorBlendFactor = BlendFactor.SrcAlpha,
+                        DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                        ColorBlendOp = BlendOp.Add,
+                        SrcAlphaBlendFactor = BlendFactor.One,
+                        DstAlphaBlendFactor = BlendFactor.Zero,
+                        AlphaBlendOp = BlendOp.Add
+                    }
+                }
+            },
+            DepthStencilInfo = default,
+            VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
+            VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
+            PushConstantRanges = new PushConstantRange[]
+            {
+                new()
+                {
+                    Offset = 0,
+                    Size = sizeof(float) * 4 * 2,
+                    StageFlags = ShaderStageFlags.VertexBit
                 }
             }
-        },
-        DepthStencilInfo = default,
-        VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
-        VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
-        PushConstantRanges = new PushConstantRange[]
-        {
-            new()
-            {
-                Offset = 0,
-                Size = sizeof(float) * 4 * 2,
-                StageFlags = ShaderStageFlags.VertexBit
-            }
-        }
-    };
+        };
+    }
 
     [RegisterGraphicsPipeline("ui_color_pipeline")]
-    public static GraphicsPipelineDescription UiColorPipeline => new()
+    public static GraphicsPipelineDescription UiColorPipeline(IVulkanEngine vulkanEngine) => new()
     {
         Flags = 0,
         Scissors = new[]
@@ -130,7 +134,7 @@ public static class RenderObjects
             new Rect2D()
             {
                 Offset = new Offset2D(0, 0),
-                Extent = VulkanEngine.SwapchainExtent
+                Extent = vulkanEngine.SwapchainExtent
             }
         },
         Shaders = new[]
@@ -143,8 +147,8 @@ public static class RenderObjects
         {
             new Viewport()
             {
-                Height = VulkanEngine.SwapchainExtent.Height,
-                Width = VulkanEngine.SwapchainExtent.Width,
+                Height = vulkanEngine.SwapchainExtent.Height,
+                Width = vulkanEngine.SwapchainExtent.Width,
                 MaxDepth = 1f
             }
         },
@@ -161,7 +165,7 @@ public static class RenderObjects
             PolygonMode = PolygonMode.Fill,
             LineWidth = 1f
         },
-        RenderPass = RenderPassIDs.Main,
+        RenderPass = RenderPassIDs.ColorOnly,
         SampleCount = SampleCountFlags.Count1Bit,
         SubPass = 0,
         ColorBlendInfo = new ColorBlendInfo()
@@ -197,7 +201,7 @@ public static class RenderObjects
     };
 
     [RegisterGraphicsPipeline("ui_font_pipeline")]
-    public static GraphicsPipelineDescription UiFontPipeline => new()
+    public static GraphicsPipelineDescription UiFontPipeline(IVulkanEngine vulkanEngine) => new()
     {
         Flags = 0,
         Scissors = new[]
@@ -205,7 +209,7 @@ public static class RenderObjects
             new Rect2D()
             {
                 Offset = new Offset2D(0, 0),
-                Extent = VulkanEngine.SwapchainExtent
+                Extent = vulkanEngine.SwapchainExtent
             }
         },
         Shaders = new[]
@@ -218,8 +222,8 @@ public static class RenderObjects
         {
             new Viewport()
             {
-                Height = VulkanEngine.SwapchainExtent.Height,
-                Width = VulkanEngine.SwapchainExtent.Width,
+                Height = vulkanEngine.SwapchainExtent.Height,
+                Width = vulkanEngine.SwapchainExtent.Width,
                 MaxDepth = 1f
             }
         },
@@ -239,7 +243,7 @@ public static class RenderObjects
             PolygonMode = PolygonMode.Fill,
             LineWidth = 1f
         },
-        RenderPass = RenderPassIDs.Main,
+        RenderPass = RenderPassIDs.ColorOnly,
         SampleCount = SampleCountFlags.Count1Bit,
         SubPass = 0,
         ColorBlendInfo = new ColorBlendInfo()

@@ -12,52 +12,26 @@ namespace Techardry.UI;
 /// <summary>
 ///     Class to handle the user interface
 /// </summary>
-[PublicAPI]
-public static class UiHandler
+public class UiHandler : IUiHandler
 {
-    private static readonly Dictionary<Identification, Identification> UiRootElementCreators = new();
-    private static readonly Dictionary<Identification, IRootElement> UiRootElements = new();
-    private static readonly Dictionary<Identification, Func<Element>> ElementPrefabs = new();
+    private readonly Dictionary<Identification, Identification> UiRootElementCreators = new();
+    private readonly Dictionary<Identification, IRootElement> UiRootElements = new();
+    private readonly Dictionary<Identification, Func<Element>> ElementPrefabs = new();
+    
+    public required IInputHandler InputHandler { private get; init; }
 
-    private static bool _lastLeftMouseState;
-    private static bool _lastRightMouseState;
+    private bool _lastLeftMouseState;
+    private bool _lastRightMouseState;
 
-    private static bool _currentLeftMouseState;
-    private static bool _currentRightMouseState;
-
-    /// <summary>
-    ///     Add a root element (an element which gets automatically updated)
-    /// </summary>
-    /// <param name="id"></param>
-    /// <param name="element"></param>
-    public static void AddRootElement(Identification id, Identification element)
-    {
-        UiRootElementCreators.Add(id, element);
-    }
-
-    internal static void AddElementPrefab(Identification id, Func<Element> prefab)
-    {
-        ElementPrefabs.Add(id, prefab);
-    }
-
-    internal static void SetElementPrefab(Identification prefabId, Func<Element> prefabCreator)
-    {
-        ElementPrefabs.Remove(prefabId);
-        AddElementPrefab(prefabId, prefabCreator);
-    }
-
-    internal static void SetRootElement(Identification elementId, Identification rootElement)
-    {
-        UiRootElements.Remove(elementId);
-        AddRootElement(elementId, rootElement);
-    }
+    private bool _currentLeftMouseState;
+    private bool _currentRightMouseState;
 
     /// <summary>
     ///     Get a root element
     /// </summary>
     /// <param name="id"></param>
     /// <returns></returns>
-    public static IRootElement GetRootElement(Identification id)
+    public IRootElement GetRootElement(Identification id)
     {
         return UiRootElements[id];
     }
@@ -67,13 +41,13 @@ public static class UiHandler
     /// </summary>
     /// <param name="id"></param>
     /// <returns></returns>
-    public static Element CreateElement(Identification id)
+    public Element CreateElement(Identification id)
     {
         return ElementPrefabs[id]();
     }
 
 
-    public static void Update()
+    public void Update()
     {
         _lastLeftMouseState = _currentLeftMouseState;
         _lastRightMouseState = _currentRightMouseState;
@@ -100,7 +74,7 @@ public static class UiHandler
     /// </summary>
     /// <param name="element">Element to update</param>
     /// <param name="updateChildren">Whether or not the children should be updated</param>
-    public static void UpdateElement(Element element, Size rootSize, bool updateChildren = true)
+    public void UpdateElement(Element element, Size rootSize, bool updateChildren = true)
     {
         if (!element.IsActive) return;
 
@@ -147,12 +121,12 @@ public static class UiHandler
         }
     }
 
-    private static PointF GetUiCursorPosition()
+    private PointF GetUiCursorPosition()
     {
         return new PointF(InputHandler.MousePosition with { Y = Engine.Window!.Size.Y - InputHandler.MousePosition.Y });
     }
 
-    internal static void Clear()
+    public void Clear()
     {
         foreach (var rootElement in UiRootElements.Values)
         {
@@ -167,7 +141,7 @@ public static class UiHandler
         ElementPrefabs.Clear();
     }
 
-    internal static void RemoveElement(Identification objectId)
+    public void RemoveElement(Identification objectId)
     {
         ElementPrefabs.Remove(objectId);
         if (UiRootElements.Remove(objectId, out var rootElement) && rootElement is Element element)
@@ -177,7 +151,7 @@ public static class UiHandler
         UiRootElementCreators.Remove(objectId);
     }
 
-    internal static void CreateRootElements()
+    public void CreateRootElements()
     {
         foreach (var (elementId, creatorId) in UiRootElementCreators)
         {

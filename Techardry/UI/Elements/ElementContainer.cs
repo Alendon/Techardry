@@ -35,7 +35,7 @@ public class ElementContainer : Element
         protected set => _redraw = value;
     }*/
 
-    public override void Draw(UiRenderer renderer, Rect2D scissor, Viewport viewport)
+    public override void Draw(IUiRenderer renderer, Rect2D scissor, Viewport viewport)
     {
         foreach (var childElement in GetChildElements())
         {

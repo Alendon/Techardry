@@ -10,7 +10,7 @@ using Techardry.Components.Client;
 using Techardry.Identifications;
 
 namespace Techardry.Systems.Client;
-
+/*
 /// <summary>
 /// System which calculates the camera matrix and sends it to the graphics card.
 /// </summary>
@@ -56,4 +56,4 @@ public partial class ApplyGpuCameraBufferSystem : ASystem
     {
         _cameraQuery.Setup(this);
     }
-}
+}*/

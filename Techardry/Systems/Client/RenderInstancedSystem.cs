@@ -1,6 +1,5 @@
 ﻿using System.Numerics;
 using MintyCore;
-using MintyCore.Components.Client;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Registries;
@@ -13,7 +12,7 @@ using Techardry.Utils;
 using Buffer = System.Buffer;
 
 namespace Techardry.Systems.Client;
-
+/*
 /// <summary>
 ///     System to instanced render entities
 /// </summary>
@@ -214,4 +213,4 @@ public unsafe partial class RenderInstancedSystem : ARenderSystem
 
         base.Dispose();
     }
-}
+}*/

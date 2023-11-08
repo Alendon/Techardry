@@ -1,16 +1,28 @@
-﻿using System.Drawing;
+﻿using System.Buffers;
+using System.Drawing;
 using FontStashSharp.Interfaces;
+using JetBrains.Annotations;
 using MintyCore.Render;
+using MintyCore.Render.Implementations;
+using MintyCore.Render.Managers.Interfaces;
+using MintyCore.Render.Utils;
+using MintyCore.Render.VulkanObjects;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
 
 namespace Techardry.Render;
 
-public class FontTextureManager : ITexture2DManager
+[Singleton<IFontTextureManager>(SingletonContextFlags.NoHeadless)]
+[UsedImplicitly]
+public class FontTextureManager : IFontTextureManager
 {
     private List<FontTextureWrapper> _managedTextures = new();
     public IReadOnlyList<FontTextureWrapper> ManagedTextures => _managedTextures;
+    public required ITextureManager TextureManager { private get; init; }
+    public required IVulkanEngine VulkanEngine { private get; init; }
+    public required IDescriptorSetManager DescriptorSetManager { private get; init; }
+    public required IMemoryManager MemoryManager { private get; init; }
 
     public unsafe object CreateTexture(int width, int height)
     {
@@ -19,8 +31,8 @@ public class FontTextureManager : ITexture2DManager
         var stagingDescription = TextureDescription.Texture2D((uint)width, (uint)height, 1, 1, Format.R8G8B8A8Unorm,
             TextureUsage.Sampled | TextureUsage.Staging);
 
-        var texture = Texture.Create(ref description);
-        var stagingTexture = Texture.Create(ref stagingDescription);
+        var texture = TextureManager.Create(ref description);
+        var stagingTexture = TextureManager.Create(ref stagingDescription);
 
         SamplerCreateInfo samplerCreateInfo = new()
         {
@@ -41,7 +53,7 @@ public class FontTextureManager : ITexture2DManager
         };
 
         VulkanUtils.Assert(VulkanEngine.Vk.CreateSampler(VulkanEngine.Device, in samplerCreateInfo,
-            VulkanEngine.AllocationCallback, out var sampler));
+            null, out var sampler));
 
         ImageViewCreateInfo imageViewCreateInfo = new()
         {
@@ -60,9 +72,9 @@ public class FontTextureManager : ITexture2DManager
         };
 
         VulkanUtils.Assert(VulkanEngine.Vk.CreateImageView(VulkanEngine.Device, in imageViewCreateInfo,
-            VulkanEngine.AllocationCallback, out var imageView));
+            null, out var imageView));
 
-        var descriptorSet = DescriptorSetHandler.AllocateDescriptorSet(DescriptorSetIDs.UiFontTexture);
+        var descriptorSet = DescriptorSetManager.AllocateDescriptorSet(DescriptorSetIDs.UiFontTexture);
 
         DescriptorImageInfo descriptorImageInfo = new()
         {
@@ -88,7 +100,9 @@ public class FontTextureManager : ITexture2DManager
             StagingTexture = stagingTexture,
             Sampler = sampler,
             ImageView = imageView,
-            SampledImageDescriptorSet = descriptorSet
+            SampledImageDescriptorSet = descriptorSet,
+            DescriptorSetManager = DescriptorSetManager,
+            VulkanEngine = VulkanEngine
         };
         _managedTextures.Add(textureWrapper);
         

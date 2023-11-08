@@ -6,12 +6,12 @@ using FontStashSharp;
 using JetBrains.Annotations;
 using MintyCore.Modding;
 using MintyCore.Render;
+using MintyCore.Render.Managers.Interfaces;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
 using Techardry.UI;
 using Techardry.UI.Interfaces;
-using RenderPassIDs = MintyCore.Identifications.RenderPassIDs;
 
 namespace Techardry.Render;
 
@@ -19,22 +19,33 @@ namespace Techardry.Render;
 ///     The main UI renderer
 /// </summary>
 [PublicAPI]
-public class UiRenderer : IDisposable
+[Singleton<IUiRenderer>(SingletonContextFlags.NoHeadless)]
+internal sealed class UiRenderer : IUiRenderer
 {
-    private Element? _rootElement;
+    private readonly IVulkanEngine _vulkanEngine;
+    private readonly IModManager _modManager;
+    private readonly IPipelineManager _pipelineManager;
+    private readonly ITextureManager _textureManager;
+    private readonly IFontTextureManager _fontTextureManager;
+    
+    private uint FrameIndex => _vulkanEngine.ImageIndex;
 
-    private uint FrameIndex => VulkanEngine.ImageIndex;
+    public CommandBuffer CommandBuffer { get; set; }
 
-    public Size RenderSize => (_rootElement as IRootElement)?.PixelSize ?? Size.Empty;
-    public CommandBuffer CommandBuffer { get; private set; }
-
-    private List<IDisposable>?[] _disposables = new List<IDisposable>?[VulkanEngine.SwapchainImageCount];
+    private List<IDisposable>?[] _disposables;
 
     private FontSystem[] _fontSystems;
     private FontRenderer[] _fontRenderers;
 
-    public UiRenderer()
+    public UiRenderer(IVulkanEngine vulkanEngine, IModManager modManager, IPipelineManager pipelineManager,
+        ITextureManager textureManager, IFontTextureManager fontTextureManager)
     {
+        _vulkanEngine = vulkanEngine;
+        _modManager = modManager;
+        _pipelineManager = pipelineManager;
+        _textureManager = textureManager;
+        _fontTextureManager = fontTextureManager;
+
         var fontSettings = new FontSystemSettings()
         {
             FontResolutionFactor = 2,
@@ -44,56 +55,27 @@ public class UiRenderer : IDisposable
             TextureHeight = 4096,
         };
 
-        _fontSystems = new FontSystem[VulkanEngine.SwapchainImageCount];
+        _disposables = new List<IDisposable>?[_vulkanEngine.SwapchainImageCount];
+        _fontSystems = new FontSystem[_vulkanEngine.SwapchainImageCount];
         foreach (ref var fontSystem in _fontSystems.AsSpan())
         {
             fontSystem = new FontSystem(fontSettings);
-            fontSystem.AddFont(ModManager.GetResourceFileStream(FontIDs.Akashi));
+            fontSystem.AddFont(_modManager.GetResourceFileStream(FontIDs.Akashi));
         }
 
-        _fontRenderers = new FontRenderer[VulkanEngine.SwapchainImageCount];
-        foreach (ref var fontTextureManager in _fontRenderers.AsSpan())
+        _fontRenderers = new FontRenderer[_vulkanEngine.SwapchainImageCount];
+        foreach (ref var fontRenderer in _fontRenderers.AsSpan())
         {
-            fontTextureManager = new FontRenderer();
+            fontRenderer = new FontRenderer(fontTextureManager, vulkanEngine, pipelineManager);
         }
     }
 
-    /// <summary>
-    ///     Set the root ui element
-    /// </summary>
-    public void SetUiContext(Element? rootUiElement)
-    {
-        _rootElement = rootUiElement;
-    }
-    
-    public Element? GetUiContext()
-    {
-        return _rootElement;
-    }
+    private List<IDisposable> Disposables { get; set; } = new();
 
-    public void DrawUi()
-    {
-        if (_rootElement is null) return;
-        VulkanEngine.SetActiveRenderPass(RenderPassHandler.GetRenderPass(RenderPassIDs.Main),
-            SubpassContents.SecondaryCommandBuffers);
-
-        CommandBuffer = VulkanEngine.GetSecondaryCommandBuffer();
-        DrawToScreen();
-
-        var singleTimeCb = VulkanEngine.GetSingleTimeCommandBuffer();
-        _fontRenderers[FrameIndex].FontTextureManager.ManagedTextures.ForEach(x => x.ApplyChanges(singleTimeCb));
-        VulkanEngine.ExecuteSingleTimeCommandBuffer(singleTimeCb);
-
-        VulkanEngine.ExecuteSecondary(CommandBuffer);
-        CommandBuffer = default;
-    }
-
-    public List<IDisposable> Disposables { get; private set; } = new();
-
-    private void DrawToScreen()
+    public void DrawUi(Element rootElement)
     {
         _disposables[FrameIndex]?.ForEach(x => x.Dispose());
-        if (_rootElement is null || _rootElement is not IRootElement root) return;
+        if (rootElement is null || rootElement is not IRootElement root) return;
 
         var viewport = new Viewport()
         {
@@ -109,15 +91,20 @@ public class UiRenderer : IDisposable
             Offset = new Offset2D(),
             Extent = new Extent2D()
             {
-                Height = (uint)root.PixelSize.Height,
-                Width = (uint)root.PixelSize.Width
+                Height = (uint) root.PixelSize.Height,
+                Width = (uint) root.PixelSize.Width
             }
         };
 
-        _rootElement.Draw(this, scissor, viewport);
+        rootElement.Draw(this, scissor, viewport);
 
         _disposables[FrameIndex] = Disposables;
         Disposables = new List<IDisposable>();
+    }
+
+    public void UpdateInternalTextures(CommandBuffer commandBuffer)
+    {
+        _fontRenderers[FrameIndex].FontTextureManager.ManagedTextures.ForEach(x => x.ApplyChanges(commandBuffer));
     }
 
     public Bounds MeasureString(string text, int fontSize, Vector2 position, Vector2? scale = null,
@@ -146,52 +133,50 @@ public class UiRenderer : IDisposable
     public unsafe void DrawTexture(Identification textureId,
         RectangleF drawingRect, RectangleF uvRect, Rect2D scissor, Viewport viewport)
     {
-        var textureDescriptor = TextureHandler.GetTextureBindResourceSet(textureId);
-        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiTexturePipeline);
-        var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiTexturePipeline);
+        var textureDescriptor = _textureManager.GetTextureBindResourceSet(textureId);
+        var pipeline = _pipelineManager.GetPipeline(PipelineIDs.UiTexturePipeline);
+        var pipelineLayout = _pipelineManager.GetPipelineLayout(PipelineIDs.UiTexturePipeline);
 
-        VulkanEngine.Vk.CmdBindPipeline(CommandBuffer, PipelineBindPoint.Graphics, pipeline);
-        VulkanEngine.Vk.CmdBindDescriptorSets(CommandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
+        _vulkanEngine.Vk.CmdBindPipeline(CommandBuffer, PipelineBindPoint.Graphics, pipeline);
+        _vulkanEngine.Vk.CmdBindDescriptorSets(CommandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
             textureDescriptor,
             0, null);
-        VulkanEngine.Vk.CmdSetScissor(CommandBuffer, 0, 1, scissor);
-        VulkanEngine.Vk.CmdSetViewport(CommandBuffer, 0, 1, viewport);
+        _vulkanEngine.Vk.CmdSetScissor(CommandBuffer, 0, 1, scissor);
+        _vulkanEngine.Vk.CmdSetViewport(CommandBuffer, 0, 1, viewport);
 
         var pushConstantValues = (stackalloc RectangleF[]
         {
             drawingRect,
             uvRect
         });
-        VulkanEngine.Vk.CmdPushConstants(CommandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
-            (uint)(sizeof(RectangleF) * 2), pushConstantValues);
+        _vulkanEngine.Vk.CmdPushConstants(CommandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
+            (uint) (sizeof(RectangleF) * 2), pushConstantValues);
 
-        VulkanEngine.Vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
+        _vulkanEngine.Vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
     }
 
     public unsafe void FillColor(Color color,
         Rect2D scissor, Viewport viewport)
     {
-        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiColorPipeline);
-        var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiColorPipeline);
+        var pipeline = _pipelineManager.GetPipeline(PipelineIDs.UiColorPipeline);
+        var pipelineLayout = _pipelineManager.GetPipelineLayout(PipelineIDs.UiColorPipeline);
 
         var pushConstants = stackalloc float[4 * 2];
         Unsafe.AsRef<RectangleF>(pushConstants) = new RectangleF(0, 0, 1, 1);
         Unsafe.AsRef<Vector4>(pushConstants + 4) =
             new Vector4(color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
 
-        VulkanEngine.Vk.CmdBindPipeline(CommandBuffer, PipelineBindPoint.Graphics, pipeline);
-        VulkanEngine.Vk.CmdPushConstants(CommandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
+        _vulkanEngine.Vk.CmdBindPipeline(CommandBuffer, PipelineBindPoint.Graphics, pipeline);
+        _vulkanEngine.Vk.CmdPushConstants(CommandBuffer, pipelineLayout, ShaderStageFlags.VertexBit, 0,
             sizeof(float) * 4 * 2, pushConstants);
-        VulkanEngine.Vk.CmdSetScissor(CommandBuffer, 0, 1, scissor);
-        VulkanEngine.Vk.CmdSetViewport(CommandBuffer, 0, 1, viewport);
+        _vulkanEngine.Vk.CmdSetScissor(CommandBuffer, 0, 1, scissor);
+        _vulkanEngine.Vk.CmdSetViewport(CommandBuffer, 0, 1, viewport);
 
-        VulkanEngine.Vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
+        _vulkanEngine.Vk.CmdDraw(CommandBuffer, 6, 1, 0, 0);
     }
 
     public void Dispose()
     {
-        _rootElement?.Dispose();
-
         foreach (var fontSystem in _fontSystems.AsSpan())
         {
             foreach (var fontAtlas in fontSystem.Atlases)

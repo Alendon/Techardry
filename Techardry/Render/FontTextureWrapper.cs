@@ -1,4 +1,6 @@
 ﻿using MintyCore.Render;
+using MintyCore.Render.Managers.Interfaces;
+using MintyCore.Render.VulkanObjects;
 using Silk.NET.Vulkan;
 
 namespace Techardry.Render;
@@ -11,6 +13,8 @@ public class FontTextureWrapper : IDisposable
     public required ImageView ImageView { get; set; }
     public required Sampler Sampler { get; set; }
     public required DescriptorSet SampledImageDescriptorSet { get; set; }
+    public required IDescriptorSetManager DescriptorSetManager { get; set; }
+    public required IVulkanEngine VulkanEngine { get; set; }
 
     public void ApplyChanges(CommandBuffer commandBuffer)
     {
@@ -23,9 +27,9 @@ public class FontTextureWrapper : IDisposable
 
     public unsafe void Dispose()
     {
-        DescriptorSetHandler.FreeDescriptorSet(SampledImageDescriptorSet);
-        VulkanEngine.Vk.DestroySampler(VulkanEngine.Device, Sampler, VulkanEngine.AllocationCallback);
-        VulkanEngine.Vk.DestroyImageView(VulkanEngine.Device, ImageView, VulkanEngine.AllocationCallback);
+        DescriptorSetManager.FreeDescriptorSet(SampledImageDescriptorSet);
+        VulkanEngine.Vk.DestroySampler(VulkanEngine.Device, Sampler, null);
+        VulkanEngine.Vk.DestroyImageView(VulkanEngine.Device, ImageView, null);
 
         Texture.Dispose();
         StagingTexture.Dispose();

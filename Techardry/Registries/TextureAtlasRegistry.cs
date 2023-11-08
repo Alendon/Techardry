@@ -1,41 +1,18 @@
-﻿using MintyCore.Modding;
+﻿using JetBrains.Annotations;
+using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
+using MintyCore.Modding.Implementations;
 using MintyCore.Utils;
-using Techardry.Identifications;
 using Techardry.Render;
+using RegistryIDs = Techardry.Identifications.RegistryIDs;
 
 namespace Techardry.Registries;
 
 [Registry("texture_atlas")]
 public class TextureAtlasRegistry : IRegistry
 {
-    /// <summary />
-    public static event Action OnRegister = () => { };
-
-    /// <summary />
-    public static event Action OnPostRegister = () => { };
-
-    /// <summary />
-    public static event Action OnPreRegister = () => { };
+    public required ITextureAtlasHandler TextureAtlasHandler { private get; [UsedImplicitly] set; }
     
-    public void PreRegister()
-    {
-        OnPreRegister();
-    }
-
-    public void Register()
-    {
-        
-        OnRegister();
-    }
-
-    public void PostRegister()
-    {
-        
-        OnPostRegister();
-    }
-    
-
     public void PreUnRegister()
     {
         
@@ -53,22 +30,15 @@ public class TextureAtlasRegistry : IRegistry
 
     public void Clear()
     {
-        ClearRegistryEvents();
         TextureAtlasHandler.Clear();
     }
 
     [RegisterMethod(ObjectRegistryPhase.Main)]
-    public static void RegisterTextureAtlas(Identification id, TextureAtlasInfo info)
+    public void RegisterTextureAtlas(Identification id, TextureAtlasInfo info)
     {
         TextureAtlasHandler.CreateTextureAtlas(id, info.Textures);
     }
-
-    public void ClearRegistryEvents()
-    {
-        OnRegister = () => { };
-        OnPostRegister = () => { };
-        OnPreRegister = () => { };
-    }
+    
 
     public ushort RegistryId => RegistryIDs.TextureAtlas;
     public IEnumerable<ushort> RequiredRegistries => Enumerable.Empty<ushort>();

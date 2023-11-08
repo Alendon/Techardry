@@ -2,6 +2,8 @@
 using System.Runtime.CompilerServices;
 using FontStashSharp.Interfaces;
 using MintyCore.Render;
+using MintyCore.Render.Managers.Interfaces;
+using MintyCore.Render.VulkanObjects;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
@@ -13,8 +15,20 @@ public class FontRenderer : IFontStashRenderer2
     private CommandBuffer _commandBuffer;
     private Viewport _viewport;
     private Rect2D _scissor;
+
+    public FontRenderer(IFontTextureManager fontTextureManager, IVulkanEngine vulkanEngine, IPipelineManager pipelineManager)
+    {
+        FontTextureManager = fontTextureManager;
+        VulkanEngine = vulkanEngine;
+        PipelineManager = pipelineManager;
+    }
+
+    private IVulkanEngine VulkanEngine { get;  }
+    private IPipelineManager PipelineManager { get; }
     
-    public List<Mesh> Meshes { get; } = new();
+    
+    public ITexture2DManager TextureManager => FontTextureManager;
+    public IFontTextureManager FontTextureManager { get; }
     
     public void PrepareNextDraw(CommandBuffer commandBuffer, Viewport viewport, Rect2D scissor)
     {
@@ -64,8 +78,8 @@ public class FontRenderer : IFontStashRenderer2
         Unsafe.As<float, Vector4>(ref pushConstants[8]) = bottomLeft.Color.ToVector4();
 
 
-        var pipeline = PipelineHandler.GetPipeline(PipelineIDs.UiFontPipeline);
-        var pipelineLayout = PipelineHandler.GetPipelineLayout(PipelineIDs.UiFontPipeline);
+        var pipeline = PipelineManager.GetPipeline(PipelineIDs.UiFontPipeline);
+        var pipelineLayout = PipelineManager.GetPipelineLayout(PipelineIDs.UiFontPipeline);
         
         VulkanEngine.Vk.CmdBindPipeline(_commandBuffer, PipelineBindPoint.Graphics, pipeline);
         VulkanEngine.Vk.CmdBindDescriptorSets(_commandBuffer, PipelineBindPoint.Graphics, pipelineLayout, 0, 1,
@@ -78,6 +92,4 @@ public class FontRenderer : IFontStashRenderer2
         VulkanEngine.Vk.CmdDraw(_commandBuffer, 6, 1, 0, 0);
     }
 
-    public ITexture2DManager TextureManager => FontTextureManager;
-    public FontTextureManager FontTextureManager { get; } = new();
 }

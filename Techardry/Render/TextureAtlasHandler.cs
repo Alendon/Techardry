@@ -1,8 +1,11 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using MintyCore.Identifications;
 using MintyCore.Render;
+using MintyCore.Render.Managers.Interfaces;
+using MintyCore.Render.VulkanObjects;
 using MintyCore.Utils;
 using RectpackSharp;
 using Silk.NET.Maths;
@@ -10,23 +13,28 @@ using Silk.NET.Vulkan;
 
 namespace Techardry.Render;
 
-public static class TextureAtlasHandler
+[Singleton<ITextureAtlasHandler>(SingletonContextFlags.NoHeadless)]
+public class TextureAtlasHandler : ITextureAtlasHandler
 {
-    private static readonly Dictionary<Identification, Texture> _atlasTextures = new();
-    private static readonly Dictionary<Identification, ImageView> _atlasViews = new();
-    private static readonly Dictionary<Identification, Sampler> _atlasSamplers = new();
-    private static readonly Dictionary<Identification, DescriptorSet> _atlasDescriptorSets = new();
+    public required ITextureManager TextureManager { private get; [UsedImplicitly] set; }
+    public required IDescriptorSetManager DescriptorSetHandler { private get; [UsedImplicitly] set; }
+    public required IVulkanEngine VulkanEngine { private get; [UsedImplicitly] set; }
+    
+    private readonly Dictionary<Identification, Texture> _atlasTextures = new();
+    private readonly Dictionary<Identification, ImageView> _atlasViews = new();
+    private readonly Dictionary<Identification, Sampler> _atlasSamplers = new();
+    private readonly Dictionary<Identification, DescriptorSet> _atlasDescriptorSets = new();
 
-    private static readonly Dictionary<Identification, Dictionary<Identification, AtlasLocationInfo>> _atlasLocations =
+    private readonly Dictionary<Identification, Dictionary<Identification, AtlasLocationInfo>> _atlasLocations =
         new();
 
-    internal static unsafe void CreateTextureAtlas(Identification atlasId, Identification[] textureIds)
+    public unsafe void CreateTextureAtlas(Identification atlasId, Identification[] textureIds)
     {
         Logger.AssertAndThrow(textureIds.Length > 0, "Texture atlas must have at least one texture",
             "Techardry/TextureAtlas");
 
         (Identification id, Texture tex)[] textures =
-            (from textureId in textureIds select (textureId, TextureHandler.GetTexture(textureId))).ToArray();
+            (from textureId in textureIds select (textureId, TextureManager.GetTexture(textureId))).ToArray();
         
         var rectangles = new PackingRectangle[textures.Length];
         for (var i = 0; i < textures.Length; i++)
@@ -59,7 +67,7 @@ public static class TextureAtlasHandler
 
         Dictionary<Identification, AtlasLocationInfo> textureLocationInfos = new();
 
-        var atlas = Texture.Create(ref atlasDescription);
+        var atlas = TextureManager.Create(ref atlasDescription);
 
         var cb = VulkanEngine.GetSingleTimeCommandBuffer();
         
@@ -139,7 +147,7 @@ public static class TextureAtlasHandler
             ViewType = ImageViewType.Type2D
         };
 
-        VulkanEngine.Vk.CreateImageView(VulkanEngine.Device, imageViewCreateInfo, VulkanEngine.AllocationCallback,
+        VulkanEngine.Vk.CreateImageView(VulkanEngine.Device, imageViewCreateInfo, null,
             out var imageView);
         _atlasViews[atlasId] = imageView;
 
@@ -164,7 +172,7 @@ public static class TextureAtlasHandler
             UnnormalizedCoordinates = false
         };
 
-        VulkanEngine.Vk.CreateSampler(VulkanEngine.Device, samplerCreateInfo, VulkanEngine.AllocationCallback,
+        VulkanEngine.Vk.CreateSampler(VulkanEngine.Device, samplerCreateInfo, null,
             out var sampler);
 
         _atlasSamplers[atlasId] = sampler;
@@ -193,12 +201,12 @@ public static class TextureAtlasHandler
         _atlasDescriptorSets[atlasId] = atlasDescriptorSet;
     }
 
-    public static bool TryGetAtlasTexture(Identification id, out Texture texture)
+    public bool TryGetAtlasTexture(Identification id, [MaybeNullWhen(false)] out Texture texture)
     {
         return _atlasTextures.TryGetValue(id, out texture);
     }
 
-    public static bool TryGetAtlasLocation(Identification atlasId, Identification subTextureId,
+    public bool TryGetAtlasLocation(Identification atlasId, Identification subTextureId,
         out AtlasLocationInfo locationInfo)
     {
         locationInfo = default;
@@ -206,22 +214,22 @@ public static class TextureAtlasHandler
                atlasLocations.TryGetValue(subTextureId, out locationInfo);
     }
     
-    public static bool TryGetAtlasDescriptorSet(Identification atlasId, out DescriptorSet descriptorSet)
+    public bool TryGetAtlasDescriptorSet(Identification atlasId, out DescriptorSet descriptorSet)
     {
         return _atlasDescriptorSets.TryGetValue(atlasId, out descriptorSet);
     }
     
-    public static bool TryGetAtlasView(Identification atlasId, out ImageView imageView)
+    public bool TryGetAtlasView(Identification atlasId, out ImageView imageView)
     {
         return _atlasViews.TryGetValue(atlasId, out imageView);
     }
     
-    public static bool TryGetAtlasSampler(Identification atlasId, out Sampler sampler)
+    public bool TryGetAtlasSampler(Identification atlasId, out Sampler sampler)
     {
         return _atlasSamplers.TryGetValue(atlasId, out sampler);
     }
 
-    internal static unsafe void RemoveTextureAtlas(Identification id)
+    public unsafe void RemoveTextureAtlas(Identification id)
     {
         if (_atlasDescriptorSets.Remove(id, out var descriptorSet))
         {
@@ -230,12 +238,12 @@ public static class TextureAtlasHandler
         
         if(_atlasSamplers.Remove(id, out var sampler))
         {
-            VulkanEngine.Vk.DestroySampler(VulkanEngine.Device, sampler, VulkanEngine.AllocationCallback);
+            VulkanEngine.Vk.DestroySampler(VulkanEngine.Device, sampler, null);
         }
         
         if(_atlasViews.Remove(id, out var imageView))
         {
-            VulkanEngine.Vk.DestroyImageView(VulkanEngine.Device, imageView, VulkanEngine.AllocationCallback);
+            VulkanEngine.Vk.DestroyImageView(VulkanEngine.Device, imageView, null);
         }
         
         if(_atlasTextures.Remove(id, out var texture))
@@ -246,7 +254,7 @@ public static class TextureAtlasHandler
         _atlasLocations.Remove(id);
     }
 
-    internal static void Clear()
+    public void Clear()
     {
         var ids = _atlasTextures.Keys.ToArray();
         foreach (var id in ids)

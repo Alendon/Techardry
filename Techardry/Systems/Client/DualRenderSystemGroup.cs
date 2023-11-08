@@ -8,7 +8,7 @@ using Silk.NET.Vulkan;
 using Techardry.Identifications;
 
 namespace Techardry.Systems.Client;
-
+/*
 [RegisterSystem("dual_render")]
 [ExecuteAfter<ApplyGpuCameraBufferSystem>]
 [ExecuteInSystemGroup<PresentationSystemGroup>]
@@ -123,4 +123,4 @@ public class DualRenderSystemGroup : ARenderSystemGroup
         CurrentSubpass = 0;
         base.PreExecuteMainThread();
     }
-}
+}*/

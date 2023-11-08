@@ -54,4 +54,8 @@ public partial class ChunkDataMessage : IMessage
     public Identification MessageId => MessageIDs.ChunkData;
     public DeliveryMethod DeliveryMethod => DeliveryMethod.Reliable;
     public ushort Sender { get; set; }
+
+    /// <inheritdoc />
+    public required INetworkHandler NetworkHandler { get; init; }
+    public required IWorldHandler WorldHandler { private get; init; }
 }

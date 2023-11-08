@@ -1,10 +1,14 @@
 ﻿using JetBrains.Annotations;
 using MintyCore;
+using MintyCore.Identifications;
 using MintyCore.Modding;
 using MintyCore.Modding.Attributes;
+using MintyCore.Modding.Implementations;
 using MintyCore.Utils;
 using Techardry.Identifications;
 using Techardry.UI;
+using Techardry.UI.Interfaces;
+using RegistryIDs = Techardry.Identifications.RegistryIDs;
 
 namespace Techardry.Registries;
 
@@ -17,32 +21,20 @@ public class UiRegistry : IRegistry
 {
     /// <inheritdoc />
     public ushort RegistryId => RegistryIDs.Ui;
+    public required IUiHandler UiHandler { [UsedImplicitly] init; private get; }
 
     /// <inheritdoc />
     public IEnumerable<ushort> RequiredRegistries => Enumerable.Empty<ushort>();
 
-    /// <inheritdoc />
-    public void PreRegister()
-    {
-        OnPreRegister();
-    }
+
 
     /// <inheritdoc />
-    public void Register()
+    public void PostRegister(ObjectRegistryPhase phase)
     {
-        OnRegister();
-    }
-
-    /// <inheritdoc />
-    public void PostRegister()
-    {
-        OnPostRegister();
+        if(phase != ObjectRegistryPhase.Main)
+            return;
+        
         UiHandler.CreateRootElements();
-    }
-
-    /// <inheritdoc />
-    public void PreUnRegister()
-    {
     }
 
     /// <inheritdoc />
@@ -54,48 +46,9 @@ public class UiRegistry : IRegistry
     }
 
     /// <inheritdoc />
-    public void PostUnRegister()
-    {
-    }
-
-    /// <inheritdoc />
-    public void ClearRegistryEvents()
-    {
-        OnRegister = delegate { };
-        OnPostRegister = delegate { };
-        OnPreRegister = delegate { };
-    }
-
-    /// <inheritdoc />
     public void Clear()
     {
         UiHandler.Clear();
-        ClearRegistryEvents();
-    }
-
-    /// <summary />
-    public static event Action OnRegister = delegate { };
-
-    /// <summary />
-    public static event Action OnPostRegister = delegate { };
-
-    /// <summary />
-    public static event Action OnPreRegister = delegate { };
-
-
-    /// <summary>
-    ///     Register a ui prefab
-    /// This method is used by the source generator for the auto registry
-    /// </summary>
-    /// <param name="id"></param>
-    /// <param name="prefabElementInfo"></param>
-    [RegisterMethod(ObjectRegistryPhase.Main)]
-    public static void RegisterUiPrefab(Identification id, PrefabElementInfo prefabElementInfo)
-    {
-        RegistryManager.AssertMainObjectRegistryPhase();
-        if (Engine.HeadlessModeActive)
-            return;
-        UiHandler.AddElementPrefab(id, prefabElementInfo.PrefabCreator);
     }
 
     /// <summary>
@@ -103,35 +56,12 @@ public class UiRegistry : IRegistry
     /// This method is used by the source generator for the auto registry
     /// </summary>
     /// <param name="id"></param>
-    /// <param name="info"></param>
     [RegisterMethod(ObjectRegistryPhase.Main)]
-    public static void RegisterUiRoot(Identification id, RootElementInfo info)
+    public void RegisterUiRoot<TRootElement>(Identification id) where TRootElement : Element, IRootElement
     {
         if (Engine.HeadlessModeActive)
             return;
-        UiHandler.AddRootElement(id, info.RootElementPrefab);
+        UiHandler.AddRootElement<TRootElement>(id);
     }
     
-}
-
-/// <summary>
-/// Wrapper struct to register a ui prefab
-/// </summary>
-public struct PrefabElementInfo
-{
-    /// <summary>
-    /// Function which instantiates the prefab
-    /// </summary>
-    public Func<Element> PrefabCreator;
-}
-
-/// <summary>
-/// Wrapper struct to register a new ui root element
-/// </summary>
-public struct RootElementInfo
-{
-    /// <summary>
-    /// Id of the prefab function which creates the root element
-    /// </summary>
-    public Identification RootElementPrefab;
 }

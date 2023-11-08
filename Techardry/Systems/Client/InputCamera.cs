@@ -11,7 +11,7 @@ using Techardry.Components.Client;
 using Techardry.Identifications;
 
 namespace Techardry.Systems.Client;
-
+/*
 [ExecutionSide(GameType.Client)]
 [RegisterSystem("input_camera")]
 [ExecuteInSystemGroup<InitializationSystemGroup>]
@@ -193,4 +193,4 @@ public partial class InputCamera : ASystem
     };
 
     public override Identification Identification => SystemIDs.InputCamera;
-}
+}*/

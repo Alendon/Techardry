@@ -11,7 +11,7 @@ namespace Techardry.UI;
 /// </summary>
 public static class BorderBuilder
 {
-    public static void DrawBorder(UiRenderer renderer, [ValueRange(0, 1)] float borderWidth,
+    public static void DrawBorder(IUiRenderer renderer, [ValueRange(0, 1)] float borderWidth,
         Color? fillColor, BorderImages borderImages,
         Rect2D scissor, Viewport viewport)
     {

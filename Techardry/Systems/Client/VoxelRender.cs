@@ -17,7 +17,7 @@ using PipelineIDs = Techardry.Identifications.PipelineIDs;
 using SystemIDs = Techardry.Identifications.SystemIDs;
 
 namespace Techardry.Systems.Client;
-
+/*
 [RegisterSystem("voxel_render")]
 [ExecuteInSystemGroup<DualRenderSystemGroup>]
 [ExecuteAfter<RenderInstancedSystem>]
@@ -278,4 +278,4 @@ public sealed partial class VoxelRender : ARenderSystem
         [FieldOffset(sizeof(float) * 11)] public float Near;
         [FieldOffset(sizeof(float) * 12)] public float Far;
     }
-}
+}*/

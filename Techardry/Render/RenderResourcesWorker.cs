@@ -15,7 +15,9 @@ using Techardry.World;
 using Int3 = Techardry.Utils.Int3;
 
 namespace Techardry.Render;
+//TODO Update to new render system
 
+/*
 public class RenderResourcesWorker
 {
     private readonly ConcurrentUniqueQueue<Int3> _chunkRemoveQueue = new();
@@ -782,4 +784,4 @@ public class RenderResourcesWorker
         [UsedImplicitly] [FieldOffset(sizeof(TreeType) + 2 * Mat4X4Size)] public fixed float TransposedNormalMatrix[9];
         [UsedImplicitly] [FieldOffset(sizeof(TreeType) + 2 * Mat4X4Size + Mat3X3Size) ] public uint NodeCount;
     }
-}
+}*/

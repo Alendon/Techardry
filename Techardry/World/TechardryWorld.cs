@@ -7,12 +7,14 @@ using BepuPhysics.CollisionDetection.SweepTasks;
 using BepuPhysics.Constraints;
 using MintyCore.ECS;
 using MintyCore.Physics;
+using MintyCore.Registries;
 using MintyCore.Utils;
 using Techardry.Identifications;
 using Techardry.Voxels;
 
 namespace Techardry.World;
 
+[RegisterWorld("techardry_world")]
 public class TechardryWorld : IWorld
 {
     private SystemManager? _systemManager;
@@ -32,12 +34,12 @@ public class TechardryWorld : IWorld
     /// <summary>
     ///     The EntityManager of the <see cref="World" />
     /// </summary>
-    public EntityManager EntityManager => _entityManager ?? throw new Exception("Object is Disposed");
+    public IEntityManager EntityManager => _entityManager ?? throw new Exception("Object is Disposed");
 
     /// <summary>
     ///     The <see cref="PhysicsWorld" /> of the <see cref="World" />
     /// </summary>
-    public PhysicsWorld PhysicsWorld => _physicsWorld ?? throw new Exception("Object is Disposed");
+    public IPhysicsWorld PhysicsWorld => _physicsWorld ?? throw new Exception("Object is Disposed");
 
     public Identification Identification => WorldIDs.Default;
 
@@ -63,7 +65,7 @@ public class TechardryWorld : IWorld
         var poseIntegrator = new MintyPoseIntegratorCallback(new Vector3(0, -10, 0), 0.03f, 0.03f);
         var solveDescription = new SolveDescription(8, 8);
 
-        _physicsWorld = PhysicsWorld.Create(narrowPhase, poseIntegrator, solveDescription);
+        _physicsWorld = MintyCore.Physics.PhysicsWorld.Create(narrowPhase, poseIntegrator, solveDescription);
 
         
         RegisterPhysicsExtensions();

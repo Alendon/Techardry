@@ -2,6 +2,7 @@
 using DotNext.Diagnostics;
 using DotNext.Threading;
 using MintyCore;
+using MintyCore.Network;
 using MintyCore.Utils;
 using Techardry.Blocks;
 using Techardry.Networking;
@@ -21,18 +22,22 @@ public class Chunk : IDisposable
     public Timestamp LastSyncedTime { get; set; }
 
     public TechardryWorld ParentWorld { get; }
+    private IPlayerHandler _playerHandler;
+    private INetworkHandler _networkHandler;
     
 
 
-    public Chunk(Int3 chunkPos, TechardryWorld parentWorld) : this(chunkPos, new VoxelOctree(), parentWorld)
+    public Chunk(Int3 chunkPos, TechardryWorld parentWorld, IPlayerHandler playerHandler, INetworkHandler networkHandler) : this(chunkPos, new VoxelOctree(), parentWorld, playerHandler, networkHandler)
     {
     }
 
-    internal Chunk(Int3 chunkPos, VoxelOctree octree, TechardryWorld parentWorld)
+    internal Chunk(Int3 chunkPos, VoxelOctree octree, TechardryWorld parentWorld, IPlayerHandler playerHandler, INetworkHandler networkHandler)
     {
         Position = chunkPos;
         Octree = octree;
         ParentWorld = parentWorld;
+        _playerHandler = playerHandler;
+        _networkHandler = networkHandler;
     }
 
 
@@ -56,14 +61,12 @@ public class Chunk : IDisposable
             return;
         }
 
-        var chunkData = new ChunkDataMessage
-        {
-            ChunkPosition = Position,
-            Octree = Octree,
-            WorldId = ParentWorld.Identification
-        };
+        var chunkData = _networkHandler.CreateMessage<ChunkDataMessage>();
+        chunkData.ChunkPosition = Position;
+        chunkData.Octree = Octree;
+        chunkData.WorldId = ParentWorld.Identification;
 
-        chunkData.Send(PlayerHandler.GetConnectedPlayers());
+        chunkData.Send(_playerHandler.GetConnectedPlayers());
 
         LastSyncedVersion = Version;
         LastSyncedTime = new Timestamp();
@@ -75,11 +78,9 @@ public class Chunk : IDisposable
 
         if (LastSyncedTime.ElapsedMilliseconds < 1000) return;
 
-        var requestData = new RequestChunkData()
-        {
-            Position = Position,
-            WorldId = ParentWorld.Identification
-        };
+        var requestData = _networkHandler.CreateMessage<RequestChunkData>();
+        requestData.Position = Position;
+        requestData.WorldId = ParentWorld.Identification;
 
         requestData.SendToServer();
 

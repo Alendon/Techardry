@@ -76,7 +76,7 @@ public class Button : Element, IBorderElement
         base.OnResize();
     }
 
-    public override void Draw(UiRenderer renderer, Rect2D scissor, Viewport viewport)
+    public override void Draw(IUiRenderer renderer, Rect2D scissor, Viewport viewport)
     {
         if(BorderActive)
         {

@@ -20,7 +20,6 @@ public class TextBox : Element, IBorderElement
     private string _content;
     private Color _drawColor;
     private Color _fillColor;
-    private Font? _font;
     private HorizontalAlignment _horizontalAlignment;
 
     private RectangleF _innerLayout;
@@ -103,12 +102,10 @@ public class TextBox : Element, IBorderElement
     /// <inheritdoc />
     public override void Initialize()
     {
-        //_font = GetFittingFont();
-
         HasChanged = true;
     }
 
-    public override void Draw(UiRenderer renderer, Rect2D scissors, Viewport viewports)
+    public override void Draw(IUiRenderer renderer, Rect2D scissors, Viewport viewports)
     {
         if (BorderActive)
         {

@@ -28,7 +28,7 @@ public abstract class Element : IDisposable
     /// </summary>
     //public virtual bool Redraw { get; protected set; } = true;
 
-    public abstract void Draw(UiRenderer renderer, Rect2D scissor, Viewport viewport);
+    public abstract void Draw(IUiRenderer renderer, Rect2D scissor, Viewport viewport);
 
     public virtual bool HasChanged { get; protected set; }
 

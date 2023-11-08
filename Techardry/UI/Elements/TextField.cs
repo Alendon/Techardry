@@ -24,12 +24,12 @@ public class TextField : TextBox
     /// <param name="horizontalAlignment">Which horizontal alignment the text should use</param>
     /// <param name="hint">Text which will be displayed if empty</param>
     // ReSharper disable once NotNullMemberIsNotInitialized
-    public TextField(RectangleF relativeLayout, ushort desiredFontSize = ushort.MaxValue,
+    public TextField(IInputHandler inputHandler, RectangleF relativeLayout, ushort desiredFontSize = ushort.MaxValue,
         bool borderActive = true, HorizontalAlignment horizontalAlignment = HorizontalAlignment.Center,
         string hint = "", float borderWidth = 0.05f) : base(relativeLayout,
         "To Measure |", desiredFontSize, borderActive, horizontalAlignment, borderWidth: borderWidth)
     {
-        _textInput = new TextInput(false);
+        _textInput = new TextInput(false, inputHandler);
         FillColor = Color.Gray;
         _hint = hint;
     }

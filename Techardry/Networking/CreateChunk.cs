@@ -49,7 +49,11 @@ public partial class CreateChunk : IMessage
     public Identification MessageId => MessageIDs.CreateChunk;
     public DeliveryMethod DeliveryMethod => DeliveryMethod.Reliable;
     public ushort Sender { get; set; }
-    
+
+    /// <inheritdoc />
+    public required INetworkHandler NetworkHandler { get; init; }
+    public required IWorldHandler WorldHandler { private get; init; }
+
     public Int3 ChunkPosition;
     public Identification WorldId;
 }

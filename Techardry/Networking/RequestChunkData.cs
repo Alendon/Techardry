@@ -12,6 +12,10 @@ namespace Techardry.Networking;
 [RegisterMessage("request_chunk_data")]
 public partial class RequestChunkData : IMessage
 {
+    public required IWorldHandler WorldHandler { private get; init; }
+    public required INetworkHandler NetworkHandler { get; init; }
+
+
     public void Serialize(DataWriter writer)
     {
         Position.Serialize(writer);
@@ -32,12 +36,10 @@ public partial class RequestChunkData : IMessage
 
         chunk.Octree.AcquireReadLock();
 
-        var chunkDataMessage = new ChunkDataMessage()
-        {
-            ChunkPosition = Position,
-            WorldId = WorldId,
-            Octree = chunk.Octree
-        };
+        var chunkDataMessage = NetworkHandler.CreateMessage<ChunkDataMessage>();
+        chunkDataMessage.ChunkPosition = Position;
+        chunkDataMessage.WorldId = WorldId;
+        chunkDataMessage.Octree = chunk.Octree;
         
         chunkDataMessage.Send(Sender);
 
@@ -55,7 +57,7 @@ public partial class RequestChunkData : IMessage
     public Identification MessageId => MessageIDs.RequestChunkData;
     public DeliveryMethod DeliveryMethod => DeliveryMethod.Reliable;
     public ushort Sender { get; set; }
-    
+
     public Int3 Position;
     public Identification WorldId;
 }

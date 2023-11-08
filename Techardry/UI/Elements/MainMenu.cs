@@ -4,10 +4,12 @@ using MintyCore.ECS;
 using MintyCore.Modding;
 using MintyCore.Render;
 using MintyCore.Utils;
+using Serilog;
 using Silk.NET.Maths;
 using Silk.NET.Vulkan;
 using SixLabors.Fonts;
 using Techardry.Identifications;
+using Techardry.Registries;
 using Techardry.Render;
 using Techardry.UI.Interfaces;
 using static Techardry.UI.UiHelper;
@@ -17,6 +19,7 @@ namespace Techardry.UI.Elements;
 /// <summary>
 ///     Ui element representing the main menu
 /// </summary>
+[RegisterUiRoot("main_menu")]
 public class MainMenu : ElementContainer, IRootElement
 {
     private readonly Identification _background;
@@ -32,11 +35,16 @@ public class MainMenu : ElementContainer, IRootElement
     private ulong _playerIdValue;
     private ushort _targetPortValue;
 
+    private IInputHandler InputHandler { get;  }
+    private IVulkanEngine VulkanEngine { get;  }
+
     /// <summary>
     ///     Constructor
     /// </summary>
-    public MainMenu() : base(new RectangleF(new PointF(0, 0), new SizeF(1, 1)))
+    public MainMenu(IInputHandler inputHandler, IVulkanEngine vulkanEngine) : base(new RectangleF(new PointF(0, 0), new SizeF(1, 1)))
     {
+        InputHandler = inputHandler;
+        VulkanEngine = vulkanEngine;
         Engine.Window!.WindowInstance.FramebufferResize += OnResize;
 
         var title = new TextBox(new RectangleF(0.3f, 0, 0.4f, 0.2f), "Main Menu", borderActive: false);
@@ -47,25 +55,25 @@ public class MainMenu : ElementContainer, IRootElement
         
         var absoluteBorderWidth = 0.01f;
 
-        _targetAddress = new TextField(new RectangleF(0.2f, 0.7f, 0.25f, 0.1f), 
+        _targetAddress = new TextField(InputHandler, new RectangleF(0.2f, 0.7f, 0.25f, 0.1f), 
             horizontalAlignment: HorizontalAlignment.Left, hint: "Target address", desiredFontSize: fontSize);
         AddElement(_targetAddress);
         _targetAddress.IsActive = true;
         _targetAddress.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, _targetAddress);
 
-        _targetPort = new TextField(new RectangleF(0.2f, 0.8f, 0.25f, 0.1f), 
+        _targetPort = new TextField(InputHandler, new RectangleF(0.2f, 0.8f, 0.25f, 0.1f), 
             horizontalAlignment: HorizontalAlignment.Left, hint: "Target port", desiredFontSize: fontSize);
         AddElement(_targetPort);
         _targetPort.IsActive = true;
         _targetPort.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, _targetPort);
 
-        _playerName = new TextField(new RectangleF(0.55f, 0.7f, 0.25f, 0.1f), 
+        _playerName = new TextField(InputHandler, new RectangleF(0.55f, 0.7f, 0.25f, 0.1f), 
             horizontalAlignment: HorizontalAlignment.Left, hint: "Player name", desiredFontSize: fontSize);
         AddElement(_playerName);
         _playerName.IsActive = true;
         _playerName.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, _playerName);
 
-        _playerId = new TextField(new RectangleF(0.55f, 0.8f, 0.25f, 0.1f), 
+        _playerId = new TextField(InputHandler, new RectangleF(0.55f, 0.8f, 0.25f, 0.1f), 
             horizontalAlignment: HorizontalAlignment.Left, hint: "Player id", desiredFontSize: fontSize);
         AddElement(_playerId);
         _playerId.IsActive = true;
@@ -90,10 +98,11 @@ public class MainMenu : ElementContainer, IRootElement
         createServer.OnLeftClickCb += OnCreateServer;
         createServer.BorderWidth = GetRelativeBorderWidth(absoluteBorderWidth, createServer);
 
+        PixelSize = new Size((int)VulkanEngine.SwapchainExtent.Width, (int)VulkanEngine.SwapchainExtent.Height);
         _background = TextureIDs.MainMenuBackground;
     }
 
-    public override void Draw(UiRenderer renderer, Rect2D scissor,
+    public override void Draw(IUiRenderer renderer, Rect2D scissor,
         Viewport viewport)
     {
 
@@ -104,6 +113,9 @@ public class MainMenu : ElementContainer, IRootElement
 
     private void OnPlayLocal()
     {
+        Log.Logger.Information("{Method} not implemented yet", nameof(OnPlayLocal));
+        
+        /*
         TechardryMod.MainUiRenderer?.SetUiContext(null);
 
         Engine.SetGameType(GameType.Local);
@@ -119,12 +131,13 @@ public class MainMenu : ElementContainer, IRootElement
         Engine.ConnectToServer(_targetAddress.InputText.Length == 0 ? "localhost" : _targetAddress.InputText,
             _targetPortValue != 0 ? _targetPortValue : Constants.DefaultPort);
 
-        TechardryMod.GameLoop();
+        TechardryMod.GameLoop();*/
     }
 
     private void OnConnectToServer()
     {
-        TechardryMod.MainUiRenderer?.SetUiContext(null);
+        Log.Logger.Information("{Method} not implemented yet", nameof(OnConnectToServer));
+        /*TechardryMod.MainUiRenderer?.SetUiContext(null);
 
         if (_playerIdValue == 0)
         {
@@ -153,11 +166,13 @@ public class MainMenu : ElementContainer, IRootElement
         Engine.ConnectToServer(_targetAddress.InputText,
             _targetPortValue != 0 ? _targetPortValue : Constants.DefaultPort);
 
-        TechardryMod.GameLoop();
+        TechardryMod.GameLoop();*/
     }
 
     private void OnCreateServer()
     {
+        Log.Logger.Information("{Method} not implemented yet", nameof(OnCreateServer));
+        /*
         TechardryMod.MainUiRenderer?.SetUiContext(null);
 
         Engine.SetGameType(GameType.Server);
@@ -168,7 +183,7 @@ public class MainMenu : ElementContainer, IRootElement
 
         Engine.CreateServer(_targetPortValue != 0 ? _targetPortValue : Constants.DefaultPort);
 
-        TechardryMod.GameLoop();
+        TechardryMod.GameLoop();*/
     }
 
     /// <inheritdoc />
@@ -199,6 +214,5 @@ public class MainMenu : ElementContainer, IRootElement
     }
 
 
-    public Size PixelSize { get; set; } =
-        new((int)VulkanEngine.SwapchainExtent.Width, (int)VulkanEngine.SwapchainExtent.Height);
+    public Size PixelSize { get; set; }
 }

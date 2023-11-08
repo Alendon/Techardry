@@ -1,6 +1,9 @@
 ﻿using System.Numerics;
 using MintyCore.Registries;
 using MintyCore.Render;
+using MintyCore.Render.Implementations;
+using MintyCore.Render.Managers;
+using MintyCore.Render.Utils;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using DescriptorSetIDs = MintyCore.Identifications.DescriptorSetIDs;
@@ -59,14 +62,64 @@ public static class RenderObjects
         DescriptorSetsPerPool = 16
     };
 
+    [RegisterRenderPass("main")]
+    public static RenderPassInfo MainRenderPass(IVulkanEngine vulkanEngine) => new()
+    {
+    };
+
+    [RegisterRenderPass("color_only")]
+    public static RenderPassInfo ColorOnlyPass(IVulkanEngine vulkanEngine) => new(new[]
+        {
+            new AttachmentDescription()
+            {
+                Flags = AttachmentDescriptionFlags.None,
+                Format = vulkanEngine.SwapchainImageFormat,
+                Samples = SampleCountFlags.Count1Bit,
+                InitialLayout = ImageLayout.Undefined,
+                FinalLayout = ImageLayout.ColorAttachmentOptimal,
+                StencilLoadOp = AttachmentLoadOp.DontCare,
+                StencilStoreOp = AttachmentStoreOp.DontCare,
+                LoadOp = AttachmentLoadOp.Clear,
+                StoreOp = AttachmentStoreOp.Store
+            }
+        },
+        new[]
+        {
+            new SubpassDescriptionInfo()
+            {
+                Flags = SubpassDescriptionFlags.None,
+                ColorAttachments = new[]
+                {
+                    new AttachmentReference(0, ImageLayout.ColorAttachmentOptimal)
+                },
+                PipelineBindPoint = PipelineBindPoint.Graphics,
+                HasDepthStencilAttachment = false,
+                HasResolveAttachment = false
+            }
+        },
+        new[]
+        {
+            new SubpassDependency()
+            {
+                DependencyFlags = DependencyFlags.None,
+                SrcSubpass = Vk.SubpassExternal,
+                DstSubpass = 0,
+                SrcAccessMask = AccessFlags.None,
+                DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.ColorAttachmentReadBit,
+                SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit,
+                DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit
+            }
+        }, RenderPassCreateFlags.None
+    );
+
     [RegisterRenderPass("dual_pipeline")]
-    public static RenderPassInfo VoxelRenderPass => new(new[]
+    public static RenderPassInfo VoxelRenderPass(IVulkanEngine vulkanEngine) => new(new[]
         {
             //Color
             new AttachmentDescription()
             {
                 Flags = 0,
-                Format = VulkanEngine.SwapchainImageFormat,
+                Format = vulkanEngine.SwapchainImageFormat,
                 Samples = SampleCountFlags.Count1Bit,
                 InitialLayout = ImageLayout.PresentSrcKhr,
                 FinalLayout = ImageLayout.PresentSrcKhr,
@@ -102,8 +155,6 @@ public static class RenderObjects
                         Layout = ImageLayout.ColorAttachmentOptimal
                     }
                 },
-                InputAttachments = Array.Empty<AttachmentReference>(),
-                PreserveAttachments = Array.Empty<uint>(),
                 PipelineBindPoint = PipelineBindPoint.Graphics,
                 HasDepthStencilAttachment = true,
                 DepthStencilAttachment =
@@ -136,7 +187,6 @@ public static class RenderObjects
                         Layout = ImageLayout.General
                     }
                 },
-                PreserveAttachments = Array.Empty<uint>(),
                 PipelineBindPoint = PipelineBindPoint.Graphics,
                 HasResolveAttachment = false,
                 HasDepthStencilAttachment = true,
@@ -173,227 +223,219 @@ public static class RenderObjects
         0);
 
     [RegisterGraphicsPipeline("voxel")]
-    public static GraphicsPipelineDescription VoxelPipeline
-    {
-        get
+    public static GraphicsPipelineDescription VoxelPipeline(IVulkanEngine vulkanEngine) =>
+        new()
         {
-            return new GraphicsPipelineDescription
+            Flags = 0,
+            Scissors = new[]
             {
-                Flags = 0,
-                Scissors = new[]
+                new Rect2D
                 {
-                    new Rect2D
+                    Extent = vulkanEngine.SwapchainExtent,
+                    Offset = new Offset2D(0, 0)
+                }
+            },
+            Shaders = new[] {ShaderIDs.VoxelFrag, ShaderIDs.VoxelVert},
+            Topology = PrimitiveTopology.TriangleList,
+            Viewports = new[]
+            {
+                new Viewport
+                {
+                    Width = vulkanEngine.SwapchainExtent.Width,
+                    Height = vulkanEngine.SwapchainExtent.Height,
+                    MaxDepth = 1.0f
+                }
+            },
+            DescriptorSets = new[]
+            {
+                Identifications.DescriptorSetIDs.CameraData,
+                DescriptorSetIDs.SampledTexture,
+                Identifications.DescriptorSetIDs.InputAttachment,
+                Identifications.DescriptorSetIDs.Render
+            },
+            DynamicStates = new[] {DynamicState.Scissor, DynamicState.Viewport},
+            RasterizationInfo =
+            {
+                CullMode = CullModeFlags.None,
+                FrontFace = FrontFace.Clockwise,
+                PolygonMode = PolygonMode.Fill,
+                LineWidth = 1
+            },
+            RenderPass = RenderPassIDs.DualPipeline,
+            SampleCount = SampleCountFlags.Count1Bit,
+            SubPass = 1,
+            BasePipelineHandle = default,
+            BasePipelineIndex = 0,
+            ColorBlendInfo =
+            {
+                Attachments = new[]
+                {
+                    new PipelineColorBlendAttachmentState
                     {
-                        Extent = VulkanEngine.SwapchainExtent,
-                        Offset = new Offset2D(0, 0)
-                    }
-                },
-                Shaders = new[] { ShaderIDs.VoxelFrag, ShaderIDs.VoxelVert },
-                Topology = PrimitiveTopology.TriangleList,
-                Viewports = new[]
-                {
-                    new Viewport
-                    {
-                        Width = VulkanEngine.SwapchainExtent.Width,
-                        Height = VulkanEngine.SwapchainExtent.Height,
-                        MaxDepth = 1.0f
-                    }
-                },
-                DescriptorSets = new[]
-                {
-                    Identifications.DescriptorSetIDs.CameraData,
-                    DescriptorSetIDs.SampledTexture,
-                    Identifications.DescriptorSetIDs.InputAttachment,
-                    Identifications.DescriptorSetIDs.Render
-                },
-                DynamicStates = new[] { DynamicState.Scissor, DynamicState.Viewport },
-                RasterizationInfo =
-                {
-                    CullMode = CullModeFlags.None,
-                    FrontFace = FrontFace.Clockwise,
-                    PolygonMode = PolygonMode.Fill,
-                    LineWidth = 1
-                },
-                RenderPass = RenderPassIDs.DualPipeline,
-                SampleCount = SampleCountFlags.Count1Bit,
-                SubPass = 1,
-                BasePipelineHandle = default,
-                BasePipelineIndex = 0,
-                ColorBlendInfo =
-                {
-                    Attachments = new[]
-                    {
-                        new PipelineColorBlendAttachmentState
-                        {
-                            BlendEnable = Vk.True,
-                            AlphaBlendOp = BlendOp.Add,
-                            ColorBlendOp = BlendOp.Add,
-                            ColorWriteMask = ColorComponentFlags.ABit | ColorComponentFlags.RBit |
-                                             ColorComponentFlags.GBit | ColorComponentFlags.BBit,
-                            SrcColorBlendFactor = BlendFactor.One,
-                            SrcAlphaBlendFactor = BlendFactor.SrcAlpha,
-                            DstAlphaBlendFactor = BlendFactor.OneMinusSrcAlpha,
-                            DstColorBlendFactor = BlendFactor.Zero
-                        }
-                    }
-                },
-                DepthStencilInfo = default,
-                VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
-                VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
-                PushConstantRanges = new []
-                {
-                    new PushConstantRange()
-                    {
-                        StageFlags = ShaderStageFlags.FragmentBit,
-                        Offset = 0,
-                        Size = sizeof(uint)
+                        BlendEnable = Vk.True,
+                        AlphaBlendOp = BlendOp.Add,
+                        ColorBlendOp = BlendOp.Add,
+                        ColorWriteMask = ColorComponentFlags.ABit | ColorComponentFlags.RBit |
+                                         ColorComponentFlags.GBit | ColorComponentFlags.BBit,
+                        SrcColorBlendFactor = BlendFactor.One,
+                        SrcAlphaBlendFactor = BlendFactor.SrcAlpha,
+                        DstAlphaBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                        DstColorBlendFactor = BlendFactor.Zero
                     }
                 }
-            };
-        }
-    }
+            },
+            DepthStencilInfo = default,
+            VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
+            VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
+            PushConstantRanges = new[]
+            {
+                new PushConstantRange()
+                {
+                    StageFlags = ShaderStageFlags.FragmentBit,
+                    Offset = 0,
+                    Size = sizeof(uint)
+                }
+            }
+        };
 
     [RegisterGraphicsPipeline("dual_texture")]
-    internal static unsafe GraphicsPipelineDescription TextureDescription
+    internal static unsafe GraphicsPipelineDescription TextureDescription(IVulkanEngine vulkanEngine)
     {
-        get
+        Rect2D scissor = new()
         {
-            Rect2D scissor = new()
-            {
-                Extent = VulkanEngine.SwapchainExtent,
-                Offset = new Offset2D(0, 0)
-            };
-            Viewport viewport = new()
-            {
-                Width = VulkanEngine.SwapchainExtent.Width,
-                Height = VulkanEngine.SwapchainExtent.Height,
-                MaxDepth = 1f,
-                MinDepth = 0f
-            };
+            Extent = vulkanEngine.SwapchainExtent,
+            Offset = new Offset2D(0, 0)
+        };
+        Viewport viewport = new()
+        {
+            Width = vulkanEngine.SwapchainExtent.Width,
+            Height = vulkanEngine.SwapchainExtent.Height,
+            MaxDepth = 1f,
+            MinDepth = 0f
+        };
 
-            var vertexInputBindings = new[]
-            {
-                Vertex.GetVertexBinding(),
-                new VertexInputBindingDescription
-                {
-                    Binding = 1,
-                    Stride = (uint)sizeof(Matrix4x4),
-                    InputRate = VertexInputRate.Instance
-                }
-            };
-
-            var attributes = Vertex.GetVertexAttributes();
-            var vertexInputAttributes =
-                new VertexInputAttributeDescription[attributes.Length + 4];
-            for (var i = 0; i < attributes.Length; i++) vertexInputAttributes[i] = attributes[i];
-
-            vertexInputAttributes[attributes.Length] = new VertexInputAttributeDescription
+        var vertexInputBindings = new[]
+        {
+            Vertex.GetVertexBinding(),
+            new VertexInputBindingDescription
             {
                 Binding = 1,
-                Format = Format.R32G32B32A32Sfloat,
-                Location = (uint)attributes.Length,
-                Offset = 0
-            };
-            vertexInputAttributes[attributes.Length + 1] = new VertexInputAttributeDescription
-            {
-                Binding = 1,
-                Format = Format.R32G32B32A32Sfloat,
-                Location = (uint)attributes.Length + 1,
-                Offset = (uint)sizeof(Vector4)
-            };
-            vertexInputAttributes[attributes.Length + 2] = new VertexInputAttributeDescription
-            {
-                Binding = 1,
-                Format = Format.R32G32B32A32Sfloat,
-                Location = (uint)attributes.Length + 2,
-                Offset = (uint)sizeof(Vector4) * 2
-            };
-            vertexInputAttributes[attributes.Length + 3] = new VertexInputAttributeDescription
-            {
-                Binding = 1,
-                Format = Format.R32G32B32A32Sfloat,
-                Location = (uint)attributes.Length + 3,
-                Offset = (uint)sizeof(Vector4) * 3
-            };
+                Stride = (uint) sizeof(Matrix4x4),
+                InputRate = VertexInputRate.Instance
+            }
+        };
 
-            var colorBlendAttachment = new[]
-            {
-                new PipelineColorBlendAttachmentState
-                {
-                    BlendEnable = Vk.True,
-                    SrcColorBlendFactor = BlendFactor.SrcAlpha,
-                    DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
-                    ColorBlendOp = BlendOp.Add,
-                    SrcAlphaBlendFactor = BlendFactor.One,
-                    DstAlphaBlendFactor = BlendFactor.Zero,
-                    AlphaBlendOp = BlendOp.Add,
-                    ColorWriteMask = ColorComponentFlags.RBit |
-                                     ColorComponentFlags.GBit |
-                                     ColorComponentFlags.BBit | ColorComponentFlags.ABit
-                }
-            };
+        var attributes = Vertex.GetVertexAttributes();
+        var vertexInputAttributes =
+            new VertexInputAttributeDescription[attributes.Length + 4];
+        for (var i = 0; i < attributes.Length; i++) vertexInputAttributes[i] = attributes[i];
 
-            var dynamicStates = new[]
-            {
-                DynamicState.Viewport,
-                DynamicState.Scissor
-            };
+        vertexInputAttributes[attributes.Length] = new VertexInputAttributeDescription
+        {
+            Binding = 1,
+            Format = Format.R32G32B32A32Sfloat,
+            Location = (uint) attributes.Length,
+            Offset = 0
+        };
+        vertexInputAttributes[attributes.Length + 1] = new VertexInputAttributeDescription
+        {
+            Binding = 1,
+            Format = Format.R32G32B32A32Sfloat,
+            Location = (uint) attributes.Length + 1,
+            Offset = (uint) sizeof(Vector4)
+        };
+        vertexInputAttributes[attributes.Length + 2] = new VertexInputAttributeDescription
+        {
+            Binding = 1,
+            Format = Format.R32G32B32A32Sfloat,
+            Location = (uint) attributes.Length + 2,
+            Offset = (uint) sizeof(Vector4) * 2
+        };
+        vertexInputAttributes[attributes.Length + 3] = new VertexInputAttributeDescription
+        {
+            Binding = 1,
+            Format = Format.R32G32B32A32Sfloat,
+            Location = (uint) attributes.Length + 3,
+            Offset = (uint) sizeof(Vector4) * 3
+        };
 
-            GraphicsPipelineDescription pipelineDescription = new()
+        var colorBlendAttachment = new[]
+        {
+            new PipelineColorBlendAttachmentState
             {
-                Shaders = new[]
-                {
-                    ShaderIDs.TriangleVert,
-                    ShaderIDs.TextureFrag
-                },
-                Scissors = new[] { scissor },
-                Viewports = new[] { viewport },
-                DescriptorSets = new[]
-                {
-                    Identifications.DescriptorSetIDs.CameraBuffer,
-                    DescriptorSetIDs.SampledTexture
-                },
-                Flags = 0,
-                Topology = PrimitiveTopology.TriangleList,
-                DynamicStates = dynamicStates,
-                RenderPass = RenderPassIDs.DualPipeline,
-                SampleCount = SampleCountFlags.Count1Bit,
-                SubPass = 0,
-                BasePipelineHandle = default,
-                BasePipelineIndex = 0,
-                PrimitiveRestartEnable = false,
-                AlphaToCoverageEnable = false,
-                VertexAttributeDescriptions = vertexInputAttributes,
-                VertexInputBindingDescriptions = vertexInputBindings,
-                RasterizationInfo =
-                {
-                    CullMode = CullModeFlags.BackBit,
-                    FrontFace = FrontFace.Clockwise,
-                    RasterizerDiscardEnable = false,
-                    LineWidth = 1,
-                    PolygonMode = PolygonMode.Fill,
-                    DepthBiasEnable = false,
-                    DepthClampEnable = false
-                },
-                ColorBlendInfo =
-                {
-                    LogicOpEnable = false,
-                    Attachments = colorBlendAttachment
-                },
-                DepthStencilInfo =
-                {
-                    DepthTestEnable = true,
-                    DepthWriteEnable = true,
-                    DepthCompareOp = CompareOp.LessOrEqual,
-                    MinDepthBounds = 0,
-                    MaxDepthBounds = 1,
-                    StencilTestEnable = false,
-                    DepthBoundsTestEnable = false
-                },
-                PushConstantRanges = Array.Empty<PushConstantRange>()
-            };
-            return pipelineDescription;
-        }
+                BlendEnable = Vk.True,
+                SrcColorBlendFactor = BlendFactor.SrcAlpha,
+                DstColorBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                ColorBlendOp = BlendOp.Add,
+                SrcAlphaBlendFactor = BlendFactor.One,
+                DstAlphaBlendFactor = BlendFactor.Zero,
+                AlphaBlendOp = BlendOp.Add,
+                ColorWriteMask = ColorComponentFlags.RBit |
+                                 ColorComponentFlags.GBit |
+                                 ColorComponentFlags.BBit | ColorComponentFlags.ABit
+            }
+        };
+
+        var dynamicStates = new[]
+        {
+            DynamicState.Viewport,
+            DynamicState.Scissor
+        };
+
+        GraphicsPipelineDescription pipelineDescription = new()
+        {
+            Shaders = new[]
+            {
+                ShaderIDs.TriangleVert,
+                ShaderIDs.TextureFrag
+            },
+            Scissors = new[] {scissor},
+            Viewports = new[] {viewport},
+            DescriptorSets = new[]
+            {
+                Identifications.DescriptorSetIDs.CameraBuffer,
+                DescriptorSetIDs.SampledTexture
+            },
+            Flags = 0,
+            Topology = PrimitiveTopology.TriangleList,
+            DynamicStates = dynamicStates,
+            RenderPass = RenderPassIDs.DualPipeline,
+            SampleCount = SampleCountFlags.Count1Bit,
+            SubPass = 0,
+            BasePipelineHandle = default,
+            BasePipelineIndex = 0,
+            PrimitiveRestartEnable = false,
+            AlphaToCoverageEnable = false,
+            VertexAttributeDescriptions = vertexInputAttributes,
+            VertexInputBindingDescriptions = vertexInputBindings,
+            RasterizationInfo =
+            {
+                CullMode = CullModeFlags.BackBit,
+                FrontFace = FrontFace.Clockwise,
+                RasterizerDiscardEnable = false,
+                LineWidth = 1,
+                PolygonMode = PolygonMode.Fill,
+                DepthBiasEnable = false,
+                DepthClampEnable = false
+            },
+            ColorBlendInfo =
+            {
+                LogicOpEnable = false,
+                Attachments = colorBlendAttachment
+            },
+            DepthStencilInfo =
+            {
+                DepthTestEnable = true,
+                DepthWriteEnable = true,
+                DepthCompareOp = CompareOp.LessOrEqual,
+                MinDepthBounds = 0,
+                MaxDepthBounds = 1,
+                StencilTestEnable = false,
+                DepthBoundsTestEnable = false
+            },
+            PushConstantRanges = Array.Empty<PushConstantRange>()
+        };
+        return pipelineDescription;
     }
 
     [RegisterExternalDescriptorSet("render")]
@@ -404,7 +446,7 @@ public static class RenderObjects
 
     public static DescriptorSetLayout RenderDescriptorLayout { get; private set; }
 
-    public static unsafe void CreateRenderDescriptorLayout()
+    public static unsafe void CreateRenderDescriptorLayout(IVulkanEngine vulkanEngine)
     {
         Logger.AssertAndThrow(RenderDescriptorLayout.Handle == default, "Render descriptor layout already created",
             "RenderObjects");
@@ -455,17 +497,17 @@ public static class RenderObjects
             PBindings = descriptorBindings
         };
 
-        VulkanUtils.Assert(VulkanEngine.Vk.CreateDescriptorSetLayout(VulkanEngine.Device, createInfo,
-            VulkanEngine.AllocationCallback, out var renderDescriptorLayout));
+        VulkanUtils.Assert(vulkanEngine.Vk.CreateDescriptorSetLayout(vulkanEngine.Device, createInfo,
+            null, out var renderDescriptorLayout));
         RenderDescriptorLayout = renderDescriptorLayout;
     }
 
-    public static unsafe void DestroyRenderDescriptorLayout()
+    public static unsafe void DestroyRenderDescriptorLayout(IVulkanEngine vulkanEngine)
     {
         if (RenderDescriptorLayout.Handle == default) return;
-        
-        VulkanEngine.Vk.DestroyDescriptorSetLayout(VulkanEngine.Device, RenderDescriptorLayout,
-            VulkanEngine.AllocationCallback);
+
+        vulkanEngine.Vk.DestroyDescriptorSetLayout(vulkanEngine.Device, RenderDescriptorLayout,
+            null);
         RenderDescriptorLayout = default;
     }
 }

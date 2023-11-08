@@ -3,8 +3,10 @@ using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using BepuPhysics;
 using BepuPhysics.Collidables;
+using MintyCore;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.Network;
 using MintyCore.Utils;
 using Techardry.Components.Common;
 using Techardry.Identifications;
@@ -29,19 +31,20 @@ public class ChunkManager : IDisposable
     private Task _currentWaitTasks = Task.CompletedTask;
 
     private readonly CancellationTokenSource _cancellationTokenSource = new();
-    
+
     public event Action<Int3> ChunkAdded = delegate { };
     public event Action<Int3> ChunkUpdated = delegate { };
-    public event Action<Int3> ChunkRemoved = delegate { }; 
+    public event Action<Int3> ChunkRemoved = delegate { };
 
+    private INetworkHandler NetworkHandler { get; }
+    private IPlayerHandler PlayerHandler { get; }
 
-
-    public ChunkManager(TechardryWorld parentWorld)
+    public ChunkManager(TechardryWorld parentWorld, INetworkHandler networkHandler, IPlayerHandler playerHandler)
     {
         _parentWorld = parentWorld;
-
-        if (!_parentWorld.IsServerWorld) return;
-
+        NetworkHandler = networkHandler;
+        PlayerHandler = playerHandler;
+        
         EntityManager.PostEntityCreateEvent += OnEntityCreate;
         EntityManager.PreEntityDeleteEvent += OnEntityDelete;
     }
@@ -61,7 +64,7 @@ public class ChunkManager : IDisposable
 
         var chunk = _parentWorld.WorldGenerator.GenerateChunk(chunkPosition);
 
-        _chunksToLoad.TryEnqueue(new ChunkLoadEntry { ChunkPosition = chunkPosition, Chunk = chunk });
+        _chunksToLoad.TryEnqueue(new ChunkLoadEntry {ChunkPosition = chunkPosition, Chunk = chunk});
     }
 
     private void ProcessPlayerChunkChanged(Int3? oldChunk, Int3? newChunk, ushort player)
@@ -110,11 +113,9 @@ public class ChunkManager : IDisposable
                     return players;
                 });
 
-            var createMessage = new CreateChunk()
-            {
-                ChunkPosition = chunk,
-                WorldId = _parentWorld.Identification
-            };
+            var createMessage = NetworkHandler.CreateMessage<CreateChunk>();
+            createMessage.ChunkPosition = chunk;
+            createMessage.WorldId = _parentWorld.Identification;
 
             createMessage.Send(player);
         }
@@ -130,11 +131,9 @@ public class ChunkManager : IDisposable
 
             players.TryRemove(player, out _);
 
-            var releaseMessage = new ReleaseChunk()
-            {
-                ChunkPosition = chunk,
-                WorldId = _parentWorld.Identification
-            };
+            var releaseMessage = NetworkHandler.CreateMessage<ReleaseChunk>();
+            releaseMessage.ChunkPosition = chunk;
+            releaseMessage.WorldId = _parentWorld.Identification;
             releaseMessage.Send(player);
 
             if (players.Count != 0) continue;
@@ -161,7 +160,7 @@ public class ChunkManager : IDisposable
             _newChunkUpdateTasks.Add(newTask);
             var maxConcurrencyLevel = Task.Factory.Scheduler?.MaximumConcurrencyLevel ?? 4;
             if (_newChunkUpdateTasks.Count < maxConcurrencyLevel / 4) continue;
-            
+
             _currentWaitTasks = Task.WhenAll(_newChunkUpdateTasks);
             _newChunkUpdateTasks.Clear();
         }
@@ -197,21 +196,21 @@ public class ChunkManager : IDisposable
 
         var player = _parentWorld.EntityManager.GetEntityOwner(entity);
         var position = _parentWorld.EntityManager.GetComponent<Position>(entity);
-        var chunkPos = new Int3((int)position.Value.X / Chunk.Size, (int)position.Value.Y / Chunk.Size,
-            (int)position.Value.Z / Chunk.Size);
+        var chunkPos = new Int3((int) position.Value.X / Chunk.Size, (int) position.Value.Y / Chunk.Size,
+            (int) position.Value.Z / Chunk.Size);
 
         PlayerChunkChanged(chunkPos, null, player);
     }
 
     private void OnEntityCreate(IWorld world, Entity entity)
     {
-        if (world != _parentWorld) return;
+        if (world != _parentWorld && world is {IsServerWorld: true}) return;
         if (entity.ArchetypeId != ArchetypeIDs.TestCamera) return;
 
         var player = _parentWorld.EntityManager.GetEntityOwner(entity);
         var position = _parentWorld.EntityManager.GetComponent<Position>(entity);
-        var chunkPos = new Int3((int)position.Value.X / Chunk.Size, (int)position.Value.Y / Chunk.Size,
-            (int)position.Value.Z / Chunk.Size);
+        var chunkPos = new Int3((int) position.Value.X / Chunk.Size, (int) position.Value.Y / Chunk.Size,
+            (int) position.Value.Z / Chunk.Size);
 
         _parentWorld.EntityManager.GetComponent<LastChunk>(entity).Value = chunkPos;
 
@@ -232,7 +231,7 @@ public class ChunkManager : IDisposable
             _parentWorld.PhysicsWorld.Simulation.Statics.Remove(chunkEntry.StaticHandle);
             chunkEntry.Chunk.Dispose();
             _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
-            
+
             ChunkRemoved(chunkToUnload);
         }
 
@@ -249,7 +248,7 @@ public class ChunkManager : IDisposable
 
             _chunks.TryAdd(toLoad.ChunkPosition, new ChunkEntry(toLoad.Chunk, bodyHandle, shape));
             _activeChunkCreations.TryRemove(toLoad.ChunkPosition, out _);
-            
+
             ChunkAdded(chunkPosition);
         }
 
@@ -260,7 +259,6 @@ public class ChunkManager : IDisposable
                 var (chunkPosition, octree) = toUpdate;
                 if (!_chunks.TryGetValue(chunkPosition, out var chunkEntry))
                 {
-
                     Logger.WriteLog($"Chunk to update was not found: {chunkPosition}", LogImportance.Error,
                         "ChunkManager");
 
@@ -284,7 +282,7 @@ public class ChunkManager : IDisposable
                         Chunk.Size, shape));
 
                 _chunks[chunkPosition] = new ChunkEntry(chunk, staticHandle, shape);
-                
+
                 ChunkUpdated(chunkPosition);
             }
         }
@@ -328,7 +326,7 @@ public class ChunkManager : IDisposable
         var (chunk, _, _) = chunkEntry;
 
         chunk.SetBlock(blockPos, blockId, depth, rotation);
-        
+
         ChunkUpdated(chunkPos);
     }
 
@@ -365,6 +363,7 @@ public class ChunkManager : IDisposable
             _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
             chunkEntry.Chunk.Dispose();
         }
+
         _chunks.Clear();
     }
 
@@ -377,7 +376,7 @@ public class ChunkManager : IDisposable
         _chunksToLoad.TryEnqueue(new ChunkLoadEntry()
         {
             ChunkPosition = chunkPosition,
-            Chunk = new Chunk(chunkPosition, _parentWorld)
+            Chunk = new Chunk(chunkPosition, _parentWorld, PlayerHandler, NetworkHandler)
         });
     }
 

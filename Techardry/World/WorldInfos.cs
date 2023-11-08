@@ -1,4 +1,5 @@
-﻿using MintyCore.Registries;
+﻿using Autofac;
+using MintyCore.Registries;
 using Techardry.Lib.FastNoseLite;
 
 namespace Techardry.World;
@@ -13,6 +14,9 @@ internal static class WorldInfos
             var noise = new FastNoiseLite(5);
             noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
             noise.SetFrequency(0.02f);
+
+            ILifetimeScope scope;
+            scope.Resolve<>()
             
             return new TechardryWorld(serverWorld, new WorldGeneratorSettings()
             {
