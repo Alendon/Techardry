@@ -1,29 +1,32 @@
 ﻿using System.Numerics;
+using MintyCore;
+using MintyCore.Network;
+using Techardry.Blocks;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
+using Techardry.Render;
 using Techardry.Utils;
 
 namespace Techardry.World;
 
-public class WorldGenerator
+public class WorldGenerator(
+    TechardryWorld techardryWorld,
+    WorldGeneratorSettings settings,
+    IPlayerHandler playerHandler,
+    INetworkHandler networkHandler,
+    IBlockHandler blockHandler,
+    ITextureAtlasHandler textureAtlasHandler)
 {
-    private readonly TechardryWorld _parentWorld;
-    private FastNoiseLite _noise;
-
-    public WorldGenerator(TechardryWorld techardryWorld, WorldGeneratorSettings settings)
-    {
-        _parentWorld = techardryWorld;
-        _noise = settings.Noise;
-    }
-
+    private readonly FastNoiseLite _noise = settings.Noise;
 
     public Chunk GenerateChunk(Int3 chunkPosition)
     {
-        var chunk = new Chunk(chunkPosition, _parentWorld);
+        var chunk = new Chunk(chunkPosition, techardryWorld, playerHandler, networkHandler, blockHandler,
+            textureAtlasHandler);
 
         var realChunkPosition = new Vector3(chunkPosition.X * Chunk.Size, chunkPosition.Y * Chunk.Size,
             chunkPosition.Z * Chunk.Size);
-        
+
         for (int x = 0; x < Chunk.Size; x++)
         {
             for (int z = 0; z < Chunk.Size; z++)
@@ -50,7 +53,7 @@ public class WorldGenerator
                         chunk.SetBlock(localPos, BlockIDs.Dirt);
                         continue;
                     }
-                    
+
                     break;
                 }
             }

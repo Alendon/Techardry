@@ -16,7 +16,7 @@ public struct Camera : IComponent
     /// <inheritdoc />
     public void DecreaseRefCount()
     {
-        throw new NotImplementedException();
+        
     }
 
     /// <inheritdoc />
@@ -101,6 +101,5 @@ public struct Camera : IComponent
     /// <inheritdoc />
     public void IncreaseRefCount()
     {
-        throw new NotImplementedException();
     }
 }

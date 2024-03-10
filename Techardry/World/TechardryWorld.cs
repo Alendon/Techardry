@@ -1,15 +1,23 @@
 ﻿using System.Numerics;
+using Autofac;
 using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
 using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.CollisionDetection.SweepTasks;
 using BepuPhysics.Constraints;
+using MintyCore;
 using MintyCore.ECS;
+using MintyCore.Graphics.Render.Managers;
+using MintyCore.Modding;
+using MintyCore.Network;
 using MintyCore.Physics;
 using MintyCore.Registries;
 using MintyCore.Utils;
+using Techardry.Blocks;
 using Techardry.Identifications;
+using Techardry.Lib.FastNoseLite;
+using Techardry.Render;
 using Techardry.Voxels;
 
 namespace Techardry.World;
@@ -41,7 +49,7 @@ public class TechardryWorld : IWorld
     /// </summary>
     public IPhysicsWorld PhysicsWorld => _physicsWorld ?? throw new Exception("Object is Disposed");
 
-    public Identification Identification => WorldIDs.Default;
+    public Identification Identification => WorldIDs.TechardryWorld;
 
     public ChunkManager ChunkManager { get; }
     public WorldGenerator WorldGenerator { get; }
@@ -49,16 +57,25 @@ public class TechardryWorld : IWorld
     /// <summary>
     ///     Whether or not this world is a server world.
     /// </summary>
-    public bool IsServerWorld { get; }
+    public bool IsServerWorld { get; init; }
 
-    public TechardryWorld(bool isServerWorld, WorldGeneratorSettings settings)
+    public TechardryWorld(INetworkHandler networkHandler, IPlayerHandler playerHandler,
+        IArchetypeManager archetypeManager, IComponentManager componentManager, IModManager modManager,
+        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? renderDataManager)
     {
-        IsServerWorld = isServerWorld;
-        ChunkManager = new ChunkManager(this);
-        
-        _entityManager = new EntityManager(this);
-        _systemManager = new SystemManager(this);
-        WorldGenerator = new WorldGenerator(this, settings);
+        ChunkManager = new ChunkManager(this, networkHandler, playerHandler, textureAtlasHandler, blockHandler,renderDataManager);
+
+        _entityManager = new EntityManager(this, archetypeManager, playerHandler, networkHandler);
+        _systemManager = new SystemManager(this, componentManager, modManager);
+
+        var noise = new FastNoiseLite(5);
+        noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
+        noise.SetFrequency(0.02f);
+
+        WorldGenerator = new WorldGenerator(this, new WorldGeneratorSettings()
+        {
+            Noise = noise
+        }, playerHandler, networkHandler, blockHandler, textureAtlasHandler);
 
         var narrowPhase = new MintyNarrowPhaseCallback(new SpringSettings(30f, 1f), 1f, 2f);
 
@@ -67,7 +84,7 @@ public class TechardryWorld : IWorld
 
         _physicsWorld = MintyCore.Physics.PhysicsWorld.Create(narrowPhase, poseIntegrator, solveDescription);
 
-        
+
         RegisterPhysicsExtensions();
     }
 

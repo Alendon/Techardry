@@ -5,13 +5,11 @@
   "Configuration": "Debug",
   "ShaderInputFolders": [
     "Voxels/shaders",
-    "Render/shaders",
-    "UI/shaders"
+    "Render/shaders"
   ],
   "ShaderOutputFolders": [
     "shaders/voxels",
-    "shaders",
-    "shaders/ui"
+    "shaders"
   ],
   "ShaderDebugging": false,
   "ResourceFolder": "Resources"

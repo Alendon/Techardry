@@ -1,19 +1,26 @@
-﻿using System.Numerics;
+﻿using System.Diagnostics;
+using System.Numerics;
 using JetBrains.Annotations;
 using MintyCore;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.Graphics;
+using MintyCore.Graphics.Managers;
+using MintyCore.Graphics.Render.Managers;
 using MintyCore.Modding;
 using MintyCore.Network;
-using MintyCore.Render;
+using MintyCore.UI;
 using MintyCore.Utils;
 using MintyCore.Utils.Maths;
+using Myra;
+using Serilog;
+using Serilog.Core;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
 using Techardry.Registries;
-using Techardry.Render;
 using Techardry.UI;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
+using Constants = MintyCore.Utils.Constants;
 using TextureIDs = Techardry.Identifications.TextureIDs;
 
 namespace Techardry;
@@ -28,13 +35,14 @@ public sealed class TechardryMod : IMod
     public required IWorldHandler WorldHandler { [UsedImplicitly] init; private get; }
     public required INetworkHandler NetworkHandler { [UsedImplicitly] init; private get; }
     public required IModManager ModManager { [UsedImplicitly] init; private get; }
-    public required IUiHandler UiHandler { [UsedImplicitly] init; private get; }
+    public required IRenderManager RenderManager { [UsedImplicitly] init; private get; }
+    public required ITextureManager TextureManager { [UsedImplicitly] init; private get; }
 
     public int ServerRenderDistance { get; set; } = 2;
-    
+
     public void Dispose()
     {
-        Logger.WriteLog("Disposing TechardryMod", LogImportance.Info, "Techardry");
+        Log.Information("Disposing TechardryMod");
     }
 
     public void PreLoad()
@@ -58,14 +66,14 @@ public sealed class TechardryMod : IMod
 
     public void Load()
     {
-        Logger.WriteLog("Loading TechardryMod", LogImportance.Info, "Techardry");
+        Log.Information("Loading TechardryMod");
 
         Voxels.RenderObjects.CreateRenderDescriptorLayout(VulkanEngine);
-        
+
         PlayerHandler.OnPlayerReady += (player, serverSide) =>
         {
             if (!serverSide) return;
-            var found = WorldHandler.TryGetWorld(GameType.Server, WorldIDs.Default, out var world);
+            var found = WorldHandler.TryGetWorld(GameType.Server, WorldIDs.TechardryWorld, out var world);
             if (!found) throw new Exception();
             var playerEntity = world!.EntityManager.CreateEntity(ArchetypeIDs.TestCamera, player);
             world.EntityManager.GetComponent<Position>(playerEntity).Value = new Vector3(0, 20, 0);
@@ -75,30 +83,63 @@ public sealed class TechardryMod : IMod
     private void RunMainMenu()
     {
         Engine.Timer.Reset();
-        Element? mainMenu = null;
-        while (Engine.Window is not null && Engine.Window.Exists)
+
+        RenderManager.StartRendering();
+        RenderManager.MaxFrameRate = 100;
+        MainMenu? mainMenu = null;
+        while (!Engine.Stop)
         {
-            Engine.Timer.Tick();
-            
-            if (mainMenu is null)
+            if (Engine.Desktop?.Root is null)
             {
-                mainMenu = UiHandler.GetRootElement(UiIDs.MainMenu) as Element;
-                mainMenu!.Initialize();
-                mainMenu.IsActive = true;
+                mainMenu = new MainMenu();
+                Engine.Desktop!.Root = mainMenu;
             }
+
+            Engine.Timer.Tick();
+
 
             if (Engine.Timer.GameUpdate(out var deltaTime))
             {
                 Engine.DeltaTime = deltaTime;
-                UiHandler.Update();
             }
 
-            if (!Engine.Timer.RenderUpdate(out _) || !VulkanEngine.PrepareDraw()) continue;
-            
-            VulkanEngine.EndDraw();
-            Engine.Window.DoEvents(Engine.DeltaTime);
+            Engine.Desktop.Render();
 
+            if (mainMenu?.Quit is true)
+            {
+                Engine.ShouldStop = true;
+                break;
+            }
+
+            var cb = VulkanEngine.GetSingleTimeCommandBuffer();
+            TextureManager.ApplyChanges(cb);
+            VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
+
+            var renderer = (IUiRenderer)MyraEnvironment.Platform.Renderer;
+            renderer.ApplyRenderData();
+
+
+            Engine.Window!.DoEvents(Engine.DeltaTime);
+
+            if (mainMenu?.PlayLocal is true)
+            {
+                Engine.SetGameType(GameType.Local);
+
+                PlayerHandler.LocalPlayerId = 1;
+                PlayerHandler.LocalPlayerName = "Alendon";
+
+                Engine.LoadMods(ModManager.GetAvailableMods(true));
+
+                WorldHandler.CreateWorlds(GameType.Server);
+
+                Engine.CreateServer(Constants.DefaultPort);
+                Engine.ConnectToServer("localhost", Constants.DefaultPort);
+
+                GameLoop();
+            }
         }
+
+        RenderManager.StopRendering();
     }
 
     private void RunHeadless()
@@ -116,14 +157,13 @@ public sealed class TechardryMod : IMod
             var simulationEnable = Engine.Timer.GameUpdate(out var deltaTime);
 
             Engine.DeltaTime = deltaTime;
-            WorldHandler.UpdateWorlds(GameType.Server, simulationEnable, false);
+            WorldHandler.UpdateWorlds(GameType.Server, simulationEnable);
 
 
             WorldHandler.SendEntityUpdates();
 
             NetworkHandler.Update();
 
-            Logger.AppendLogToFile();
             if (simulationEnable)
                 Engine.Tick++;
         }
@@ -136,13 +176,21 @@ public sealed class TechardryMod : IMod
     /// </summary>
     public void GameLoop()
     {
+        Engine.Desktop!.Root = null;
+        
         //If this is a client game (client or local) wait until the player is connected
         while (MathHelper.IsBitSet((int)Engine.GameType, (int)GameType.Client) &&
                PlayerHandler.LocalPlayerGameId == Constants.InvalidId)
+        {
             NetworkHandler.Update();
+            Thread.Sleep(10);
+        }
 
         Engine.DeltaTime = 0;
         Engine.Timer.Reset();
+        
+        Stopwatch sw = Stopwatch.StartNew();
+        
         while (Engine.Stop == false)
         {
             Engine.Timer.Tick();
@@ -153,24 +201,34 @@ public sealed class TechardryMod : IMod
             Engine.DeltaTime = deltaTime;
 
             WorldHandler.UpdateWorlds(GameType.Local, simulationEnable);
-            
-
             WorldHandler.SendEntityUpdates();
-
+            
             NetworkHandler.Update();
 
+            if (sw.Elapsed.TotalSeconds > 1)
+            {
+                Log.Debug("Current FPS: {Fps}", RenderManager.FrameRate);
+                sw.Restart();
+            }
+            
+            Engine.Desktop?.Render();
+            
+            var cb = VulkanEngine.GetSingleTimeCommandBuffer();
+            TextureManager.ApplyChanges(cb);
+            VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
 
-            Logger.AppendLogToFile();
+            var renderer = (IUiRenderer)MyraEnvironment.Platform.Renderer;
+            renderer.ApplyRenderData();
+
             if (simulationEnable)
                 Engine.Tick++;
         }
-        
+
         Engine.CleanupGame();
     }
 
     public void PostLoad()
     {
-
     }
 
     [RegisterTextureAtlas("block_texture")]
@@ -185,7 +243,7 @@ public sealed class TechardryMod : IMod
         {
             VulkanEngine.WaitForAll();
         }
-        
+
         Voxels.RenderObjects.DestroyRenderDescriptorLayout(VulkanEngine);
     }
 

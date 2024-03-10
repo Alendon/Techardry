@@ -1,19 +1,18 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
+using MintyCore.Graphics;
+using MintyCore.Graphics.Managers;
+using MintyCore.Graphics.VulkanObjects;
 using MintyCore.Identifications;
-using MintyCore.Render;
-using MintyCore.Render.Managers.Interfaces;
-using MintyCore.Render.VulkanObjects;
 using MintyCore.Utils;
 using RectpackSharp;
-using Silk.NET.Maths;
+using Serilog.Core;
 using Silk.NET.Vulkan;
 
 namespace Techardry.Render;
 
-[Singleton<ITextureAtlasHandler>(SingletonContextFlags.NoHeadless)]
+[Singleton<ITextureAtlasHandler>(/*SingletonContextFlags.NoHeadless*/)]
 public class TextureAtlasHandler : ITextureAtlasHandler
 {
     public required ITextureManager TextureManager { private get; [UsedImplicitly] set; }
@@ -30,8 +29,8 @@ public class TextureAtlasHandler : ITextureAtlasHandler
 
     public unsafe void CreateTextureAtlas(Identification atlasId, Identification[] textureIds)
     {
-        Logger.AssertAndThrow(textureIds.Length > 0, "Texture atlas must have at least one texture",
-            "Techardry/TextureAtlas");
+        if(textureIds.Length <= 0)
+            throw new ArgumentException("Texture atlas must have at least one texture", nameof(textureIds));
 
         (Identification id, Texture tex)[] textures =
             (from textureId in textureIds select (textureId, TextureManager.GetTexture(textureId))).ToArray();
@@ -107,7 +106,7 @@ public class TextureAtlasHandler : ITextureAtlasHandler
             var oldSrcLayout = texture.GetImageLayout(0, 0);
             texture.TransitionImageLayout(cb, 0, 1, 0, 1, ImageLayout.TransferSrcOptimal);
 
-            VulkanEngine.Vk.CmdCopyImage(cb, texture.Image, ImageLayout.TransferSrcOptimal, atlas.Image,
+            VulkanEngine.Vk.CmdCopyImage(cb.InternalCommandBuffer, texture.Image, ImageLayout.TransferSrcOptimal, atlas.Image,
                 ImageLayout.TransferDstOptimal, 1, copy);
 
             texture.TransitionImageLayout(cb, 0, 1, 0, 1, oldSrcLayout);

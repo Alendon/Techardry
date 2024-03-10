@@ -11,6 +11,8 @@ namespace Techardry.Registries;
 [Registry("block")]
 public class BlockRegistry : IRegistry
 {
+    public required IBlockHandler BlockHandler { private get; init; }
+
     [RegisterMethod(ObjectRegistryPhase.Main)]
     public void RegisterBlock(Identification blockId, IBlock block)
     {
@@ -34,7 +36,7 @@ public class BlockRegistry : IRegistry
     {
         BlockHandler.Clear();
     }
-    
+
 
     public ushort RegistryId => RegistryIDs.Block;
     public IEnumerable<ushort> RequiredRegistries => Array.Empty<ushort>();

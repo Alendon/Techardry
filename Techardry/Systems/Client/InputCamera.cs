@@ -2,27 +2,33 @@
 using System.Numerics;
 using BepuUtilities;
 using MintyCore;
+using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.Graphics.Render.Managers;
 using MintyCore.Registries;
 using MintyCore.SystemGroups;
 using MintyCore.Utils;
 using Silk.NET.Input;
 using Techardry.Components.Client;
 using Techardry.Identifications;
+using Techardry.Render;
 
 namespace Techardry.Systems.Client;
-/*
+
 [ExecutionSide(GameType.Client)]
 [RegisterSystem("input_camera")]
 [ExecuteInSystemGroup<InitializationSystemGroup>]
-public partial class InputCamera : ASystem
+public partial class InputCamera(
+    IPlayerHandler playerHandler,
+    IInputHandler inputHandler,
+    IInputDataManager renderInputData) : ASystem
 {
-    [ComponentQuery] private ComponentQuery<(Camera, InputComponent)> _cameraQuery = new();
+    [ComponentQuery] private ComponentQuery<(Camera, InputComponent), Position> _cameraQuery = new();
 
     private static Vector3 Input = Vector3.Zero;
     private const float mouseSensitiveity = 0.3f;
     private Stopwatch _stopwatch = Stopwatch.StartNew();
-    
+
     public override void Setup(SystemManager systemManager)
     {
         _cameraQuery.Setup(this);
@@ -31,43 +37,47 @@ public partial class InputCamera : ASystem
     protected override void Execute()
     {
         if (World is null) return;
-        
-        if(_stopwatch.Elapsed.TotalSeconds > 1)
+
+        if (_stopwatch.Elapsed.TotalSeconds > 1)
             _stopwatch.Restart();
-           
-        
+
+
         foreach (var currentEntity in _cameraQuery)
         {
-            if (World.EntityManager.GetEntityOwner(currentEntity.Entity) != PlayerHandler.LocalPlayerGameId)
+            if (World.EntityManager.GetEntityOwner(currentEntity.Entity) != playerHandler.LocalPlayerGameId)
                 continue;
-            
+
             ref var camera = ref currentEntity.GetCamera();
             ref var input = ref currentEntity.GetInputComponent();
-            
-            if (Engine.Window is {MouseLocked: true})
+
+            if (Engine.Window is { MouseLocked: true })
             {
-                float deltaTime = (float) _stopwatch.Elapsed.TotalSeconds;
+                float deltaTime = (float)_stopwatch.Elapsed.TotalSeconds;
                 _stopwatch.Restart();
-                camera.Yaw += InputHandler.MouseDelta.X * mouseSensitiveity * deltaTime;
-                camera.Pitch = Math.Clamp(camera.Pitch - InputHandler.MouseDelta.Y * mouseSensitiveity * deltaTime, MathHelper.ToRadians(-85), MathHelper.ToRadians(85));
+                camera.Yaw += inputHandler.MouseDelta.X * mouseSensitiveity * deltaTime;
+                camera.Pitch = Math.Clamp(camera.Pitch - inputHandler.MouseDelta.Y * mouseSensitiveity * deltaTime,
+                    MathHelper.ToRadians(-85), MathHelper.ToRadians(85));
             }
 
             var rotation = Quaternion.CreateFromYawPitchRoll(camera.Yaw, camera.Pitch, 0f);
             camera.Forward = Vector3.Transform(Vector3.UnitZ, rotation);
             camera.Upward = Vector3.Transform(-Vector3.UnitY, rotation);
-            
+
             var movement = Input;
-            if(movement != Vector3.Zero)
+            if (movement != Vector3.Zero)
                 movement = Vector3.Normalize(movement);
-            
+
             var direction = rotation;
             direction.Y = 1;
             movement = Vector3.Transform(movement, rotation);
-            
+
             input.Movement = movement;
 
             camera.Dirty = true;
             input.Dirty = true;
+
+            renderInputData.SetSingletonInputData(RenderInputDataIDs.Camera,
+                new CameraInputData(camera, currentEntity.GetPosition()));
         }
     }
 
@@ -193,4 +203,4 @@ public partial class InputCamera : ASystem
     };
 
     public override Identification Identification => SystemIDs.InputCamera;
-}*/
+}

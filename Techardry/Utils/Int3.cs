@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Numerics;
 using JetBrains.Annotations;
 using MintyCore.Utils;
 
@@ -144,5 +145,10 @@ public struct Int3 : IEquatable<Int3>
     public override int GetHashCode()
     {
         return HashCode.Combine(X, Y, Z);
+    }
+    
+    public static implicit operator Vector3(Int3 value)
+    {
+        return new Vector3(value.X, value.Y, value.Z);
     }
 }

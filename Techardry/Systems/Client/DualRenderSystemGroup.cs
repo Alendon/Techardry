@@ -1,13 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-using MintyCore.ECS;
-using MintyCore.Registries;
-using MintyCore.Render;
-using MintyCore.SystemGroups;
-using MintyCore.Utils;
-using Silk.NET.Vulkan;
-using Techardry.Identifications;
-
-namespace Techardry.Systems.Client;
+﻿namespace Techardry.Systems.Client;
 /*
 [RegisterSystem("dual_render")]
 [ExecuteAfter<ApplyGpuCameraBufferSystem>]

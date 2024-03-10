@@ -5,8 +5,8 @@
 #define MaxDepth 10
 #define FloatMax 1e+30
 #define BvhStackSize 64
-#define SampleCount 4
-#define MaxPathLength 4
+#define SampleCount 1
+#define MaxPathLength 1
 
 
 layout (location = 0) in vec3 in_position;
@@ -18,13 +18,10 @@ layout (push_constant) uniform PushConstants {
 
 layout (set = 1, binding = 0) uniform sampler2D tex;
 
-layout (input_attachment_index = 0, set = 2, binding = 0) uniform subpassInput inDepth;
-layout (input_attachment_index = 1, set = 2, binding = 1) uniform subpassInput inColor;
-
 #define CAMERA_DATA_SET 0
 #include "camera.glsl"
 
-#define RENDER_DATA_SET 3
+#define RENDER_DATA_SET 2
 #define RENDER_DATA_SET_MASTER_BVH_BINDING 0
 #define RENDER_DATA_SET_MASTER_BVH_INDICES_BINDING 1
 #define RENDER_DATA_SET_OCTREE_BINDING 2

@@ -2,6 +2,7 @@
 using MintyCore.Network;
 using MintyCore.Registries;
 using MintyCore.Utils;
+using Serilog.Core;
 using Techardry.Identifications;
 using Techardry.Utils;
 using Techardry.World;
@@ -13,11 +14,8 @@ public partial class CreateChunk : IMessage
 {
     public void Serialize(DataWriter writer)
     {
-        Logger.AssertAndThrow(
-            WorldId != Identification.Invalid,
-            "Invalid chunk data",
-            "CreateChunkMessage"
-        );
+        if(WorldId == Identification.Invalid)
+            throw new InvalidOperationException("Invalid chunk data");
         
         ChunkPosition.Serialize(writer);
         WorldId.Serialize(writer);

@@ -1,8 +1,12 @@
-﻿using MintyCore.ECS;
+﻿using JetBrains.Annotations;
+using MintyCore.ECS;
 using MintyCore.Network;
 using MintyCore.Registries;
 using MintyCore.Utils;
+using Serilog.Core;
+using Techardry.Blocks;
 using Techardry.Identifications;
+using Techardry.Render;
 using Techardry.Utils;
 using Techardry.Voxels;
 using Techardry.World;
@@ -15,11 +19,14 @@ public partial class ChunkDataMessage : IMessage
     public Int3 ChunkPosition;
     public Identification WorldId;
     public VoxelOctree? Octree;
-    
+    public required ITextureAtlasHandler TextureAtlasHandler { private get; [UsedImplicitly] init; }
+    public required IBlockHandler BlockHandler { private get; [UsedImplicitly] init; }
+
     public void Serialize(DataWriter writer)
     {
-        Logger.AssertAndThrow(Octree is not null, "Octree is null", "ChunkDataMessage");
-        
+        if (Octree is null)
+            throw new NullReferenceException("Octree is null");
+
         ChunkPosition.Serialize(writer);
         WorldId.Serialize(writer);
         Octree.Serialize(writer);
@@ -31,12 +38,13 @@ public partial class ChunkDataMessage : IMessage
 
         if (!Int3.TryDeserialize(reader, out ChunkPosition) ||
             !Identification.Deserialize(reader, out WorldId) ||
-            !VoxelOctree.TryDeserialize(reader, out Octree))
+            !VoxelOctree.TryDeserialize(reader, out Octree, TextureAtlasHandler, BlockHandler))
             return false;
-        
-        if(!WorldHandler.TryGetWorld(GameType.Client, WorldId, out var world) || world is not TechardryWorld techardryWorld)
+
+        if (!WorldHandler.TryGetWorld(GameType.Client, WorldId, out var world) ||
+            world is not TechardryWorld techardryWorld)
             return false;
-        
+
         techardryWorld.ChunkManager.UpdateChunk(ChunkPosition, Octree);
 
         return true;
@@ -57,5 +65,6 @@ public partial class ChunkDataMessage : IMessage
 
     /// <inheritdoc />
     public required INetworkHandler NetworkHandler { get; init; }
+
     public required IWorldHandler WorldHandler { private get; init; }
 }

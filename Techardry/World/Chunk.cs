@@ -4,8 +4,11 @@ using DotNext.Threading;
 using MintyCore;
 using MintyCore.Network;
 using MintyCore.Utils;
+using Serilog;
+using Serilog.Core;
 using Techardry.Blocks;
 using Techardry.Networking;
+using Techardry.Render;
 using Techardry.Utils;
 using Techardry.Voxels;
 
@@ -22,22 +25,26 @@ public class Chunk : IDisposable
     public Timestamp LastSyncedTime { get; set; }
 
     public TechardryWorld ParentWorld { get; }
-    private IPlayerHandler _playerHandler;
-    private INetworkHandler _networkHandler;
-    
+    private readonly IPlayerHandler _playerHandler;
+    private readonly INetworkHandler _networkHandler;
+    private readonly IBlockHandler _blockHandler;
 
-
-    public Chunk(Int3 chunkPos, TechardryWorld parentWorld, IPlayerHandler playerHandler, INetworkHandler networkHandler) : this(chunkPos, new VoxelOctree(), parentWorld, playerHandler, networkHandler)
+    public Chunk(Int3 chunkPos, TechardryWorld parentWorld, IPlayerHandler playerHandler,
+        INetworkHandler networkHandler, IBlockHandler blockHandler, ITextureAtlasHandler textureAtlasHandler) : this(
+        chunkPos, new VoxelOctree(textureAtlasHandler, blockHandler), parentWorld,
+        playerHandler, networkHandler, blockHandler)
     {
     }
 
-    internal Chunk(Int3 chunkPos, VoxelOctree octree, TechardryWorld parentWorld, IPlayerHandler playerHandler, INetworkHandler networkHandler)
+    internal Chunk(Int3 chunkPos, VoxelOctree octree, TechardryWorld parentWorld, IPlayerHandler playerHandler,
+        INetworkHandler networkHandler, IBlockHandler blockHandler)
     {
         Position = chunkPos;
         Octree = octree;
         ParentWorld = parentWorld;
         _playerHandler = playerHandler;
         _networkHandler = networkHandler;
+        _blockHandler = blockHandler;
     }
 
 
@@ -56,8 +63,7 @@ public class Chunk : IDisposable
         using var octreeLock = Octree.AcquireReadLock();
         if (octreeLock.IsEmpty)
         {
-            Logger.WriteLog($"Tried to update server chunk but failed to acquire read lock for chunk {Position}",
-                LogImportance.Error, "Chunk");
+            Log.Error("Tried to update server chunk but failed to acquire read lock for chunk {Position}", Position);
             return;
         }
 
@@ -95,11 +101,20 @@ public class Chunk : IDisposable
     public void SetBlock(Vector3 blockPos, Identification blockId, int depth,
         BlockRotation rotation = BlockRotation.None)
     {
-        Logger.AssertAndThrow(BlockHandler.DoesBlockExist(blockId), "Block to place does not exist", "World");
-        Logger.AssertAndThrow(depth >= VoxelOctree.SizeOneDepth || BlockHandler.IsBlockSplittable(blockId),
-            "Invalid block placement depth", "World");
-        Logger.AssertAndThrow(rotation == BlockRotation.None || BlockHandler.IsBlockRotatable(blockId),
-            "Invalid block placement rotation", "World");
+        if (!_blockHandler.DoesBlockExist(blockId))
+        {
+            throw new ArgumentException("Block to place does not exist", nameof(blockId));
+        }
+
+        if (depth < VoxelOctree.SizeOneDepth || !_blockHandler.IsBlockSplittable(blockId))
+        {
+            throw new ArgumentException("Invalid block placement depth", nameof(depth));
+        }
+
+        if (rotation != BlockRotation.None && !_blockHandler.IsBlockRotatable(blockId))
+        {
+            throw new ArgumentException("Invalid block placement rotation", nameof(rotation));
+        }
 
         using var octreeLock = Octree.AcquireWriteLock();
 

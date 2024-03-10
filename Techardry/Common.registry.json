@@ -47,39 +47,5 @@
         "File": "main_menu_background.png"
       }
     ]
-  },
-  {
-    "RegisterMethodInfo": "MintyCore.Registries.MeshRegistry_RegisterMesh",
-    "Entries": [
-      {
-        "Id": "suzanne",
-        "File": "suzanne.obj"
-      },
-      {
-        "Id": "square",
-        "File": "square.obj"
-      },
-      {
-        "Id": "cube",
-        "File": "cube.obj"
-      },
-      {
-        "Id": "sphere",
-        "File": "sphere.obj"
-      },
-      {
-        "Id": "capsule",
-        "File": "capsule.obj"
-      }
-    ]
-  },
-  {
-    "RegisterMethodInfo": "Techardry.Registries.FontRegistry_RegisterFont",
-    "Entries": [
-      {
-        "Id": "akashi",
-        "File": "akashi.ttf"
-      }
-    ]
   }
 ]

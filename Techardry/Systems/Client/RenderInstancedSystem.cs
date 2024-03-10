@@ -1,17 +1,4 @@
-﻿using System.Numerics;
-using MintyCore;
-using MintyCore.Components.Common;
-using MintyCore.ECS;
-using MintyCore.Registries;
-using MintyCore.Render;
-using MintyCore.Utils;
-using Silk.NET.Vulkan;
-using Techardry.Components.Client;
-using Techardry.Identifications;
-using Techardry.Utils;
-using Buffer = System.Buffer;
-
-namespace Techardry.Systems.Client;
+﻿namespace Techardry.Systems.Client;
 /*
 /// <summary>
 ///     System to instanced render entities

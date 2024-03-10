@@ -6,12 +6,14 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using MintyCore.Utils;
 using MintyCore.Utils.Maths;
+using Serilog.Core;
+using Techardry.Blocks;
 using Techardry.Identifications;
-using TechardryMath = Techardry.Utils.MathHelper;
+using Techardry.Render;
 
 namespace Techardry.Voxels;
 
-//[DebuggerTypeProxy(typeof(OctreeDebugView))]
+[DebuggerTypeProxy(typeof(OctreeDebugView))]
 public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 {
     /// <summary>
@@ -29,7 +31,7 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
     public const int MaximumTotalDivision = 10; // Math.Log2(MaximumTotalDimension);
 
     public const int MaximumLevelCount = MaximumTotalDivision + 1; // 10 Divisions + 1 Root
-    
+
     public const int Dimensions = 16;
 
     public const int ChildCount = 8;
@@ -127,10 +129,16 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
     private uint _nodeCount;
     private uint _dataCount;
+    private ITextureAtlasHandler textureAtlasHandler;
+    private IBlockHandler blockHandler;
+    
+    public uint Version { get; private set; }
 
 
-    public VoxelOctree()
+    public VoxelOctree(ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler)
     {
+        this.textureAtlasHandler = textureAtlasHandler;
+        this.blockHandler = blockHandler;
         Nodes = Array.Empty<Node>();
         Data = (Array.Empty<uint>(), Array.Empty<VoxelData>(), Array.Empty<VoxelPhysicsData>(),
             Array.Empty<VoxelRenderData>());
@@ -172,34 +180,36 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         MergeUpwards(ref node);
 
         ValidateTree();
+        
+        Version++;
     }
 
 
     public void Serialize(DataWriter writer)
     {
-        //writer.EnterRegion("octree");
+        writer.EnterRegion("octree");
 
         DataWriter.ValueRef<int> count = writer.AddValueRef<int>();
         int countValue = 0;
-        
+
         foreach (var leafNode in this)
         {
-            
             writer.Put(leafNode.Depth);
             writer.Put(leafNode.Position);
-            
+
             leafNode.Data.Serialize(writer);
             countValue++;
         }
 
         count.SetValue(countValue);
-        
-        //writer.ExitRegion();
+
+        writer.ExitRegion();
     }
 
-    public static bool TryDeserialize(DataReader reader, [NotNullWhen(true)] out VoxelOctree? octree)
+    public static bool TryDeserialize(DataReader reader, [NotNullWhen(true)] out VoxelOctree? octree,
+        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler)
     {
-        //reader.EnterRegion();
+        reader.EnterRegion();
 
         if (!reader.TryGetInt(out int count))
         {
@@ -207,8 +217,8 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
             return false;
         }
 
-        octree = new VoxelOctree();
-        
+        octree = new VoxelOctree(textureAtlasHandler, blockHandler);
+
         for (int i = 0; i < count; i++)
         {
             if (!reader.TryGetByte(out var depth)
@@ -222,7 +232,7 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
             octree.Insert(data, position, depth);
         }
 
-        //reader.ExitRegion();
+        reader.ExitRegion();
         return true;
     }
 
@@ -233,20 +243,25 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
         for (var i = NodeCount; i < Nodes.Length; i++)
         {
-            Logger.AssertAndThrow(Nodes[i] == (Node)default, "Node array not cleared", "VoxelOctree");
+            if (Nodes[i] != default)
+                throw new Exception("Node array not cleared");
         }
 
         for (var i = 0; i < NodeCount; i++)
         {
             ref var node = ref Nodes[i];
-            Logger.AssertAndThrow(node.Index == i, "Node index mismatch", "VoxelOctree");
+
+            if (node.Index != i)
+                throw new Exception("Node index mismatch");
         }
 
         for (var i = 0; i < DataCount; i++)
         {
             var nodeIndex = Data.ownerNodes[i];
             ref var node = ref Nodes[nodeIndex];
-            Logger.AssertAndThrow(node.DataIndex == i, "Data owner node index mismatch", "VoxelOctree");
+
+            if (node.DataIndex != i)
+                throw new Exception("Data owner node index mismatch");
         }
     }
 
@@ -256,16 +271,22 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         // check if the parent node is a not a leaf and has data
         if (parentNode.IsLeaf) return;
 
-        Logger.AssertAndThrow(parentNode.IsEmpty, "Parent node is not a leaf but has data.", "VoxelOctree");
+        if (parentNode.IsEmpty)
+            throw new Exception("Parent node is not a leaf but has data.");
 
         for (byte i = 0; i < ChildCount; i++)
         {
             var childIndex = parentNode.GetChildIndex(i);
             ref var child = ref GetChildNode(ref parentNode, i);
 
-            Logger.AssertAndThrow(childIndex == child.Index, "Child index does not match.", "VoxelOctree");
-            Logger.AssertAndThrow(parentNode.Index == child.ParentIndex, "Parent index does not match.", "VoxelOctree");
-            Logger.AssertAndThrow(parentNode.Depth + 1 == child.Depth, "Child depth does not match.", "VoxelOctree");
+            if (childIndex != child.Index)
+                throw new Exception("Child index does not match.");
+
+            if (parentNode.Index != child.ParentIndex)
+                throw new Exception("Parent index does not match.");
+
+            if (parentNode.Depth + 1 != child.Depth)
+                throw new Exception("Child depth does not match.");
 
             ValidateTreeInner(ref child);
         }
@@ -437,37 +458,6 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         return ref Nodes[node.Index];
     }
 
-    private void FillPathToNode(ref Node node, Span<byte> path)
-    {
-        Logger.AssertAndThrow(path.Length == node.Depth, "Path length and node depth must be the same", "VoxelOctree");
-
-        ref Node parentNode = ref GetParentNode(ref node);
-
-        while (true)
-        {
-            path[parentNode.Depth] = node.ParentChildIndex;
-
-            if (parentNode.ParentIndex == InvalidIndex)
-                break;
-
-            node = ref parentNode;
-            parentNode = ref GetParentNode(ref parentNode);
-        }
-    }
-
-    private ref Node GetNodeByPath(Span<byte> path)
-    {
-        ref Node node = ref GetRootNode();
-
-        foreach (var childIndex in path)
-        {
-            node = ref GetChildNode(ref node, childIndex);
-        }
-
-        return ref node;
-    }
-
-
     private ref Node GetChildNode(ref Node node, byte position)
     {
         Debug.Assert(node.Depth != 0 || node.ParentIndex == InvalidIndex);
@@ -546,24 +536,31 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
         Data.voxels[node.DataIndex] = dataVoxel;
         Data.physicsData[node.DataIndex] = dataVoxel.GetPhysicsData();
-        Data.renderData[node.DataIndex] = dataVoxel.GetRenderData();
+        Data.renderData[node.DataIndex] = dataVoxel.GetRenderData(textureAtlasHandler, blockHandler);
     }
 
     internal VoxelData GetVoxelData(ref Node node)
     {
-        Logger.AssertAndThrow(node.IsLeaf, "Node is not a leaf", "VoxelOctree");
+        if (!node.IsLeaf)
+            throw new Exception("Node is not a leaf");
+
         return node.IsEmpty ? new VoxelData(BlockIDs.Air) : Data.voxels[node.DataIndex];
     }
 
     private void DeleteData(ref Node node)
     {
-        Logger.AssertAndThrow(node.IsLeaf, "Can only delete data from leaf nodes", "VoxelOctree");
+        if (!node.IsLeaf)
+        {
+            throw new InvalidOperationException("Can only delete data from leaf nodes");
+        }
+        
         if (node.IsEmpty) return;
 
         ref var replaceDataNode = ref GetNode(Data.ownerNodes[DataCount - 1]);
 
-        Logger.AssertAndThrow(replaceDataNode.DataIndex == DataCount - 1, "Index mismatch", "VoxelOctree");
-
+        if( replaceDataNode.DataIndex != DataCount - 1)
+            throw new Exception("Index mismatch");
+        
         Data.voxels[node.DataIndex] = Data.voxels[replaceDataNode.DataIndex];
         Data.physicsData[node.DataIndex] = Data.physicsData[replaceDataNode.DataIndex];
         Data.renderData[node.DataIndex] = Data.renderData[replaceDataNode.DataIndex];
@@ -827,7 +824,7 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         var nodes = from node in Nodes[0..(int)NodeCount]
             where node is { IsLeaf: true, IsEmpty: false }
             select node;
-        
+
         foreach (var node in nodes)
         {
             var leafNode = new VoxelLeafNode();

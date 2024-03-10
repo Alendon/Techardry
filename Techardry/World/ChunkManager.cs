@@ -6,11 +6,16 @@ using BepuPhysics.Collidables;
 using MintyCore;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.Graphics.Render.Managers;
 using MintyCore.Network;
 using MintyCore.Utils;
+using Serilog;
+using Serilog.Core;
+using Techardry.Blocks;
 using Techardry.Components.Common;
 using Techardry.Identifications;
 using Techardry.Networking;
+using Techardry.Render;
 using Techardry.Utils;
 using Techardry.Voxels;
 
@@ -38,21 +43,29 @@ public class ChunkManager : IDisposable
 
     private INetworkHandler NetworkHandler { get; }
     private IPlayerHandler PlayerHandler { get; }
+    private ITextureAtlasHandler TextureAtlasHandler { get; }
+    private IBlockHandler BlockHandler { get; }
+    private IInputDataManager? InputDataManager { get; }
 
-    public ChunkManager(TechardryWorld parentWorld, INetworkHandler networkHandler, IPlayerHandler playerHandler)
+
+    public ChunkManager(TechardryWorld parentWorld, INetworkHandler networkHandler, IPlayerHandler playerHandler,
+        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? inputDataManager)
     {
         _parentWorld = parentWorld;
         NetworkHandler = networkHandler;
         PlayerHandler = playerHandler;
-        
-        EntityManager.PostEntityCreateEvent += OnEntityCreate;
-        EntityManager.PreEntityDeleteEvent += OnEntityDelete;
+        TextureAtlasHandler = textureAtlasHandler;
+        BlockHandler = blockHandler;
+        InputDataManager = inputDataManager;
+
+        IEntityManager.PostEntityCreateEvent += OnEntityCreate;
+        IEntityManager.PreEntityDeleteEvent += OnEntityDelete;
     }
 
     public void PlayerChunkChanged(Int3? oldChunk, Int3? newChunk, ushort player)
     {
-        Logger.AssertAndThrow(_parentWorld.IsServerWorld, "Player Chunk Changes can only be processed on the server",
-            "ChunkManager");
+        if (!_parentWorld.IsServerWorld)
+            throw new InvalidOperationException("Player Chunk Changes can only be processed on the server");
 
         Task.Run(() => ProcessPlayerChunkChanged(oldChunk, newChunk, player), _cancellationTokenSource.Token);
     }
@@ -64,7 +77,7 @@ public class ChunkManager : IDisposable
 
         var chunk = _parentWorld.WorldGenerator.GenerateChunk(chunkPosition);
 
-        _chunksToLoad.TryEnqueue(new ChunkLoadEntry {ChunkPosition = chunkPosition, Chunk = chunk});
+        _chunksToLoad.TryEnqueue(new ChunkLoadEntry { ChunkPosition = chunkPosition, Chunk = chunk });
     }
 
     private void ProcessPlayerChunkChanged(Int3? oldChunk, Int3? newChunk, ushort player)
@@ -124,8 +137,7 @@ public class ChunkManager : IDisposable
         {
             if (!_chunkPlayers.TryGetValue(chunk, out var players))
             {
-                Logger.WriteLog($"Player {player} tried to unload chunk {chunk} but it was not loaded",
-                    LogImportance.Error, "ChunkManager");
+                Log.Error("Player {Player} tried to unload chunk {Chunk} but it was not loaded", player, chunk);
                 continue;
             }
 
@@ -196,21 +208,21 @@ public class ChunkManager : IDisposable
 
         var player = _parentWorld.EntityManager.GetEntityOwner(entity);
         var position = _parentWorld.EntityManager.GetComponent<Position>(entity);
-        var chunkPos = new Int3((int) position.Value.X / Chunk.Size, (int) position.Value.Y / Chunk.Size,
-            (int) position.Value.Z / Chunk.Size);
+        var chunkPos = new Int3((int)position.Value.X / Chunk.Size, (int)position.Value.Y / Chunk.Size,
+            (int)position.Value.Z / Chunk.Size);
 
         PlayerChunkChanged(chunkPos, null, player);
     }
 
     private void OnEntityCreate(IWorld world, Entity entity)
     {
-        if (world != _parentWorld && world is {IsServerWorld: true}) return;
+        if (world != _parentWorld || world is { IsServerWorld: false }) return;
         if (entity.ArchetypeId != ArchetypeIDs.TestCamera) return;
 
         var player = _parentWorld.EntityManager.GetEntityOwner(entity);
         var position = _parentWorld.EntityManager.GetComponent<Position>(entity);
-        var chunkPos = new Int3((int) position.Value.X / Chunk.Size, (int) position.Value.Y / Chunk.Size,
-            (int) position.Value.Z / Chunk.Size);
+        var chunkPos = new Int3((int)position.Value.X / Chunk.Size, (int)position.Value.Y / Chunk.Size,
+            (int)position.Value.Z / Chunk.Size);
 
         _parentWorld.EntityManager.GetComponent<LastChunk>(entity).Value = chunkPos;
 
@@ -233,6 +245,9 @@ public class ChunkManager : IDisposable
             _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
 
             ChunkRemoved(chunkToUnload);
+            
+            if(!_parentWorld.IsServerWorld)
+                InputDataManager?.RemoveKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkToUnload);
         }
 
 
@@ -250,6 +265,9 @@ public class ChunkManager : IDisposable
             _activeChunkCreations.TryRemove(toLoad.ChunkPosition, out _);
 
             ChunkAdded(chunkPosition);
+            
+            if(!_parentWorld.IsServerWorld)
+                InputDataManager?.SetKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition, chunk.Octree);
         }
 
         if (!_parentWorld.IsServerWorld)
@@ -259,9 +277,7 @@ public class ChunkManager : IDisposable
                 var (chunkPosition, octree) = toUpdate;
                 if (!_chunks.TryGetValue(chunkPosition, out var chunkEntry))
                 {
-                    Logger.WriteLog($"Chunk to update was not found: {chunkPosition}", LogImportance.Error,
-                        "ChunkManager");
-
+                    Log.Error("Chunk to update was not found: {ChunkPosition}", chunkPosition);
                     continue;
                 }
 
@@ -284,6 +300,9 @@ public class ChunkManager : IDisposable
                 _chunks[chunkPosition] = new ChunkEntry(chunk, staticHandle, shape);
 
                 ChunkUpdated(chunkPosition);
+                
+                if(!_parentWorld.IsServerWorld)
+                    InputDataManager?.SetKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition, octree);
             }
         }
 
@@ -295,7 +314,8 @@ public class ChunkManager : IDisposable
 
     public void UpdateChunk(Int3 chunkPosition, VoxelOctree octree)
     {
-        Logger.AssertAndThrow(!_parentWorld.IsServerWorld, "Client tried to update chunk on server", "ChunkManager");
+        if (_parentWorld.IsServerWorld)
+            throw new InvalidOperationException("Client tried to update chunk on server");
 
         _chunksToUpdate.Enqueue((chunkPosition, octree));
     }
@@ -317,9 +337,7 @@ public class ChunkManager : IDisposable
     {
         if (!_chunks.TryGetValue(chunkPos, out var chunkEntry))
         {
-            Logger.WriteLog($"Chunk to set block in was not found: {chunkPos}", LogImportance.Error,
-                "ChunkManager");
-
+            Log.Error("Chunk to set block in was not found: {ChunkPos}", chunkPos);
             return;
         }
 
@@ -369,22 +387,24 @@ public class ChunkManager : IDisposable
 
     internal void AddChunk(Int3 chunkPosition)
     {
-        Logger.AssertAndThrow(!_parentWorld.IsServerWorld, "Chunks can only be manually added to the client world",
-            "ChunkManager");
-
+        if (_parentWorld.IsServerWorld)
+            throw new InvalidOperationException("Chunks can only be manually added to the client world");
 
         _chunksToLoad.TryEnqueue(new ChunkLoadEntry()
         {
             ChunkPosition = chunkPosition,
-            Chunk = new Chunk(chunkPosition, _parentWorld, PlayerHandler, NetworkHandler)
+            Chunk = new Chunk(chunkPosition, _parentWorld, PlayerHandler, NetworkHandler, BlockHandler,
+                TextureAtlasHandler)
         });
     }
 
+
     internal void RemoveChunk(Int3 chunkPosition)
     {
-        Logger.AssertAndThrow(!_parentWorld.IsServerWorld, "Chunks can only be manually removed from the client world",
-            "ChunkManager");
-
+        if (_parentWorld.IsServerWorld)
+        {
+            throw new InvalidOperationException("Chunks can only be manually removed from the client world");
+        }
 
         _chunksToUnload.TryEnqueue(chunkPosition);
     }

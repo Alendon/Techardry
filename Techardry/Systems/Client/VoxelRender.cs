@@ -1,22 +1,5 @@
-﻿using System.Numerics;
-using System.Runtime.InteropServices;
-using MintyCore;
-using MintyCore.Components.Common;
-using MintyCore.ECS;
-using MintyCore.Registries;
-using MintyCore.Render;
-using MintyCore.Utils;
-using Silk.NET.Vulkan;
-using Techardry.Components.Client;
-using Techardry.Identifications;
-using Techardry.Render;
-using Techardry.Utils;
-using Techardry.World;
-using DescriptorSetIDs = Techardry.Identifications.DescriptorSetIDs;
-using PipelineIDs = Techardry.Identifications.PipelineIDs;
-using SystemIDs = Techardry.Identifications.SystemIDs;
-
-namespace Techardry.Systems.Client;
+﻿namespace Techardry.Systems.Client;
+//TODO delete file
 /*
 [RegisterSystem("voxel_render")]
 [ExecuteInSystemGroup<DualRenderSystemGroup>]

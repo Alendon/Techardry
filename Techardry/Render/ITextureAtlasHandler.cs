@@ -1,9 +1,10 @@
 ﻿using System.Diagnostics.CodeAnalysis;
-using MintyCore.Render.VulkanObjects;
+using MintyCore.Graphics.VulkanObjects;
 using MintyCore.Utils;
 using Silk.NET.Vulkan;
 
 namespace Techardry.Render;
+
 
 public interface ITextureAtlasHandler
 {
