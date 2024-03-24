@@ -1,4 +1,5 @@
-﻿using MintyCore.ECS;
+﻿using System;
+using MintyCore.ECS;
 using MintyCore.Network;
 using MintyCore.Registries;
 using MintyCore.Utils;

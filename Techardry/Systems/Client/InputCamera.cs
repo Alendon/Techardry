@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Numerics;
 using BepuUtilities;
 using MintyCore;
@@ -23,11 +24,11 @@ public partial class InputCamera(
     IInputHandler inputHandler,
     IInputDataManager renderInputData) : ASystem
 {
-    [ComponentQuery] private ComponentQuery<(Camera, InputComponent), Position> _cameraQuery = new();
+    [ComponentQuery] private readonly ComponentQuery<(Camera, InputComponent), Position> _cameraQuery = new();
 
-    private static Vector3 Input = Vector3.Zero;
-    private const float mouseSensitiveity = 0.3f;
-    private Stopwatch _stopwatch = Stopwatch.StartNew();
+    private static Vector3 _input = Vector3.Zero;
+    private const float MouseSensitivity = 1f;
+    private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
     public override void Setup(SystemManager systemManager)
     {
@@ -54,8 +55,8 @@ public partial class InputCamera(
             {
                 float deltaTime = (float)_stopwatch.Elapsed.TotalSeconds;
                 _stopwatch.Restart();
-                camera.Yaw += inputHandler.MouseDelta.X * mouseSensitiveity * deltaTime;
-                camera.Pitch = Math.Clamp(camera.Pitch - inputHandler.MouseDelta.Y * mouseSensitiveity * deltaTime,
+                camera.Yaw += inputHandler.MouseDelta.X * MouseSensitivity * deltaTime;
+                camera.Pitch = Math.Clamp(camera.Pitch + inputHandler.MouseDelta.Y * MouseSensitivity * deltaTime,
                     MathHelper.ToRadians(-85), MathHelper.ToRadians(85));
             }
 
@@ -63,7 +64,7 @@ public partial class InputCamera(
             camera.Forward = Vector3.Transform(Vector3.UnitZ, rotation);
             camera.Upward = Vector3.Transform(-Vector3.UnitY, rotation);
 
-            var movement = Input;
+            var movement = _input;
             if (movement != Vector3.Zero)
                 movement = Vector3.Normalize(movement);
 
@@ -89,12 +90,12 @@ public partial class InputCamera(
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.Z = Math.Clamp(Input.Z + 1, -1, 1);
+                _input.Z = Math.Clamp(_input.Z + 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.Z = Math.Clamp(Input.Z - 1, -1, 1);
+                _input.Z = Math.Clamp(_input.Z - 1, -1, 1);
             }
         }
     };
@@ -107,12 +108,12 @@ public partial class InputCamera(
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.Z = Math.Clamp(Input.Z - 1, -1, 1);
+                _input.Z = Math.Clamp(_input.Z - 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.Z = Math.Clamp(Input.Z + 1, -1, 1);
+                _input.Z = Math.Clamp(_input.Z + 1, -1, 1);
             }
         }
     };
@@ -125,12 +126,12 @@ public partial class InputCamera(
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.X = Math.Clamp(Input.X - 1, -1, 1);
+                _input.X = Math.Clamp(_input.X - 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.X = Math.Clamp(Input.X + 1, -1, 1);
+                _input.X = Math.Clamp(_input.X + 1, -1, 1);
             }
         }
     };
@@ -143,12 +144,12 @@ public partial class InputCamera(
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.X = Math.Clamp(Input.X + 1, -1, 1);
+                _input.X = Math.Clamp(_input.X + 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.X = Math.Clamp(Input.X - 1, -1, 1);
+                _input.X = Math.Clamp(_input.X - 1, -1, 1);
             }
         }
     };
@@ -161,12 +162,12 @@ public partial class InputCamera(
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.Y = Math.Clamp(Input.Y + 1, -1, 1);
+                _input.Y = Math.Clamp(_input.Y + 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.Y = Math.Clamp(Input.Y - 1, -1, 1);
+                _input.Y = Math.Clamp(_input.Y - 1, -1, 1);
             }
         }
     };
@@ -179,12 +180,12 @@ public partial class InputCamera(
         {
             if (state is KeyStatus.KeyDown)
             {
-                Input.Y = Math.Clamp(Input.Y - 1, -1, 1);
+                _input.Y = Math.Clamp(_input.Y - 1, -1, 1);
             }
 
             if (state is KeyStatus.KeyUp)
             {
-                Input.Y = Math.Clamp(Input.Y + 1, -1, 1);
+                _input.Y = Math.Clamp(_input.Y + 1, -1, 1);
             }
         }
     };

@@ -1,4 +1,7 @@
-﻿using System.Buffers;
+﻿using System;
+using System.Buffers;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -46,6 +49,9 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
 
         var voxelBuffer = _voxelBufferAccessor();
         var worldData = _worldDataAccessor();
+        
+        if(!voxelBuffer.Buffers.Any())
+            return;
 
         var octrees = voxelBuffer.Buffers.ToArray();
         var boundingBoxes = octrees.Select(x =>

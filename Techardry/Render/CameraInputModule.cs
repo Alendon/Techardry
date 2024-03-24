@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using MintyCore.Components.Common;
 using MintyCore.Graphics;
@@ -45,9 +46,7 @@ public class CameraInputModule(
             Log.Error("Camera Input Module is not setup correctly");
             return;
         }
-
-        if (!_cameraData.WasModified) return;
-
+        
         var (camera, position) = _cameraData.AcquireData();
         var intermediateData = _intermediateDataFunc();
 

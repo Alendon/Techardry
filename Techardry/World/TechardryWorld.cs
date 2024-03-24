@@ -1,4 +1,5 @@
-﻿using System.Numerics;
+﻿using System;
+using System.Numerics;
 using Autofac;
 using BepuPhysics;
 using BepuPhysics.Collidables;
@@ -61,8 +62,11 @@ public class TechardryWorld : IWorld
 
     public TechardryWorld(INetworkHandler networkHandler, IPlayerHandler playerHandler,
         IArchetypeManager archetypeManager, IComponentManager componentManager, IModManager modManager,
-        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? renderDataManager)
+        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? renderDataManager,
+        bool isServerWorld)
     {
+        IsServerWorld = isServerWorld;
+        
         ChunkManager = new ChunkManager(this, networkHandler, playerHandler, textureAtlasHandler, blockHandler,renderDataManager);
 
         _entityManager = new EntityManager(this, archetypeManager, playerHandler, networkHandler);

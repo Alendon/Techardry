@@ -63,4 +63,4 @@ buildFolder = buildFolder.EnumerateDirectories(debug ? "Debug" : "Release", Sear
 
 //Console.Clear();
 
-Engine.Main(new[] {$"-addModDir={buildFolder.FullName}"});
+Engine.Main([$"-addModDir={buildFolder.FullName}", "-testingModeActive"]);
