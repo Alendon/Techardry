@@ -134,7 +134,7 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
     private uint _dataCount;
     private ITextureAtlasHandler textureAtlasHandler;
     private IBlockHandler blockHandler;
-    
+
     public uint Version { get; private set; }
 
 
@@ -183,7 +183,7 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         MergeUpwards(ref node);
 
         ValidateTree();
-        
+
         Version++;
     }
 
@@ -264,7 +264,10 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
             ref var node = ref Nodes[nodeIndex];
 
             if (node.DataIndex != i)
+            {
+                var filtered = Nodes.Where(n => n.DataIndex == i).ToArray();
                 throw new Exception("Data owner node index mismatch");
+            }
         }
     }
 
@@ -274,7 +277,7 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         // check if the parent node is a not a leaf and has data
         if (parentNode.IsLeaf) return;
 
-        if (parentNode.IsEmpty)
+        if (!parentNode.IsEmpty)
             throw new Exception("Parent node is not a leaf but has data.");
 
         for (byte i = 0; i < ChildCount; i++)
@@ -313,7 +316,6 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
         ref var parentNode = ref GetParentNode(ref node);
 
-        int itCount = 0;
         while (true)
         {
             for (byte childIndex = 0; childIndex < ChildCount; childIndex++)
@@ -345,8 +347,6 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
             if (parentNode.IsLeaf)
                 return;
-
-            itCount++;
         }
     }
 
@@ -369,96 +369,124 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         return ref node;
     }
 
-    /// <summary>
-    /// Delete all children of the given node recursively
-    /// </summary>
-    /// <param name="node">Parent node to delete children from</param>
-    /// <returns>New reference of the parent node</returns>
     private ref Node DeleteChildren(ref Node node)
     {
-        if (node.IsLeaf)
-        {
-            return ref node;
-        }
+        if (node.IsLeaf) return ref node;
+        
+        Span<byte> pathToNode = stackalloc byte[node.Depth];
+        StorePathToNode(ref node, pathToNode);
 
-        //First step: Delete children of current nodes children (Recursion) 
-        for (byte childIndex = 0; childIndex < ChildCount; childIndex++)
+        //Delete all grandchildren and beyond
+        for (byte i = 0; i < ChildCount; i++)
         {
-            ref var child = ref GetChildNode(ref node, childIndex);
-            child = ref DeleteChildren(ref child);
-            node = ref GetParentNode(ref child);
-        }
-
-        //Second step: Delete Data of current children
-        for (byte childIndex = 0; childIndex < ChildCount; childIndex++)
-        {
-            ref var child = ref GetChildNode(ref node, childIndex);
+            ref var child = ref GetChildNode(ref node, i);
+            DeleteChildren(ref child);
+            
+            node = ref RestoreFromPath(pathToNode);
+            child = ref GetChildNode(ref node, i);
+            
             DeleteData(ref child);
         }
+        
+        //delete the children
+        DeleteChildrenInternal(ref node);
+        node = ref RestoreFromPath(pathToNode);
+        
+        return ref node;
+    }
 
-        //Third step: Delete the actual children
+    private void DeleteChildrenInternal(ref Node node)
+    {
+        //The internal method is used to actually delete the children
+        //For this all children themself must be empty leaf nodes
 
-        //Move the last nodes to the location of the ones to delete
-        ref var replaceParent = ref GetParentNode(ref Nodes[NodeCount - 1]);
-        var toReplaceIndex = node.GetChildIndex(0);
-
-        if (Unsafe.AreSame(ref replaceParent, ref node))
+        if (node.IsLeaf)
         {
-            //The replacer node is the one to delete
-            //Early exit
-            NodeCount -= ChildCount;
-            node.SetChildIndex(InvalidIndex);
+            return;
+        }
+        
+        if(!node.IsEmpty)
+            throw new Exception("Node is not empty");
 
-            Nodes.AsSpan((int)NodeCount, ChildCount).Clear();
+        for (byte i = 0; i < ChildCount; i++)
+        {
+            ref var child = ref GetChildNode(ref node, i);
 
-            //array could be resized here
-            return ref Nodes[node.Index];
+            if (!child.IsLeaf)
+                throw new Exception("Child is not a leaf node");
+
+            if (!child.IsEmpty)
+                throw new Exception("Child is not empty");
         }
 
-        var firstChildIndex = node.GetChildIndex(0);
+        //move the last nodes to the location of the ones to delete
+
+        var replaceBaseIndex = NodeCount - ChildCount;
+        var deleteBaseIndex = node.GetChildIndex(0);
         node.SetChildIndex(InvalidIndex);
 
-        for (byte childIndex = 0; childIndex < ChildCount; childIndex++)
+        //the child to delete are at the end of the array
+        if (replaceBaseIndex == deleteBaseIndex)
         {
-            ref var childNode = ref GetNode(firstChildIndex + childIndex);
-            ref var replacerChildNode = ref GetChildNode(ref replaceParent, childIndex);
+            NodeCount -= ChildCount;
+            Nodes.AsSpan((int)NodeCount, ChildCount).Clear();
 
-            var index = childNode.Index;
+            //just return the node reference
+            return;
+        }
 
-            childNode = replacerChildNode;
+        ref var replaceParent = ref GetParentNode(ref Nodes[replaceBaseIndex]);
+        replaceParent.SetChildIndex(deleteBaseIndex);
 
-            //update the node index
-            childNode.Index = index;
+        //copy the data of the last nodes to the location of the ones to delete
+        Nodes.AsSpan((int)replaceBaseIndex, ChildCount).CopyTo(Nodes.AsSpan((int)deleteBaseIndex, ChildCount));
+        Nodes.AsSpan((int)replaceBaseIndex, ChildCount).Clear();
 
-            //update data owner index
-            if (!childNode.IsEmpty)
+        for (byte i = 0; i < ChildCount; i++)
+        {
+            var movedChildIndex = replaceParent.GetChildIndex(i);
+            ref var movedChild = ref Nodes[movedChildIndex];
+            movedChild.Index = movedChildIndex;
+
+            if (!movedChild.IsEmpty)
             {
-                Data.ownerNodes[childNode.DataIndex] = childNode.Index;
+                Data.ownerNodes[movedChild.DataIndex] = movedChildIndex;
             }
 
-            //Update the children to reference to the new parent location
-            if (!childNode.IsLeaf)
-            {
-                for (byte grandChildIndex = 0; grandChildIndex < ChildCount; grandChildIndex++)
-                {
-                    ref var grandChildren = ref GetChildNode(ref childNode, grandChildIndex);
-                    grandChildren.ParentIndex = childNode.Index;
-                }
-            }
+            if (movedChild.IsLeaf) continue;
 
-            if (Unsafe.AreSame(ref replacerChildNode, ref node))
+            for (byte j = 0; j < ChildCount; j++)
             {
-                node = ref childNode;
+                ref var grandChild = ref GetChildNode(ref movedChild, j);
+                grandChild.ParentIndex = movedChildIndex;
             }
         }
 
-        replaceParent.SetChildIndex(toReplaceIndex);
-
         NodeCount -= ChildCount;
-        Nodes.AsSpan((int)NodeCount, ChildCount).Clear();
+    }
+    
+    private void StorePathToNode(ref Node node, Span<byte> pathToNode)
+    {
+        ref var current = ref node;
+        while (true)
+        {
+            if(current.ParentIndex == InvalidIndex)
+                break;
+            
+            pathToNode[current.Depth - 1] = current.ParentChildIndex;
+            current = ref GetParentNode(ref current);
+        }
+    }
 
-        //array could be resized here
-        return ref Nodes[node.Index];
+    private ref Node RestoreFromPath(scoped ReadOnlySpan<byte> path)
+    {
+        ref var node = ref GetRootNode();
+        foreach (var childIndex in path)
+        {
+            node = ref GetChildNode(ref node, childIndex);
+        }
+
+        return ref node;
     }
 
     private ref Node GetChildNode(ref Node node, byte position)
@@ -556,14 +584,14 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         {
             throw new InvalidOperationException("Can only delete data from leaf nodes");
         }
-        
+
         if (node.IsEmpty) return;
 
         ref var replaceDataNode = ref GetNode(Data.ownerNodes[DataCount - 1]);
 
-        if( replaceDataNode.DataIndex != DataCount - 1)
+        if (replaceDataNode.DataIndex != DataCount - 1)
             throw new Exception("Index mismatch");
-        
+
         Data.voxels[node.DataIndex] = Data.voxels[replaceDataNode.DataIndex];
         Data.physicsData[node.DataIndex] = Data.physicsData[replaceDataNode.DataIndex];
         Data.renderData[node.DataIndex] = Data.renderData[replaceDataNode.DataIndex];

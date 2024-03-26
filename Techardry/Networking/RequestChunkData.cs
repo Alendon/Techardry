@@ -34,7 +34,7 @@ public partial class RequestChunkData : IMessage
 
         if (!techardryWorld.ChunkManager.TryGetChunk(Position, out var chunk)) return true;
 
-        chunk.Octree.AcquireReadLock();
+        using var @lock = chunk.Octree.AcquireReadLock();
 
         var chunkDataMessage = NetworkHandler.CreateMessage<ChunkDataMessage>();
         chunkDataMessage.ChunkPosition = Position;

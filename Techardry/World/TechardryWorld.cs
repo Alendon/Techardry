@@ -66,8 +66,9 @@ public class TechardryWorld : IWorld
         bool isServerWorld)
     {
         IsServerWorld = isServerWorld;
-        
-        ChunkManager = new ChunkManager(this, networkHandler, playerHandler, textureAtlasHandler, blockHandler,renderDataManager);
+
+        ChunkManager = new ChunkManager(this, networkHandler, playerHandler, textureAtlasHandler, blockHandler,
+            renderDataManager);
 
         _entityManager = new EntityManager(this, archetypeManager, playerHandler, networkHandler);
         _systemManager = new SystemManager(this, componentManager, modManager);
@@ -157,9 +158,15 @@ public class TechardryWorld : IWorld
                 CompoundPairSweepOverlapFinder<BigCompound, VoxelCollider>>());
     }
 
+
+    private bool isDisposed;
+
     /// <inheritdoc />
     public void Dispose()
     {
+        if (isDisposed) return;
+        isDisposed = true;
+
         ChunkManager.Dispose();
 
         GC.SuppressFinalize(this);
