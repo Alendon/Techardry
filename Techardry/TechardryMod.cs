@@ -178,7 +178,7 @@ public sealed class TechardryMod : IMod
     /// </summary>
     public void GameLoop()
     {
-        Engine.Desktop!.Root = null;
+        Engine.Desktop!.Root = new IngameUi();
         
         //If this is a client game (client or local) wait until the player is connected
         while (MathHelper.IsBitSet((int)Engine.GameType, (int)GameType.Client) &&
@@ -207,9 +207,9 @@ public sealed class TechardryMod : IMod
             
             NetworkHandler.Update();
 
-            if (sw.Elapsed.TotalSeconds > 1)
+            if (sw.Elapsed.TotalSeconds > 1 && Engine.Desktop?.Root is IngameUi ui)
             {
-                Log.Debug("Current FPS: {Fps}", RenderManager.FrameRate);
+                ui.SetFps(RenderManager.FrameRate);
                 sw.Restart();
             }
             
@@ -226,6 +226,7 @@ public sealed class TechardryMod : IMod
                 Engine.Tick++;
         }
 
+        Engine.Desktop!.Root = null;
         Engine.CleanupGame();
     }
 

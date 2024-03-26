@@ -337,6 +337,20 @@ public class ChunkManager : IDisposable
         return false;
     }
 
+    public void SetBlock(Vector3 blockPos, Identification blockId, int depth,
+        BlockRotation rotation = BlockRotation.None)
+    {
+        Int3 chunkPos = new((int)blockPos.X / Chunk.Size, (int)blockPos.Y / Chunk.Size, (int)blockPos.Z / Chunk.Size);
+        if(blockPos.X < 0)
+            chunkPos.X -= 1;
+        if(blockPos.Y < 0)
+            chunkPos.Y -= 1;
+        if(blockPos.Z < 0)
+            chunkPos.Z -= 1;
+        
+        SetBlock(chunkPos, blockPos, blockId, depth, rotation);
+    }
+
     public void SetBlock(Int3 chunkPos, Vector3 blockPos, Identification blockId, int depth,
         BlockRotation rotation = BlockRotation.None)
     {

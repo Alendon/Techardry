@@ -1,4 +1,6 @@
-﻿using MintyCore.Components.Common;
+﻿using System.Numerics;
+using MintyCore;
+using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Registries;
 using MintyCore.Utils;
@@ -6,6 +8,7 @@ using Serilog;
 using Silk.NET.Input;
 using Techardry.Components.Client;
 using Techardry.Identifications;
+using Techardry.UI;
 using Techardry.Utils;
 using Techardry.Voxels;
 using Techardry.World;
@@ -14,7 +17,7 @@ namespace Techardry.Systems.Common;
 
 [ExecutionSide(GameType.Server)]
 [RegisterSystem("test_interaction")]
-public partial class TestInteractionSystem(IInputHandler inputHandler) : ASystem
+public partial class TestInteractionSystem : ASystem
 {
     [ComponentQuery] private ComponentQuery<object, (Position, Camera)> _query = new();
 
@@ -27,17 +30,23 @@ public partial class TestInteractionSystem(IInputHandler inputHandler) : ASystem
     {
         foreach (var entity in _query)
         {
-            if (!BlockPlaceIssued && !BlockBreakIssued)
-                continue;
-
             if (World is not TechardryWorld world) continue;
 
             var pos = entity.GetPosition().Value;
             var dir = entity.GetCamera().Forward;
 
-            if (!world.PhysicsWorld.RayCast(pos, dir, 100,
-                    out var tResult,
-                    out _, out var normal))
+            var hit = world.PhysicsWorld.RayCast(pos, dir, 100,
+                out var tResult, out _, out var normal);
+            var blockPos = pos + dir * tResult;
+
+            if (Engine.Desktop?.Root is IngameUi ui)
+            {
+                ui.SetBlockPos(hit ? blockPos : new Vector3(float.NaN));
+                ui.SetPlayerPos(pos);
+                ui.SetBlockSize(Math.Pow(2, -(depth - VoxelOctree.SizeOneDepth)));
+            }
+
+            if (!hit)
             {
                 BlockBreakIssued = false;
                 BlockPlaceIssued = false;
@@ -47,21 +56,15 @@ public partial class TestInteractionSystem(IInputHandler inputHandler) : ASystem
 
             if (BlockBreakIssued)
             {
-                var blockPos = pos + dir * tResult;
                 blockPos -= normal * 0.01f;
-
-                var chunkPos = new Int3((int)blockPos.X, (int)blockPos.Y, (int)blockPos.Z) / Chunk.Size;
-                world.ChunkManager.SetBlock(chunkPos, blockPos, BlockIDs.Air, VoxelOctree.SizeOneDepth + depth);
+                world.ChunkManager.SetBlock(blockPos, BlockIDs.Air, depth);
                 BlockBreakIssued = false;
             }
 
             if (BlockPlaceIssued)
             {
-                var blockPos = pos + dir * tResult;
                 blockPos += normal * 0.01f;
-
-                var chunkPos = new Int3((int)blockPos.X, (int)blockPos.Y, (int)blockPos.Z) / Chunk.Size;
-                world.ChunkManager.SetBlock(chunkPos, blockPos, BlockIDs.Stone, VoxelOctree.SizeOneDepth + depth);
+                world.ChunkManager.SetBlock(blockPos, BlockIDs.Stone, depth);
                 BlockPlaceIssued = false;
             }
         }
@@ -69,7 +72,7 @@ public partial class TestInteractionSystem(IInputHandler inputHandler) : ASystem
 
     static bool BlockPlaceIssued = false;
     static bool BlockBreakIssued = false;
-    static int depth = 0;
+    static int depth = VoxelOctree.SizeOneDepth;
 
     [RegisterKeyAction("place_block")]
     public static KeyActionInfo PlaceBlock => new()
@@ -100,7 +103,7 @@ public partial class TestInteractionSystem(IInputHandler inputHandler) : ASystem
         Action = (status, _) =>
         {
             if (status == KeyStatus.KeyDown)
-                depth = Math.Min(depth + 1, VoxelOctree.MaxSplitCount);
+                depth = Math.Min(depth + 1, VoxelOctree.MaximumTotalDivision);
         }
     };
 

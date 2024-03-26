@@ -352,8 +352,6 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
     public ref Node GetOrCreateNode(Vector3 pos, int depth)
     {
-        pos = new Vector3(pos.X % Dimensions, pos.Y % Dimensions, pos.Z % Dimensions);
-
         ref var node = ref GetRootNode();
 
         while (node.Depth != depth)

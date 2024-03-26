@@ -107,7 +107,7 @@ public class Chunk : IDisposable
             throw new ArgumentException("Block to place does not exist", nameof(blockId));
         }
 
-        if (depth < VoxelOctree.SizeOneDepth || !_blockHandler.IsBlockSplittable(blockId))
+        if (depth < VoxelOctree.SizeOneDepth && !_blockHandler.IsBlockSplittable(blockId))
         {
             throw new ArgumentException("Invalid block placement depth", nameof(depth));
         }
@@ -116,6 +116,11 @@ public class Chunk : IDisposable
         {
             throw new ArgumentException("Invalid block placement rotation", nameof(rotation));
         }
+        
+        blockPos = new Vector3(blockPos.X % Size, blockPos.Y % Size, blockPos.Z % Size);
+        blockPos.X = blockPos.X < 0 ? blockPos.X + Size : blockPos.X;
+        blockPos.Y = blockPos.Y < 0 ? blockPos.Y + Size : blockPos.Y;
+        blockPos.Z = blockPos.Z < 0 ? blockPos.Z + Size : blockPos.Z;
 
         using var octreeLock = Octree.AcquireWriteLock();
 
