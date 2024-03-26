@@ -155,6 +155,7 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
         ArrayPool<WriteDescriptorSet>.Shared.Return(writeArray);
     }
 
+    const int AdditionalDescriptorSets = 2;
     private unsafe void RecreateDescriptor(WorldIntermediateData worldData, int octreesLength)
     {
         // We need to allocate 2 additional sets for the bvh buffer (node and index)
@@ -169,7 +170,7 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
         var poolSize = new DescriptorPoolSize()
         {
             Type = DescriptorType.StorageBuffer,
-            DescriptorCount = alignedOctreesLength
+            DescriptorCount = alignedOctreesLength + AdditionalDescriptorSets
         };
 
         var createInfo = new DescriptorPoolCreateInfo()
