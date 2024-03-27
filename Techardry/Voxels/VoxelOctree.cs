@@ -367,6 +367,25 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         return ref node;
     }
 
+    public ref Node TryGetNode(Vector3 pos, int depth, out bool found)
+    {
+        ref var node = ref GetRootNode();
+        found = false;
+
+        while (node.Depth != depth)
+        {
+            if (node.IsLeaf)
+            {
+                return ref Unsafe.NullRef<Node>();
+            }
+
+            node = ref GetChildNode(ref node, pos);
+        }
+        
+        found = true;
+        return ref node;
+    }
+
     private ref Node DeleteChildren(ref Node node)
     {
         if (node.IsLeaf) return ref node;
