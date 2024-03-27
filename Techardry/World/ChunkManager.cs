@@ -366,6 +366,40 @@ public class ChunkManager : IDisposable
 
         ChunkUpdated(chunkPos);
     }
+    
+    public Identification GetBlockId(Vector3 blockPos, int depth)
+    {
+        Int3 chunkPos = new((int)blockPos.X / Chunk.Size, (int)blockPos.Y / Chunk.Size, (int)blockPos.Z / Chunk.Size);
+        if(blockPos.X < 0)
+            chunkPos.X -= 1;
+        if(blockPos.Y < 0)
+            chunkPos.Y -= 1;
+        if(blockPos.Z < 0)
+            chunkPos.Z -= 1;
+        
+        return GetBlockId(chunkPos, blockPos, depth);
+    }
+    
+    public Identification GetBlockId(Int3 chunkPos, Vector3 blockPos, int depth)
+    {
+        if (!_chunks.TryGetValue(chunkPos, out var chunkEntry))
+        {
+            Log.Error("Chunk to get block in was not found: {ChunkPos}", chunkPos);
+            return BlockIDs.Air;
+        }
+
+        var (chunk, _, _) = chunkEntry;
+        ref var node = ref chunk.Octree.TryGetNode(blockPos, depth, out bool found);
+        
+        if (found)
+        {
+            var data = chunk.Octree.GetVoxelData(ref node);
+            //Log.Information("Found ID: {Id}", data.Id);
+            return data.Id;
+        }
+
+        return BlockIDs.Air;
+    }
 
     record ChunkEntry(Chunk Chunk, StaticHandle StaticHandle, TypedIndex Shape);
 

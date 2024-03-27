@@ -20,7 +20,7 @@ namespace Techardry.Systems.Common;
 public partial class TestInteractionSystem : ASystem
 {
     [ComponentQuery] private ComponentQuery<object, (Position, Camera)> _query = new();
-
+    static Identification currentBlock = BlockIDs.Stone;
     public override void Setup(SystemManager systemManager)
     {
         _query.Setup(this);
@@ -38,12 +38,22 @@ public partial class TestInteractionSystem : ASystem
             var hit = world.PhysicsWorld.RayCast(pos, dir, 100,
                 out var tResult, out _, out var normal);
             var blockPos = pos + dir * tResult;
+            
+            var blockId = BlockIDs.Air;
+            if (hit)
+            {
+                blockId = world.ChunkManager.GetBlockId(blockPos, depth);
+                Log.Debug("Hit successful at {BlockPos} with ID {BlockId}", blockPos, blockId.Object.ToString());                
+            }
+            
 
             if (Engine.Desktop?.Root is IngameUi ui)
             {
                 ui.SetBlockPos(hit ? blockPos : new Vector3(float.NaN));
                 ui.SetPlayerPos(pos);
                 ui.SetBlockSize(Math.Pow(2, -(depth - VoxelOctree.SizeOneDepth)));
+                ui.SetCurrentBlockView(blockId);
+                ui.SetCurrentBlockHolding(currentBlock);
             }
 
             if (!hit)
@@ -64,7 +74,7 @@ public partial class TestInteractionSystem : ASystem
             if (BlockPlaceIssued)
             {
                 blockPos += normal * 0.01f;
-                world.ChunkManager.SetBlock(blockPos, BlockIDs.Stone, depth);
+                world.ChunkManager.SetBlock(blockPos, currentBlock, depth);
                 BlockPlaceIssued = false;
             }
         }
@@ -73,6 +83,7 @@ public partial class TestInteractionSystem : ASystem
     static bool BlockPlaceIssued = false;
     static bool BlockBreakIssued = false;
     static int depth = VoxelOctree.SizeOneDepth;
+
 
     [RegisterKeyAction("place_block")]
     public static KeyActionInfo PlaceBlock => new()
@@ -115,6 +126,21 @@ public partial class TestInteractionSystem : ASystem
         {
             if (status == KeyStatus.KeyDown)
                 depth = Math.Max(depth - 1, 0);
+        }
+    };
+    
+    [RegisterKeyAction("change_build_block")]
+    public static KeyActionInfo ChangeBuildBlock => new()
+    {
+        Key = Key.B,
+        Action = (status, _) =>
+        {
+            if (status == KeyStatus.KeyDown)
+            {
+                if (currentBlock == BlockIDs.Stone) currentBlock = BlockIDs.Dirt;
+                else if (currentBlock == BlockIDs.Dirt) currentBlock = BlockIDs.Grass;
+                else if (currentBlock == BlockIDs.Grass) currentBlock = BlockIDs.Stone;
+            }
         }
     };
 
