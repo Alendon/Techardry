@@ -389,9 +389,7 @@ public class ChunkManager : IDisposable
         }
 
         var (chunk, _, _) = chunkEntry;
-        ref var node = ref chunk.Octree.GetNode(blockPos, VoxelOctree.MaxDepth);
-
-        return chunk.Octree.GetVoxelData(ref node).Id;
+        return chunk.GetBlockId(blockPos);
     }
 
     record ChunkEntry(Chunk Chunk, StaticHandle StaticHandle, TypedIndex Shape);
