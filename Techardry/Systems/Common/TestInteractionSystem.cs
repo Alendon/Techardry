@@ -42,8 +42,7 @@ public partial class TestInteractionSystem : ASystem
             var blockId = BlockIDs.Air;
             if (hit)
             {
-                blockId = world.ChunkManager.GetBlockId(blockPos, depth);
-                Log.Debug("Hit successful at {BlockPos} with ID {BlockId}", blockPos, blockId.Object.ToString());                
+                blockId = world.ChunkManager.GetBlockId(blockPos - normal * 0.01f);
             }
             
 

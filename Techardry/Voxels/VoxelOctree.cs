@@ -367,29 +367,27 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         return ref node;
     }
 
-    public ref Node TryGetNode(Vector3 pos, int depth, out bool found)
+    public ref Node GetNode(Vector3 pos, int maxDepth)
     {
         ref var node = ref GetRootNode();
-        found = false;
 
-        while (node.Depth != depth)
+        while (node.Depth <= maxDepth)
         {
             if (node.IsLeaf)
             {
-                return ref Unsafe.NullRef<Node>();
+                break;
             }
 
             node = ref GetChildNode(ref node, pos);
         }
-        
-        found = true;
+
         return ref node;
     }
 
     private ref Node DeleteChildren(ref Node node)
     {
         if (node.IsLeaf) return ref node;
-        
+
         Span<byte> pathToNode = stackalloc byte[node.Depth];
         StorePathToNode(ref node, pathToNode);
 
@@ -398,17 +396,17 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         {
             ref var child = ref GetChildNode(ref node, i);
             DeleteChildren(ref child);
-            
+
             node = ref RestoreFromPath(pathToNode);
             child = ref GetChildNode(ref node, i);
-            
+
             DeleteData(ref child);
         }
-        
+
         //delete the children
         DeleteChildrenInternal(ref node);
         node = ref RestoreFromPath(pathToNode);
-        
+
         return ref node;
     }
 
@@ -421,8 +419,8 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         {
             return;
         }
-        
-        if(!node.IsEmpty)
+
+        if (!node.IsEmpty)
             throw new Exception("Node is not empty");
 
         for (byte i = 0; i < ChildCount; i++)
@@ -481,15 +479,15 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
         NodeCount -= ChildCount;
     }
-    
+
     private void StorePathToNode(ref Node node, Span<byte> pathToNode)
     {
         ref var current = ref node;
         while (true)
         {
-            if(current.ParentIndex == InvalidIndex)
+            if (current.ParentIndex == InvalidIndex)
                 break;
-            
+
             pathToNode[current.Depth - 1] = current.ParentChildIndex;
             current = ref GetParentNode(ref current);
         }

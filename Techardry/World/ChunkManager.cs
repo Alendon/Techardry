@@ -250,8 +250,8 @@ public class ChunkManager : IDisposable
             _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
 
             ChunkRemoved(chunkToUnload);
-            
-            if(!_parentWorld.IsServerWorld)
+
+            if (!_parentWorld.IsServerWorld)
                 InputDataManager?.RemoveKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkToUnload);
         }
 
@@ -270,8 +270,8 @@ public class ChunkManager : IDisposable
             _activeChunkCreations.TryRemove(toLoad.ChunkPosition, out _);
 
             ChunkAdded(chunkPosition);
-            
-            if(!_parentWorld.IsServerWorld)
+
+            if (!_parentWorld.IsServerWorld)
                 InputDataManager?.SetKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition, chunk.Octree);
         }
 
@@ -305,8 +305,8 @@ public class ChunkManager : IDisposable
                 _chunks[chunkPosition] = new ChunkEntry(chunk, staticHandle, shape);
 
                 ChunkUpdated(chunkPosition);
-                
-                if(!_parentWorld.IsServerWorld)
+
+                if (!_parentWorld.IsServerWorld)
                     InputDataManager?.SetKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition, octree);
             }
         }
@@ -341,13 +341,13 @@ public class ChunkManager : IDisposable
         BlockRotation rotation = BlockRotation.None)
     {
         Int3 chunkPos = new((int)blockPos.X / Chunk.Size, (int)blockPos.Y / Chunk.Size, (int)blockPos.Z / Chunk.Size);
-        if(blockPos.X < 0)
+        if (blockPos.X < 0)
             chunkPos.X -= 1;
-        if(blockPos.Y < 0)
+        if (blockPos.Y < 0)
             chunkPos.Y -= 1;
-        if(blockPos.Z < 0)
+        if (blockPos.Z < 0)
             chunkPos.Z -= 1;
-        
+
         SetBlock(chunkPos, blockPos, blockId, depth, rotation);
     }
 
@@ -366,21 +366,21 @@ public class ChunkManager : IDisposable
 
         ChunkUpdated(chunkPos);
     }
-    
-    public Identification GetBlockId(Vector3 blockPos, int depth)
+
+    public Identification GetBlockId(Vector3 blockPos)
     {
         Int3 chunkPos = new((int)blockPos.X / Chunk.Size, (int)blockPos.Y / Chunk.Size, (int)blockPos.Z / Chunk.Size);
-        if(blockPos.X < 0)
+        if (blockPos.X < 0)
             chunkPos.X -= 1;
-        if(blockPos.Y < 0)
+        if (blockPos.Y < 0)
             chunkPos.Y -= 1;
-        if(blockPos.Z < 0)
+        if (blockPos.Z < 0)
             chunkPos.Z -= 1;
-        
-        return GetBlockId(chunkPos, blockPos, depth);
+
+        return GetBlockId(chunkPos, blockPos);
     }
-    
-    public Identification GetBlockId(Int3 chunkPos, Vector3 blockPos, int depth)
+
+    public Identification GetBlockId(Int3 chunkPos, Vector3 blockPos)
     {
         if (!_chunks.TryGetValue(chunkPos, out var chunkEntry))
         {
@@ -389,16 +389,9 @@ public class ChunkManager : IDisposable
         }
 
         var (chunk, _, _) = chunkEntry;
-        ref var node = ref chunk.Octree.TryGetNode(blockPos, depth, out bool found);
-        
-        if (found)
-        {
-            var data = chunk.Octree.GetVoxelData(ref node);
-            //Log.Information("Found ID: {Id}", data.Id);
-            return data.Id;
-        }
+        ref var node = ref chunk.Octree.GetNode(blockPos, VoxelOctree.MaxDepth);
 
-        return BlockIDs.Air;
+        return chunk.Octree.GetVoxelData(ref node).Id;
     }
 
     record ChunkEntry(Chunk Chunk, StaticHandle StaticHandle, TypedIndex Shape);

@@ -178,7 +178,7 @@ public sealed class TechardryMod : IMod
     /// </summary>
     public void GameLoop()
     {
-        Engine.Desktop!.Root = new IngameUi();
+        Engine.Desktop!.Root = new IngameUi(ModManager);
         
         //If this is a client game (client or local) wait until the player is connected
         while (MathHelper.IsBitSet((int)Engine.GameType, (int)GameType.Client) &&
