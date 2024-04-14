@@ -1,5 +1,4 @@
-﻿using System;
-using MintyCore.Graphics;
+﻿using MintyCore.Graphics;
 using MintyCore.Graphics.Managers;
 using MintyCore.Graphics.Render;
 using MintyCore.Graphics.Render.Data;

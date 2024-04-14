@@ -1,35 +1,22 @@
 ﻿using MintyCore;
+using MintyCore.Input;
 using MintyCore.Registries;
-using Silk.NET.Input;
+using Silk.NET.GLFW;
 
 namespace Techardry.Utils;
 
 internal static class KeyActions
 {
-    public static int RenderMode = 3;
-    [RegisterKeyAction("switch_render_mode")]
-    public static KeyActionInfo SwitchRenderMode => new()
+    [RegisterInputAction("back_to_main_menu")]
+    internal static InputActionDescription BackToMainMenu => new()
     {
-        Action = (state, _) =>
+        DefaultInput = Keys.Escape,
+        ActionCallback = parameters =>
         {
-            if (state is KeyStatus.KeyDown)
-            {
-                RenderMode %= 3;
-                RenderMode++;
-            }
-        },
-        Key = Key.K,
-        MouseButton = null
-    };
-    
-    [RegisterKeyAction("back_to_main_menu")]
-    internal static KeyActionInfo BackToMainMenu => new()
-    {
-        Key = Key.Escape,
-        Action = (state, _) =>
-        {
-            if (state == KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
                 Engine.ShouldStop = true;
+            
+            return InputActionResult.Stop;
         }
     };
 }

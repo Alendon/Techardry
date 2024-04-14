@@ -1,11 +1,8 @@
-﻿using System;
-using System.Numerics;
-using MintyCore.Graphics;
+﻿using MintyCore.Graphics;
 using MintyCore.Graphics.Managers.Implementations;
 using MintyCore.Graphics.Utils;
 using MintyCore.Registries;
 using Serilog;
-using Serilog.Core;
 using Silk.NET.Vulkan;
 using DescriptorSetIDs = MintyCore.Identifications.DescriptorSetIDs;
 using ShaderIDs = Techardry.Identifications.ShaderIDs;

@@ -1,9 +1,7 @@
-﻿using System;
-using MintyCore.ECS;
+﻿using MintyCore.ECS;
 using MintyCore.Network;
 using MintyCore.Registries;
 using MintyCore.Utils;
-using Serilog.Core;
 using Techardry.Identifications;
 using Techardry.Utils;
 using Techardry.World;

@@ -1,26 +1,19 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
-using System.Threading;
 using JetBrains.Annotations;
 using MintyCore;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Graphics;
-using MintyCore.Graphics.Managers;
 using MintyCore.Graphics.Render.Managers;
 using MintyCore.Modding;
 using MintyCore.Network;
-using MintyCore.UI;
 using MintyCore.Utils;
 using MintyCore.Utils.Maths;
-using Myra;
 using Serilog;
-using Serilog.Core;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
 using Techardry.Registries;
-using Techardry.UI;
 using ArchetypeIDs = Techardry.Identifications.ArchetypeIDs;
 using Constants = MintyCore.Utils.Constants;
 using TextureIDs = Techardry.Identifications.TextureIDs;
@@ -30,7 +23,6 @@ namespace Techardry;
 [UsedImplicitly]
 public sealed class TechardryMod : IMod
 {
-    public ushort ModId { get; set; }
     private string ModName => "Techardry";
     public required IVulkanEngine VulkanEngine { [UsedImplicitly] init; private get; }
     public required IPlayerHandler PlayerHandler { [UsedImplicitly] init; private get; }
@@ -38,7 +30,6 @@ public sealed class TechardryMod : IMod
     public required INetworkHandler NetworkHandler { [UsedImplicitly] init; private get; }
     public required IModManager ModManager { [UsedImplicitly] init; private get; }
     public required IRenderManager RenderManager { [UsedImplicitly] init; private get; }
-    public required ITextureManager TextureManager { [UsedImplicitly] init; private get; }
 
     public int ServerRenderDistance { get; set; } = 2;
 
@@ -50,7 +41,6 @@ public sealed class TechardryMod : IMod
     public void PreLoad()
     {
         Engine.Timer.TargetTicksPerSecond = 60;
-        Engine.Timer.TargetFps = int.MaxValue;
         Instance = this;
         VulkanEngine.AddDeviceExtension(ModName, "VK_KHR_shader_non_semantic_info", true);
         VulkanEngine.AddDeviceFeatureExension(new PhysicalDeviceVulkan12Features()
@@ -88,15 +78,9 @@ public sealed class TechardryMod : IMod
 
         RenderManager.StartRendering();
         RenderManager.MaxFrameRate = 100;
-        MainMenu? mainMenu = null;
+        
         while (!Engine.Stop)
         {
-            if (Engine.Desktop?.Root is null)
-            {
-                mainMenu = new MainMenu();
-                Engine.Desktop!.Root = mainMenu;
-            }
-
             Engine.Timer.Tick();
 
 
@@ -104,26 +88,16 @@ public sealed class TechardryMod : IMod
             {
                 Engine.DeltaTime = deltaTime;
             }
-
-            Engine.Desktop.Render();
-
-            if (mainMenu?.Quit is true)
+            
+            if (/*mainMenu?.Quit is true*/ false)
             {
                 Engine.ShouldStop = true;
                 break;
             }
 
-            var cb = VulkanEngine.GetSingleTimeCommandBuffer();
-            TextureManager.ApplyChanges(cb);
-            VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
-
-            var renderer = (IUiRenderer)MyraEnvironment.Platform.Renderer;
-            renderer.ApplyRenderData();
-
-
             Engine.Window!.DoEvents(Engine.DeltaTime);
 
-            if (mainMenu?.PlayLocal is true)
+            if (false) // mainMenu?.PlayLocal is true)
             {
                 Engine.SetGameType(GameType.Local);
 
@@ -178,7 +152,7 @@ public sealed class TechardryMod : IMod
     /// </summary>
     public void GameLoop()
     {
-        Engine.Desktop!.Root = new IngameUi(ModManager);
+        //Engine.Desktop!.Root = new IngameUi(ModManager);
         
         //If this is a client game (client or local) wait until the player is connected
         while (MathHelper.IsBitSet((int)Engine.GameType, (int)GameType.Client) &&
@@ -207,26 +181,16 @@ public sealed class TechardryMod : IMod
             
             NetworkHandler.Update();
 
-            if (sw.Elapsed.TotalSeconds > 1 && Engine.Desktop?.Root is IngameUi ui)
+            if (false) //sw.Elapsed.TotalSeconds > 1 && Engine.Desktop?.Root is IngameUi ui)
             {
-                ui.SetFps(RenderManager.FrameRate);
+                //ui.SetFps(RenderManager.FrameRate);
                 sw.Restart();
             }
-            
-            Engine.Desktop?.Render();
-            
-            var cb = VulkanEngine.GetSingleTimeCommandBuffer();
-            TextureManager.ApplyChanges(cb);
-            VulkanEngine.ExecuteSingleTimeCommandBuffer(cb);
-
-            var renderer = (IUiRenderer)MyraEnvironment.Platform.Renderer;
-            renderer.ApplyRenderData();
 
             if (simulationEnable)
                 Engine.Tick++;
         }
 
-        Engine.Desktop!.Root = null;
         Engine.CleanupGame();
     }
 

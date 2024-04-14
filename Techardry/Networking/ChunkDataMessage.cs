@@ -1,10 +1,8 @@
-﻿using System;
-using JetBrains.Annotations;
+﻿using JetBrains.Annotations;
 using MintyCore.ECS;
 using MintyCore.Network;
 using MintyCore.Registries;
 using MintyCore.Utils;
-using Serilog.Core;
 using Techardry.Blocks;
 using Techardry.Identifications;
 using Techardry.Render;

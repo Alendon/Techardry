@@ -1,15 +1,15 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Numerics;
 using BepuUtilities;
 using MintyCore;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Graphics.Render.Managers;
+using MintyCore.Input;
 using MintyCore.Registries;
 using MintyCore.SystemGroups;
 using MintyCore.Utils;
-using Silk.NET.Input;
+using Silk.NET.GLFW;
 using Techardry.Components.Client;
 using Techardry.Identifications;
 using Techardry.Render;
@@ -82,124 +82,137 @@ public partial class InputCamera(
         }
     }
 
-    [RegisterKeyAction("Move_Forward")]
-    public static KeyActionInfo MoveForward => new KeyActionInfo()
+    [RegisterInputAction("Move_Forward")]
+    public static InputActionDescription MoveForward => new InputActionDescription()
     {
-        Key = Key.W,
-        Action = (state, _) =>
+        DefaultInput = Keys.W,
+        ActionCallback = parameters =>
         {
-            if (state is KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
             {
                 _input.Z = Math.Clamp(_input.Z + 1, -1, 1);
             }
 
-            if (state is KeyStatus.KeyUp)
+            if (parameters.InputAction is InputAction.Release)
             {
                 _input.Z = Math.Clamp(_input.Z - 1, -1, 1);
             }
+
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("Move_Backward")]
-    public static KeyActionInfo MoveBackwards => new KeyActionInfo()
+    [RegisterInputAction("Move_Backward")]
+    public static InputActionDescription MoveBackwards => new InputActionDescription()
     {
-        Key = Key.S,
-        Action = (state, _) =>
+        DefaultInput = Keys.S,
+        ActionCallback = parameters =>
         {
-            if (state is KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
             {
                 _input.Z = Math.Clamp(_input.Z - 1, -1, 1);
             }
 
-            if (state is KeyStatus.KeyUp)
+            if (parameters.InputAction is InputAction.Release)
             {
                 _input.Z = Math.Clamp(_input.Z + 1, -1, 1);
             }
+            
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("Move_Left")]
-    public static KeyActionInfo MoveLeft => new KeyActionInfo()
+    [RegisterInputAction("Move_Left")]
+    public static InputActionDescription MoveLeft => new InputActionDescription()
     {
-        Key = Key.A,
-        Action = (state, _) =>
+        DefaultInput = Keys.A,
+        ActionCallback = parameters =>
         {
-            if (state is KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
             {
                 _input.X = Math.Clamp(_input.X - 1, -1, 1);
             }
 
-            if (state is KeyStatus.KeyUp)
+            if (parameters.InputAction is InputAction.Release)
             {
                 _input.X = Math.Clamp(_input.X + 1, -1, 1);
             }
+            
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("Move_Right")]
-    public static KeyActionInfo MoveRight => new KeyActionInfo()
+    [RegisterInputAction("Move_Right")]
+    public static InputActionDescription MoveRight => new InputActionDescription()
     {
-        Key = Key.D,
-        Action = (state, _) =>
+        DefaultInput = Keys.D,
+        ActionCallback = parameters =>
         {
-            if (state is KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
             {
                 _input.X = Math.Clamp(_input.X + 1, -1, 1);
             }
 
-            if (state is KeyStatus.KeyUp)
+            if (parameters.InputAction is InputAction.Release)
             {
                 _input.X = Math.Clamp(_input.X - 1, -1, 1);
             }
+            
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("Move_Up")]
-    public static KeyActionInfo MoveUp => new KeyActionInfo()
+    [RegisterInputAction("Move_Up")]
+    public static InputActionDescription MoveUp => new InputActionDescription()
     {
-        Key = Key.Space,
-        Action = (state, _) =>
+        DefaultInput = Keys.Space,
+        ActionCallback = parameters =>
         {
-            if (state is KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
             {
                 _input.Y = Math.Clamp(_input.Y + 1, -1, 1);
             }
 
-            if (state is KeyStatus.KeyUp)
+            if (parameters.InputAction is InputAction.Release)
             {
                 _input.Y = Math.Clamp(_input.Y - 1, -1, 1);
             }
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("Move_Down")]
-    public static KeyActionInfo MoveDown => new KeyActionInfo()
+    [RegisterInputAction("Move_Down")]
+    public static InputActionDescription MoveDown => new InputActionDescription()
     {
-        Key = Key.ShiftLeft,
-        Action = (state, _) =>
+        DefaultInput = Keys.ShiftLeft,
+        ActionCallback = parameters =>
         {
-            if (state is KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
             {
                 _input.Y = Math.Clamp(_input.Y - 1, -1, 1);
             }
 
-            if (state is KeyStatus.KeyUp)
+            if (parameters.InputAction is InputAction.Release)
             {
                 _input.Y = Math.Clamp(_input.Y + 1, -1, 1);
             }
+            
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("Mouse_Lock")]
-    public static KeyActionInfo MouseLock => new KeyActionInfo()
+    [RegisterInputAction("Mouse_Lock")]
+    public static InputActionDescription MouseLock => new InputActionDescription()
     {
-        Key = Key.F,
-        Action = (state, _) =>
+        DefaultInput = Keys.F,
+        ActionCallback = parameters =>
         {
-            if (state is KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
             {
                 if (Engine.Window != null) Engine.Window.MouseLocked = !Engine.Window.MouseLocked;
             }
+            
+            return InputActionResult.Stop;
         }
     };
 

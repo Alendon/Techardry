@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.Linq;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using JetBrains.Annotations;
 using MintyCore.Graphics;
@@ -10,7 +7,6 @@ using MintyCore.Graphics.VulkanObjects;
 using MintyCore.Identifications;
 using MintyCore.Utils;
 using RectpackSharp;
-using Serilog.Core;
 using Silk.NET.Vulkan;
 
 namespace Techardry.Render;

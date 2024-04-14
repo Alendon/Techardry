@@ -1,15 +1,11 @@
-﻿using System.Numerics;
-using MintyCore;
-using MintyCore.Components.Common;
+﻿using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.Input;
 using MintyCore.Registries;
 using MintyCore.Utils;
-using Serilog;
-using Silk.NET.Input;
+using Silk.NET.GLFW;
 using Techardry.Components.Client;
 using Techardry.Identifications;
-using Techardry.UI;
-using Techardry.Utils;
 using Techardry.Voxels;
 using Techardry.World;
 
@@ -46,14 +42,15 @@ public partial class TestInteractionSystem : ASystem
             }
             
 
-            if (Engine.Desktop?.Root is IngameUi ui)
+            //TODO reimpliment this
+            /*if (Engine.Desktop?.Root is IngameUi ui)
             {
                 ui.SetBlockPos(hit ? blockPos : new Vector3(float.NaN));
                 ui.SetPlayerPos(pos);
                 ui.SetBlockSize(Math.Pow(2, -(depth - VoxelOctree.SizeOneDepth)));
                 ui.SetCurrentBlockView(blockId);
                 ui.SetCurrentBlockHolding(currentBlock);
-            }
+            }*/
 
             if (!hit)
             {
@@ -84,62 +81,72 @@ public partial class TestInteractionSystem : ASystem
     static int depth = VoxelOctree.SizeOneDepth;
 
 
-    [RegisterKeyAction("place_block")]
-    public static KeyActionInfo PlaceBlock => new()
+    [RegisterInputAction("place_block")]
+    public static InputActionDescription PlaceBlock => new()
     {
-        MouseButton = MouseButton.Right,
-        Action = (_, status) =>
+        DefaultInput = MouseButton.Right,
+        ActionCallback = parameters =>
         {
-            if (status == MouseButtonStatus.MouseButtonDown)
+            if (parameters.InputAction is InputAction.Press)
                 BlockPlaceIssued = true;
+
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("break_block")]
-    public static KeyActionInfo BreakBlock => new()
+    [RegisterInputAction("break_block")]
+    public static InputActionDescription BreakBlock => new()
     {
-        MouseButton = MouseButton.Left,
-        Action = (_, status) =>
+        DefaultInput = MouseButton.Left,
+        ActionCallback = parameters =>
         {
-            if (status == MouseButtonStatus.MouseButtonDown)
+            if (parameters.InputAction is InputAction.Press)
                 BlockBreakIssued = true;
+            
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("increase_depth")]
-    public static KeyActionInfo IncreaseDepth => new()
+    [RegisterInputAction("increase_depth")]
+    public static InputActionDescription IncreaseDepth => new()
     {
-        Key = Key.KeypadAdd,
-        Action = (status, _) =>
+        DefaultInput = Keys.KeypadAdd,
+        ActionCallback = parameters =>
         {
-            if (status == KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
                 depth = Math.Min(depth + 1, VoxelOctree.MaximumTotalDivision);
+            
+            return InputActionResult.Stop;
         }
     };
 
-    [RegisterKeyAction("decrease_depth")]
-    public static KeyActionInfo DecreaseDepth => new()
+    [RegisterInputAction("decrease_depth")]
+    public static InputActionDescription DecreaseDepth => new()
     {
-        Key = Key.KeypadSubtract,
-        Action = (status, _) =>
+        DefaultInput = Keys.KeypadSubtract,
+        ActionCallback = parameters =>
         {
-            if (status == KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
                 depth = Math.Max(depth - 1, 0);
+            
+            return InputActionResult.Stop;
         }
     };
     
-    [RegisterKeyAction("change_build_block")]
-    public static KeyActionInfo ChangeBuildBlock => new()
+    [RegisterInputAction("change_build_block")]
+    public static InputActionDescription ChangeBuildBlock => new()
     {
-        Key = Key.B,
-        Action = (status, _) =>
+        DefaultInput = Keys.B,
+        ActionCallback = parameters =>
         {
-            if (status == KeyStatus.KeyDown)
+            if (parameters.InputAction is InputAction.Press)
             {
                 if (currentBlock == BlockIDs.Stone) currentBlock = BlockIDs.Dirt;
                 else if (currentBlock == BlockIDs.Dirt) currentBlock = BlockIDs.Grass;
                 else if (currentBlock == BlockIDs.Grass) currentBlock = BlockIDs.Stone;
             }
+            
+            return InputActionResult.Stop;
         }
     };
 
