@@ -8,6 +8,7 @@ using MintyCore.Graphics;
 using MintyCore.Graphics.Render.Managers;
 using MintyCore.Modding;
 using MintyCore.Network;
+using MintyCore.UI;
 using MintyCore.Utils;
 using MintyCore.Utils.Maths;
 using Serilog;
@@ -30,6 +31,7 @@ public sealed class TechardryMod : IMod
     public required INetworkHandler NetworkHandler { [UsedImplicitly] init; private get; }
     public required IModManager ModManager { [UsedImplicitly] init; private get; }
     public required IRenderManager RenderManager { [UsedImplicitly] init; private get; }
+    public required IViewLocator ViewLocator { [UsedImplicitly] init; private get; }
 
     public int ServerRenderDistance { get; set; } = 2;
 
@@ -78,6 +80,8 @@ public sealed class TechardryMod : IMod
 
         RenderManager.StartRendering();
         RenderManager.MaxFrameRate = 100;
+
+        ViewLocator.SetRootView(ViewIDs.Main);
         
         while (!Engine.Stop)
         {
