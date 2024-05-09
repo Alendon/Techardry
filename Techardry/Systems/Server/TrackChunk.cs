@@ -1,7 +1,7 @@
 ﻿using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.ECS.SystemGroups;
 using MintyCore.Registries;
-using MintyCore.SystemGroups;
 using MintyCore.Utils;
 using Techardry.Components.Common;
 using Techardry.Identifications;

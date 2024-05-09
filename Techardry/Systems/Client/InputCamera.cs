@@ -4,10 +4,10 @@ using BepuUtilities;
 using MintyCore;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.ECS.SystemGroups;
 using MintyCore.Graphics.Render.Managers;
 using MintyCore.Input;
 using MintyCore.Registries;
-using MintyCore.SystemGroups;
 using MintyCore.Utils;
 using Silk.NET.GLFW;
 using Techardry.Components.Client;
@@ -22,7 +22,8 @@ namespace Techardry.Systems.Client;
 public partial class InputCamera(
     IPlayerHandler playerHandler,
     IInputHandler inputHandler,
-    IInputDataManager renderInputData) : ASystem
+    IInputDataManager renderInputData,
+    IWindowHandler windowHandler) : ASystem
 {
     [ComponentQuery] private readonly ComponentQuery<(Camera, InputComponent), Position> _cameraQuery = new();
 
@@ -51,7 +52,7 @@ public partial class InputCamera(
             ref var camera = ref currentEntity.GetCamera();
             ref var input = ref currentEntity.GetInputComponent();
 
-            if (Engine.Window is { MouseLocked: true })
+            if (windowHandler.GetMainWindow().MouseLocked)
             {
                 float deltaTime = (float)_stopwatch.Elapsed.TotalSeconds;
                 _stopwatch.Restart();
@@ -202,14 +203,15 @@ public partial class InputCamera(
     };
 
     [RegisterInputAction("Mouse_Lock")]
-    public static InputActionDescription MouseLock => new InputActionDescription()
+    public static InputActionDescription MouseLock(IWindowHandler windowHandler) => new()
     {
         DefaultInput = Keys.F,
         ActionCallback = parameters =>
         {
             if (parameters.InputAction is InputAction.Press)
             {
-                if (Engine.Window != null) Engine.Window.MouseLocked = !Engine.Window.MouseLocked;
+                var window = windowHandler.GetMainWindow();
+                window.MouseLocked = !window.MouseLocked;
             }
             
             return InputActionResult.Stop;

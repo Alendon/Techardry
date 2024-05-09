@@ -1,0 +1,33 @@
+﻿<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Design.PreviewWith>
+        <Border Padding="20">
+            <StackPanel Classes="listPanel">
+                <Button>First</Button>
+                <Button>Second Long Text</Button>
+                <TextBox>Hey</TextBox>
+                <StackPanel Orientation="Horizontal">
+                    <Button> One</Button>
+                    <Button> Two</Button>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Design.PreviewWith>
+
+
+    <Style Selector="StackPanel.listPanel Button">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="TextBlock.TextAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="StackPanel.listPanel StackPanel">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+
+
+    <Style Selector="StackPanel.listPanel TextBox">
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="TextBlock.TextAlignment" Value="Center" />
+    </Style>
+
+</Styles>

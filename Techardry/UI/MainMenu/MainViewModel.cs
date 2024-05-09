@@ -1,3 +1,5 @@
+using MintyCore;
+using MintyCore.GameStates;
 using MintyCore.Registries;
 using MintyCore.UI;
 using MintyCore.Utils;
@@ -8,6 +10,8 @@ namespace Techardry.UI.MainMenu;
 [RegisterViewModel("main")]
 public class MainViewModel : ViewModelNavigator
 {
+    public required IGameStateMachine GameStateMachine { init; private get; }
+    
     public MainViewModel(IViewLocator viewLocator) : base(viewLocator)
     {
     }
@@ -20,5 +24,6 @@ public class MainViewModel : ViewModelNavigator
 
     public override void Quit()
     {
+        GameStateMachine.Stop();
     }
 }

@@ -7,28 +7,43 @@
              x:Class="Techardry.UI.MainMenu.MainMenuView"
              x:DataType="mainMenu:MainMenuViewModel"
              Background="Transparent">
-    
+
+    <UserControl.Styles>
+        <StyleInclude Source="avares://Techardry/UI/Styles/CeneteredStackPanel.axaml"></StyleInclude>
+    </UserControl.Styles>
+
     <Design.DesignStyle>
         <Style Selector="mainMenu|MainMenuView">
             <Setter Property="Background" Value="Black" />
         </Style>
     </Design.DesignStyle>
-    
+
     <Design.DataContext>
         <mainMenu:MainMenuViewModel />
     </Design.DataContext>
-    
-    <Grid RowDefinitions="Auto,*,Auto">
 
-        <Button HorizontalAlignment="Center"
-            Grid.Row="0" Content="New Game" Command="{Binding NewGameCommand}" />
-        <Button Grid.Row="1" Content="Options" 
-                Command="{Binding OptionsCommand}"
-                CommandParameter="{Binding $self}"/>
-                
-        <Button Grid.Row="2" Content="Exit" Command="{Binding ExitCommand}" />
-        
-    </Grid>
-    
-    
+    <Panel>
+        <StackPanel
+            Classes="listPanel"
+            Orientation="Vertical"
+            VerticalAlignment="Top"
+            HorizontalAlignment="Left"
+            Width="200"
+            Margin="50"
+            Spacing="0,0,0,10">
+            <Button Name="Single" Command="{Binding SingleplayerCommand}">Singleplayer</Button>
+            <Button Command="{Binding MultiplayerCommand}">Multiplayer</Button>
+            <Button Command="{Binding OptionsCommand}" ToolTip.Placement="Center">
+                Options
+                <ToolTip.Tip>
+                    <TextBlock>Not Implemented Yet</TextBlock>
+                </ToolTip.Tip>
+            </Button>
+            <Button Command="{Binding ExitCommand}">Exit</Button>
+        </StackPanel>
+
+
+    </Panel>
+
+
 </UserControl>

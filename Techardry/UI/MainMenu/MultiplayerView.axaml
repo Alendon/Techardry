@@ -1,0 +1,44 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:mainMenu="clr-namespace:Techardry.UI.MainMenu"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="Techardry.UI.MainMenu.MultiplayerView"
+             x:DataType="mainMenu:MultiplayerViewModel"
+             Background="Transparent">
+
+    <Design.DataContext>
+        <mainMenu:MultiplayerViewModel />
+    </Design.DataContext>
+
+    <UserControl.Styles>
+        <StyleInclude Source="avares://Techardry/UI/Styles/CeneteredStackPanel.axaml" />
+    </UserControl.Styles>
+
+    <StackPanel Classes="listPanel" Width="400" HorizontalAlignment="Left"
+                Margin="50" Spacing="0,0,0,10">
+
+        <Grid ColumnDefinitions="*,*">
+            <TextBox Text="{Binding HostAddress}" Grid.Column="0" Margin="0,0,5,0" Watermark="Host Address"></TextBox>
+            <TextBox Text="{Binding HostPort}" Grid.Column="1" Margin="5,0,0,0" Watermark="Host Port"></TextBox>
+        </Grid>
+
+        <Grid ColumnDefinitions="*,*">
+            <TextBox Text="{Binding PlayerName}" Grid.Column="0" Margin="0,0,5,0" Watermark="Player Name"></TextBox>
+            <TextBox Text="{Binding PlayerId}" Grid.Column="1" Margin="5,0,0,0" Watermark="Player ID"></TextBox>
+        </Grid>
+
+        <Button Command="{Binding ConnectToServerCommand}" Content="Connect to Server"></Button>
+
+        <Grid ColumnDefinitions="*,*" Margin="0,100,0,0">
+            <TextBox Text="{Binding CreateServerPort}" Grid.Column="0" Margin="0,0,5,0" Watermark="Port"></TextBox>
+            <Button Command="{Binding CreateServerCommand}" Grid.Column="1" Margin="5,0,0,0" Content="Create Server"></Button>
+        </Grid>
+
+        <Button Content="Back" Width="80" Margin="0,30,0,0" HorizontalAlignment="Left"
+                Command="{Binding TryCloseCommand}" />
+
+    </StackPanel>
+
+</UserControl>

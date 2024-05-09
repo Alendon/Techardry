@@ -10,7 +10,7 @@ using Techardry.Identifications;
 namespace Techardry.Systems.Common;
 
 [RegisterSystem("movement")]
-public partial class MovementSystem : ASystem
+public partial class MovementSystem(IGameTimer timer) : ASystem
 {
     [ComponentQuery]
     private readonly ComponentQuery<Position, InputComponent> _query = new();
@@ -33,7 +33,7 @@ public partial class MovementSystem : ASystem
             if (movement != Vector3.Zero)
                 movement = Vector3.Normalize(movement);
 
-            pos.Value += movement * Speed * Engine.DeltaTime;
+            pos.Value += movement * Speed * timer.DeltaTime;
             pos.Dirty = true;
         }
     }

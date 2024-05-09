@@ -63,4 +63,4 @@ buildFolder = buildFolder.EnumerateDirectories(debug ? "Debug" : "Release", Sear
 
 //Console.Clear();
 
-Engine.Main([$"-addModDir={buildFolder.FullName}", "-testingModeActive"]);
+MintyCore.Program.Main([$"-addModDir={buildFolder.FullName}", "-testingModeActive"]);
