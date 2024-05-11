@@ -18,8 +18,8 @@
 
     <Panel>
 
-        <Panel Background="#d06e6e6e" Width="50" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
-        <Panel Background="#d06e6e6e" Width="10" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Panel Background="#d06e6e6e" Width="40" Height="5" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Panel Background="#d06e6e6e" Width="5" Height="40" HorizontalAlignment="Center" VerticalAlignment="Center" />
         
         <StackPanel Background="DimGray" HorizontalAlignment="Left" VerticalAlignment="Top"
             Margin="10,10" Orientation="Vertical">
