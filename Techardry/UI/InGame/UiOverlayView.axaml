@@ -1,0 +1,40 @@
+﻿<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:inGame="clr-namespace:Techardry.UI.InGame"
+             xmlns:ui="clr-namespace:MintyCore.UI;assembly=MintyCore"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="Techardry.UI.InGame.UiOverlayView"
+             x:DataType="inGame:UiOverlayViewModel">
+
+    <Design.DataContext>
+        <inGame:UiOverlayViewModel>
+            <x:Arguments>
+                <ui:NullViewLocator />
+            </x:Arguments>
+        </inGame:UiOverlayViewModel>
+    </Design.DataContext>
+
+    <Panel>
+
+        <Panel Background="#d06e6e6e" Width="50" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Panel Background="#d06e6e6e" Width="10" Height="50" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        
+        <StackPanel Background="DimGray" HorizontalAlignment="Left" VerticalAlignment="Top"
+            Margin="10,10" Orientation="Vertical">
+            
+            
+            <TextBlock Text="{Binding PlayerPositionText}" Foreground="White" Margin="5,2" />
+            <TextBlock Text="{Binding LookingAtText}" Foreground="White" Margin="5,2" />
+            <TextBlock Text="{Binding BlockSizeText}" Foreground="White" Margin="5,1" />
+            <TextBlock Text="{Binding FpsText}" Foreground="White" Margin="5,1" />
+            <TextBlock Text="{Binding CurrentLookingAtBlockText}" Foreground="White" Margin="5,1" />
+            <TextBlock Text="{Binding CurrentHeldBlockText}" Foreground="White" Margin="5,1" />
+            
+            
+            
+        </StackPanel>
+
+    </Panel>
+</UserControl>

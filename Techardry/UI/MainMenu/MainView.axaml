@@ -9,7 +9,13 @@
              x:DataType="mainMenu:MainViewModel">
 
     <UserControl.Background>
-        <ImageBrush Source="techardry:texture:main_menu_background"/>
+        <ImageBrush Source="techardry:texture:dirt"
+                    Stretch="None" TileMode="Tile" AlignmentX="Left" AlignmentY="Top"
+                    DestinationRect="128 128 128 128 ">
+            <ImageBrush.Transform>
+                <ScaleTransform ScaleX="0.5" ScaleY="0.5"></ScaleTransform>
+            </ImageBrush.Transform>
+        </ImageBrush>
     </UserControl.Background>
 
     <Design.DataContext>
@@ -19,8 +25,8 @@
             </x:Arguments>
         </mainMenu:MainViewModel>
     </Design.DataContext>
-    
-    <TransitioningContentControl 
-        Content="{Binding CurrentView}"/>
+
+    <TransitioningContentControl
+        Content="{Binding CurrentView}" />
 
 </UserControl>

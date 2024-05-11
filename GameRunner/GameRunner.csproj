@@ -9,7 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="MintyCore" Version="0.7" />
+      <PackageReference Include="MintyCore" Version="0.7.0.4" />
     </ItemGroup>
 
 </Project>

@@ -23,7 +23,7 @@ namespace Techardry.Render;
 [UsedImplicitly]
 public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkanEngine) : InputModule
 {
-    private Func<VoxelIntermediateData>? _voxelBufferAccessor;
+    private Func<VoxelIntermediateData?>? _voxelBufferAccessor;
     private Func<WorldIntermediateData>? _worldDataAccessor;
 
     private MemoryBuffer? _stagingNodeBuffer;
@@ -39,12 +39,12 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
 
     public override void Update(ManagedCommandBuffer commandBuffer)
     {
-        if (_voxelBufferAccessor is null || _worldDataAccessor is null)
+        var voxelBuffer = _voxelBufferAccessor?.Invoke();
+        if (voxelBuffer is null || _worldDataAccessor is null)
         {
             return;
         }
 
-        var voxelBuffer = _voxelBufferAccessor();
         var worldData = _worldDataAccessor();
         
         if(!voxelBuffer.Buffers.Any())

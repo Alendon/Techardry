@@ -1,11 +1,16 @@
-﻿using MintyCore.Components.Common;
+﻿using System.Numerics;
+using MintyCore.Components.Common;
 using MintyCore.ECS;
+using MintyCore.Graphics.Render.Managers;
 using MintyCore.Input;
+using MintyCore.Modding;
 using MintyCore.Registries;
+using MintyCore.UI;
 using MintyCore.Utils;
 using Silk.NET.GLFW;
 using Techardry.Components.Client;
 using Techardry.Identifications;
+using Techardry.UI.InGame;
 using Techardry.Voxels;
 using Techardry.World;
 
@@ -13,10 +18,14 @@ namespace Techardry.Systems.Common;
 
 [ExecutionSide(GameType.Server)]
 [RegisterSystem("test_interaction")]
-public partial class TestInteractionSystem : ASystem
+public partial class TestInteractionSystem(
+    IViewLocator viewLocator,
+    IModManager modManager,
+    IRenderManager renderManager) : ASystem
 {
     [ComponentQuery] private ComponentQuery<object, (Position, Camera)> _query = new();
     static Identification currentBlock = BlockIDs.Stone;
+
     public override void Setup(SystemManager systemManager)
     {
         _query.Setup(this);
@@ -34,23 +43,24 @@ public partial class TestInteractionSystem : ASystem
             var hit = world.PhysicsWorld.RayCast(pos, dir, 100,
                 out var tResult, out _, out var normal);
             var blockPos = pos + dir * tResult;
-            
+
             var blockId = BlockIDs.Air;
             if (hit)
             {
                 blockId = world.ChunkManager.GetBlockId(blockPos - normal * 0.01f);
             }
-            
 
-            //TODO reimpliment this
-            /*if (Engine.Desktop?.Root is IngameUi ui)
+            if (viewLocator.GetViewModel(ViewModelIDs.UiOverlay) is UiOverlayViewModel viewModel)
             {
-                ui.SetBlockPos(hit ? blockPos : new Vector3(float.NaN));
-                ui.SetPlayerPos(pos);
-                ui.SetBlockSize(Math.Pow(2, -(depth - VoxelOctree.SizeOneDepth)));
-                ui.SetCurrentBlockView(blockId);
-                ui.SetCurrentBlockHolding(currentBlock);
-            }*/
+                viewModel.LookingAt = hit ? blockPos : new Vector3(float.NaN);
+                viewModel.PlayerPosition = pos;
+                viewModel.BlockSize = (float)Math.Pow(2, -(depth - VoxelOctree.SizeOneDepth));
+                viewModel.CurrentLookingAtBlock =
+                    modManager.RegistryManager.GetObjectStringId(blockId.Mod, blockId.Category, blockId.Object);
+                viewModel.CurrentHeldBlock = modManager.RegistryManager.GetObjectStringId(currentBlock.Mod,
+                    currentBlock.Category, currentBlock.Object);
+                viewModel.Fps = renderManager.FrameRate;
+            }
 
             if (!hit)
             {
@@ -102,7 +112,7 @@ public partial class TestInteractionSystem : ASystem
         {
             if (parameters.InputAction is InputAction.Press)
                 BlockBreakIssued = true;
-            
+
             return InputActionResult.Stop;
         }
     };
@@ -115,7 +125,7 @@ public partial class TestInteractionSystem : ASystem
         {
             if (parameters.InputAction is InputAction.Press)
                 depth = Math.Min(depth + 1, VoxelOctree.MaximumTotalDivision);
-            
+
             return InputActionResult.Stop;
         }
     };
@@ -128,11 +138,11 @@ public partial class TestInteractionSystem : ASystem
         {
             if (parameters.InputAction is InputAction.Press)
                 depth = Math.Max(depth - 1, 0);
-            
+
             return InputActionResult.Stop;
         }
     };
-    
+
     [RegisterInputAction("change_build_block")]
     public static InputActionDescription ChangeBuildBlock => new()
     {
@@ -145,7 +155,7 @@ public partial class TestInteractionSystem : ASystem
                 else if (currentBlock == BlockIDs.Dirt) currentBlock = BlockIDs.Grass;
                 else if (currentBlock == BlockIDs.Grass) currentBlock = BlockIDs.Stone;
             }
-            
+
             return InputActionResult.Stop;
         }
     };

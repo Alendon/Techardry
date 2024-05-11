@@ -4,12 +4,14 @@ using MintyCore.ECS;
 using MintyCore.GameStates;
 using MintyCore.Graphics;
 using MintyCore.Graphics.Render.Managers;
-using MintyCore.Identifications;
 using MintyCore.Input;
 using MintyCore.Modding;
 using MintyCore.Network;
 using MintyCore.Registries;
+using MintyCore.UI;
 using MintyCore.Utils;
+using Techardry.Identifications;
+using RenderModuleIDs = MintyCore.Identifications.RenderModuleIDs;
 
 namespace Techardry.GameStates;
 
@@ -24,7 +26,8 @@ public class LocalGameState(
     IWindowHandler windowHandler,
     IVulkanEngine vulkanEngine,
     IRenderModuleManager renderModuleManager,
-    IInputHandler inputHandler) : GameState<LocalGameState.InitializeParameters>
+    IInputHandler inputHandler,
+    IViewLocator viewLocator) : GameState<LocalGameState.InitializeParameters>
 {
     private InitializeParameters? _initializeParameters;
     
@@ -53,14 +56,16 @@ public class LocalGameState(
             networkHandler.Update();
             Thread.Sleep(TimeSpan.FromMilliseconds(10));
         }
+
+        viewLocator.SetRootView(ViewIDs.UiOverlay);
+        
+        renderModuleManager.SetModuleActive(RenderModuleIDs.AvaloniaUi, true);
+        renderModuleManager.SetModuleActive(Identifications.RenderModuleIDs.World, true);
+       
+        renderManager.MaxFrameRate = 60;
+        renderManager.StartRendering();
         
         gameTimer.Reset();
-        
-        renderModuleManager.SetModuleActive(RenderModuleIDs.AvaloniaUi, false);
-        renderModuleManager.SetModuleActive(Identifications.RenderModuleIDs.World, true);
-        
-        renderManager.StartRendering();
-        renderManager.MaxFrameRate = 60;
 
         inputHandler.InputConsumer = InputConsumer.InputActions;
     }
@@ -80,6 +85,8 @@ public class LocalGameState(
     public override void Cleanup(bool restorable)
     {
         if (!restorable) _initializeParameters = null;
+        
+        windowHandler.GetMainWindow().MouseLocked = false;
         
         renderManager.StopRendering();
         renderModuleManager.SetModuleActive(Identifications.RenderModuleIDs.World, false);
