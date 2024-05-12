@@ -6,6 +6,7 @@ using BepuPhysics.CollisionDetection.CollisionTasks;
 using BepuPhysics.CollisionDetection.SweepTasks;
 using BepuPhysics.Constraints;
 using MintyCore;
+using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Graphics.Render.Managers;
 using MintyCore.Modding;
@@ -13,7 +14,9 @@ using MintyCore.Network;
 using MintyCore.Physics;
 using MintyCore.Registries;
 using MintyCore.Utils;
+using Serilog;
 using Techardry.Blocks;
+using Techardry.Components.Common.Physic;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
 using Techardry.Render;
@@ -187,5 +190,51 @@ public class TechardryWorld : IWorld
         IsExecuting = false;
 
         ChunkManager.Update();
+    }
+
+    /// <summary>
+    /// Set the position of an entity
+    /// </summary>
+    /// <param name="entity"> The entity to set the position of</param>
+    /// <param name="position"> The new position of the entity</param>
+    /// <exception cref="InvalidOperationException"> Thrown when the systems are executing</exception>
+    public void SetEntityPosition(Entity entity, Vector3 position)
+    {
+        if (IsExecuting) throw new InvalidOperationException("Cannot set entity position while systems are executing");
+
+        ref var positionComponent = ref EntityManager.TryGetComponent<Position>(entity, out var hasPosition);
+        ref var bodyComponent = ref EntityManager.TryGetComponent<Body>(entity, out var hasPhysics);
+
+        if (hasPosition) positionComponent.Value = position;
+
+        if (hasPhysics)
+        {
+            bodyComponent.Pose = bodyComponent.Pose with { Position = position };
+        }
+    }
+
+
+    private double _elapsedTotalSeconds;
+    private Task _physicsTask = Task.CompletedTask;
+
+    public void BeginPhysicsStep(double elapsedSeconds)
+    {
+        _elapsedTotalSeconds += elapsedSeconds;
+
+        while (_elapsedTotalSeconds > PhysicsWorld.FixedDeltaTime)
+        {
+            _physicsTask = _physicsTask.ContinueWith(_ =>
+            {
+                PhysicsWorld.StepSimulation(PhysicsWorld.FixedDeltaTime);
+            });
+
+            _elapsedTotalSeconds -= PhysicsWorld.FixedDeltaTime;
+        }
+    }
+
+    public void WaitForPhysicsCompletion()
+    {
+        _physicsTask.Wait();
+        _physicsTask = Task.CompletedTask;
     }
 }

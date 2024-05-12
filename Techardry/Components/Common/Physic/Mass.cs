@@ -1,5 +1,5 @@
 ﻿using MintyCore.ECS;
-using MintyCore.Identifications;
+using Techardry.Identifications;
 using MintyCore.Registries;
 using MintyCore.Utils;
 

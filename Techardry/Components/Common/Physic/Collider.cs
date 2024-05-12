@@ -2,10 +2,10 @@
 using System.Numerics;
 using BepuPhysics;
 using MintyCore.ECS;
-using MintyCore.Identifications;
 using MintyCore.Physics;
 using MintyCore.Registries;
 using MintyCore.Utils;
+using Techardry.Identifications;
 
 namespace Techardry.Components.Common.Physic;
 //TODO Adjust the synchronization logic to remove stuttering
@@ -27,13 +27,12 @@ public struct Collider : IComponent
     /// <summary>
     ///     The body handle of the collider to access it in the <see cref="PhysicsWorld" />
     /// </summary>
-    public BodyHandle Handle { get; set; }
+    public BodyHandle Handle;
 
     /// <summary>
     ///     Is the collider added to a physics world
     /// </summary>
     public bool AddedToPhysicsWorld => Handle.Value >= 0;
-
 
     /// <inheritdoc />
     public void DecreaseRefCount()

@@ -11,7 +11,7 @@ using Silk.NET.Vulkan;
 
 namespace Techardry.Render;
 
-[Singleton<ITextureAtlasHandler>(/*SingletonContextFlags.NoHeadless*/)]
+[Singleton<ITextureAtlasHandler>(SingletonContextFlags.NoHeadless)]
 public class TextureAtlasHandler : ITextureAtlasHandler
 {
     public required ITextureManager TextureManager { private get; [UsedImplicitly] set; }
