@@ -17,7 +17,7 @@ namespace Techardry.Systems.Client;
 [ExecutionSide(GameType.Client)]
 public class ChunkInputDataUpdateSystem(IEventBus eventBus, IInputDataManager inputDataManager) : ASystem
 {
-    private ConcurrentQueue<(Int3 chunkPosition, bool set)> _chunkUpdates = new();
+    private readonly ConcurrentQueue<(Int3 chunkPosition, bool set)> _chunkUpdates = new();
 
     public override Identification Identification => SystemIDs.ChunkInputDataUpdate;
 
@@ -83,5 +83,14 @@ public class ChunkInputDataUpdateSystem(IEventBus eventBus, IInputDataManager in
                 inputDataManager.RemoveKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition);
             }
         }
+    }
+    
+    protected override void Dispose(bool disposing)
+    {
+        _addChunkEventBinding?.UnregisterBinding(eventBus);
+        _removeChunkEventBinding?.UnregisterBinding(eventBus);
+        _updateChunkEventBinding?.UnregisterBinding(eventBus);
+        
+        base.Dispose(disposing);
     }
 }
