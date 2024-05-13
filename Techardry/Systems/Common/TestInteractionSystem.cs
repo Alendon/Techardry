@@ -21,7 +21,8 @@ namespace Techardry.Systems.Common;
 public partial class TestInteractionSystem(
     IViewLocator viewLocator,
     IModManager modManager,
-    IRenderManager renderManager) : ASystem
+    IRenderManager renderManager,
+    IGameTimer timer) : ASystem
 {
     [ComponentQuery] private ComponentQuery<object, (Position, Camera)> _query = new();
     static Identification currentBlock = BlockIDs.Stone;
@@ -46,7 +47,10 @@ public partial class TestInteractionSystem(
             if (!world.PhysicsWorld.Simulation.Statics.StaticExists(collidableReference.StaticHandle)) continue;
             
             world.PhysicsWorld.Simulation.Statics.GetDescription(collidableReference.StaticHandle, out var staticDescription);
-            if (staticDescription.Shape.Type != VoxelCollider.Id) continue;
+            if (staticDescription.Shape.Type != VoxelCollider.Id)
+            {
+                hit = false;
+            }
             
             var blockPos = pos + dir * tResult;
 
@@ -66,6 +70,7 @@ public partial class TestInteractionSystem(
                 viewModel.CurrentHeldBlock = modManager.RegistryManager.GetObjectStringId(currentBlock.Mod,
                     currentBlock.Category, currentBlock.Object);
                 viewModel.Fps = renderManager.FrameRate;
+                viewModel.Tps = timer.TicksPerSecond;
             }
 
             if (!hit)

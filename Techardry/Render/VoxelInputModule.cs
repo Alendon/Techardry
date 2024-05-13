@@ -117,7 +117,7 @@ public class VoxelInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
         var nodeSize = (uint)Marshal.SizeOf<VoxelOctree.Node>();
         var dataSize = (uint)Marshal.SizeOf<VoxelRenderData>();
 
-        return headerSize + nodeSize * octree.NodeCount + dataSize * octree.DataCount;
+        return headerSize + nodeSize * octree.NodeCount + dataSize * (uint)octree.DataCount;
     }
 
     private MemoryBuffer CreateBuffer(uint size)

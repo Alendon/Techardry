@@ -34,11 +34,11 @@ public class ChunkInputDataUpdateSystem(IEventBus eventBus, IInputDataManager in
 
     private EventResult OnUpdateChunk(UpdateChunkEvent e)
     {
-        if (ReferenceEquals(World, e.ContainingWorld))
-        {
-            _chunkUpdates.Enqueue((e.ChunkPosition, false));
-            _chunkUpdates.Enqueue((e.ChunkPosition, true));
-        }
+        if (e.UpdateKind == UpdateChunkEvent.ChunkUpdateKind.Voxel) return EventResult.Continue;
+        if (!ReferenceEquals(World, e.ContainingWorld)) return EventResult.Continue;
+        
+        _chunkUpdates.Enqueue((e.ChunkPosition, false));
+        _chunkUpdates.Enqueue((e.ChunkPosition, true));
 
         return EventResult.Continue;
     }

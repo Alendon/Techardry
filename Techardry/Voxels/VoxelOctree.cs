@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System.Buffers;
+using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
@@ -12,8 +13,10 @@ using Techardry.Render;
 
 namespace Techardry.Voxels;
 
+//TODO add removal of unused data
+
 [DebuggerTypeProxy(typeof(OctreeDebugView))]
-public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
+public class VoxelOctree
 {
     /// <summary>
     /// The maximum dimension of the tree in element it can store.
@@ -135,6 +138,14 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
     public uint Version { get; private set; }
 
+    /// <summary>
+    /// Determines how often the tree is compacted, based on the version number.
+    /// </summary>
+    private const uint CompactRate = 32;
+
+    private uint lastCompactedVersion;
+    public bool CompactingEnabled { get; set; } = true;
+
 
     public VoxelOctree(ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler)
     {
@@ -158,28 +169,22 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
 
     public void Insert(VoxelData data, Vector3 position, int depth)
     {
-        ValidateTree();
-
+        var deletionOccured = false;
         ref var node = ref GetOrCreateNode(position, depth);
-
-        ValidateTree();
 
         if (!node.IsLeaf())
         {
             node = ref DeleteChildren(ref node);
-
-            ValidateTree();
+            deletionOccured = true;
         }
 
         SetData(ref node, data);
 
         ValidateTree();
-
-        MergeUpwards(ref node);
-
-        ValidateTree();
-
-        Version++;
+        
+        Compact(false);
+        
+        Version += deletionOccured ? 10u : 1u;
     }
 
 
@@ -193,17 +198,21 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
         for (int i = 0; i < NodeCount; i++)
         {
             ref var node = ref Nodes[i];
+
+            if (node.IsEmpty() || !node.IsLeaf()) continue;
             
-            if(node.IsEmpty() || !node.IsLeaf()) continue;
-            
+            //skip nodes that are not connected to the root node
+            //this means that they were deleted and not compacted yet
+            if(i != 0 && ParentNodeIndices[i] == InvalidIndex) continue;
+
             GetNodeLocationData(ref node, out var position, out _);
             var depth = NodeGetDepth(ref node);
             var data = GetVoxelData(ref node);
-            
+
             writer.Put(depth);
             writer.Put(position);
             data.Serialize(writer);
-            
+
             countValue++;
         }
 
@@ -245,86 +254,97 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
     [Conditional("DEBUG_OCTREE")]
     private void ValidateTree()
     {
-        ValidateTreeInner(ref GetRootNode());
-
         for (var i = NodeCount; i < Nodes.Length; i++)
         {
             if (Nodes[i] != default)
                 throw new Exception("Node array not cleared");
         }
-    }
-
-    [Conditional("DEBUG_OCTREE")]
-    private void ValidateTreeInner(ref Node parentNode)
-    {
-        // check if the parent node is a not a leaf and has data
-        if (parentNode.IsLeaf()) return;
-
-        if (!parentNode.IsEmpty())
-            throw new Exception("Parent node is not a leaf but has data.");
-
-        var parentIndex = NodeIndex(ref parentNode);
-
-        for (byte i = 0; i < ChildCount; i++)
+        
+        //check the parent node indices
+        //after the root node, all indices should be repeated 8 times (the children in memory)
+        //also each parent index (except invalid) should only be present in 1 group of 8 children
+        
+        for (var i = 1; i < NodeCount; i += ChildCount)
         {
-            var childIndex = parentNode.GetChildIndex(i);
-            ref var child = ref Nodes[childIndex];
-
-            Debug.Assert(ParentNodeIndices[childIndex] == parentIndex);
-
-            ValidateTreeInner(ref child);
+            //if the remaining nodes are less than 8 stop
+            if(i + ChildCount > NodeCount) break;
+            
+            var parentIndex = ParentNodeIndices[i];
+            
+            
+            for (var j = 0; j < ChildCount; j++)
+            {
+                if (ParentNodeIndices[i + j] != parentIndex)
+                    throw new Exception("Parent index not repeated 8 times");
+            }
+            
+            if(parentIndex == InvalidIndex) continue;
+            
+            ref var parent = ref Nodes[parentIndex];
+            if(parent.IsLeaf())
+                throw new Exception("Parent node is a leaf");
+            
+            if(parent.GetChildIndex(0) != i)
+                throw new Exception("Parent index not matching first child index");
         }
     }
+
 
     /// <summary>
     /// Merge nodes upwards based on the given Leaf Node
     /// </summary>
-    private void MergeUpwards(ref Node node)
+    public void Compact(bool force)
     {
-        //A node which is not a leaf can not be merged up
-        if (!node.IsLeaf())
+        if (lastCompactedVersion + CompactRate > Version && !force)
             return;
+        
+        lastCompactedVersion = Version;
+        
+        var newNodes = ArrayPool<Node>.Shared.Rent((int)NodeCount);
+        var newParentNodeIndices = ArrayPool<int>.Shared.Rent((int)NodeCount);
+        
+        newNodes.AsSpan().Clear();
+        newParentNodeIndices.AsSpan().Clear();
+        
+        var newCount = 1;
+        newParentNodeIndices[0] = InvalidIndex;
+        CompactInternal(0, 0);
+        
+        ArrayPool<Node>.Shared.Return(Nodes);
+        ArrayPool<int>.Shared.Return(ParentNodeIndices);
+        
+        Nodes = newNodes;
+        ParentNodeIndices = newParentNodeIndices;
+        NodeCount = (uint)newCount;
 
-        //if the node index is 0 it is the root node
-        //therefor there is no additional merging
-        if (NodeIndex(ref node) == 0)
-            return;
-
-        var compareVoxel = GetVoxelData(ref node);
-
-        ref var parentNode = ref GetParentNode(ref node);
-
-        while (true)
+        ValidateTree();
+        
+        void CompactInternal(int oldNodeIndex, int newNodeIndex)
         {
-            for (byte childIndex = 0; childIndex < ChildCount; childIndex++)
-            {
-                ref var childNode = ref GetChildNode(ref parentNode, childIndex);
+            ref var oldNode = ref Nodes[oldNodeIndex];
 
-                //check if the child node is a leaf and the associated data is equal
-                //if not we can stop merging
-                if (!childNode.IsLeaf() || GetVoxelData(ref childNode) != compareVoxel)
-                    return;
+            if (oldNode.IsLeaf())
+            {
+                //if it is a leaf node, just copy it
+                newNodes[newNodeIndex] = oldNode;
+                return;
+            }
+            
+            ref var newNode = ref newNodes[newNodeIndex];
+
+            var childBaseIndex = (uint)newCount;
+            newNode.SetChildIndex(childBaseIndex);
+
+            for (byte i = 0; i < ChildCount; i++)
+            {
+                newParentNodeIndices[newCount++] = newNodeIndex;
             }
 
-            //merge the nodes
-
-            //first delete all children of the node. This should be a single invocation as all children must be leaf
-            parentNode = ref DeleteChildren(ref parentNode);
-            ValidateTree();
-
-            //Set the data to the node
-            SetData(ref parentNode, compareVoxel);
-
-            ValidateTree();
-
-            //if the parent index is invalid the current node is the root node
-            if (NodeParentIndex(ref parentNode) == InvalidIndex)
-                return;
-
-            parentNode = ref GetParentNode(ref parentNode);
-
-            if (parentNode.IsLeaf())
-                return;
+            for (byte i = 0; i < ChildCount; i++)
+            {
+                var oldChildIndex = oldNode.GetChildIndex(i);
+                CompactInternal((int)oldChildIndex, (int)childBaseIndex + i);
+            }
         }
     }
 
@@ -370,124 +390,17 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
     {
         if (node.IsLeaf()) return ref node;
 
-        Span<byte> pathToNode = stackalloc byte[MaxDepth];
-        StorePathToNode(ref node, pathToNode);
-
-        //Delete all grandchildren and beyond
         for (byte i = 0; i < ChildCount; i++)
         {
-            ref var child = ref GetChildNode(ref node, i);
-            DeleteChildren(ref child);
-
-            node = ref RestoreFromPath(pathToNode);
-            child = ref GetChildNode(ref node, i);
+            var childIndex = node.GetChildIndex(i);
+            ref var childNode = ref Nodes[childIndex];
+            
+            DeleteChildren(ref childNode);
+            ParentNodeIndices[childIndex] = InvalidIndex;
         }
-
-        //delete the children
-        DeleteChildrenInternal(ref node);
-        node = ref RestoreFromPath(pathToNode);
-
-        return ref node;
-    }
-
-    private void DeleteChildrenInternal(ref Node node)
-    {
-        //The internal method is used to actually delete the children
-        //For this all children themself must be empty leaf nodes
-
-        if (node.IsLeaf())
-        {
-            return;
-        }
-
-        if (!node.IsEmpty())
-            throw new Exception("Node is not empty");
-
-        for (byte i = 0; i < ChildCount; i++)
-        {
-            ref var child = ref GetChildNode(ref node, i);
-
-            if (!child.IsLeaf())
-                throw new Exception("Child is not a leaf node");
-
-            if (!child.IsEmpty())
-                throw new Exception("Child is not empty");
-        }
-
-        //move the last nodes to the location of the ones to delete
-
-        var replaceBaseIndex = NodeCount - ChildCount;
-        var deleteBaseIndex = node.GetChildIndex(0);
-        node.SetChildIndex(InvalidIndex);
-
-        //the child to delete are at the end of the array
-        if (replaceBaseIndex == deleteBaseIndex)
-        {
-            NodeCount -= ChildCount;
-            Nodes.AsSpan((int)NodeCount, ChildCount).Clear();
-
-            //just return the node reference
-            return;
-        }
-
-        ref var replaceParent = ref GetParentNode(ref Nodes[replaceBaseIndex]);
-        replaceParent.SetChildIndex(deleteBaseIndex);
-
-        //copy the data of the last nodes to the location of the ones to delete
-        Nodes.AsSpan((int)replaceBaseIndex, ChildCount).CopyTo(Nodes.AsSpan((int)deleteBaseIndex, ChildCount));
-        Nodes.AsSpan((int)replaceBaseIndex, ChildCount).Clear();
-
-        for (byte i = 0; i < ChildCount; i++)
-        {
-            var movedChildIndex = replaceParent.GetChildIndex(i);
-            ref var movedChild = ref Nodes[movedChildIndex];
-            movedChild.Index = movedChildIndex;
-
-            if (!movedChild.IsEmpty())
-            {
-                Data.ownerNodes[movedChild.DataIndex] = movedChildIndex;
-            }
-
-            if (movedChild.IsLeaf()) continue;
-
-            for (byte j = 0; j < ChildCount; j++)
-            {
-                ref var grandChild = ref GetChildNode(ref movedChild, j);
-                grandChild.ParentIndex = movedChildIndex;
-            }
-        }
-
-        NodeCount -= ChildCount;
-    }
-
-    private void StorePathToNode(ref Node node, Span<byte> pathToNode)
-    {
-        ref var current = ref node;
-
-        pathToNode.Fill(byte.MaxValue);
-
-        int i = 0;
-        while (true)
-        {
-            if (NodeIndex(ref current) == RootNodeIndex)
-                break;
-
-            pathToNode[i] = NodeParentChildIndex(ref current);
-            current = ref GetParentNode(ref current);
-            i++;
-        }
-    }
-
-    private ref Node RestoreFromPath(scoped ReadOnlySpan<byte> path)
-    {
-        ref var node = ref GetRootNode();
-
-        for (int i = path.Length - 1; i >= 0; i--)
-        {
-            if (path[i] == byte.MaxValue) continue;
-
-            node = ref GetChildNode(ref node, path[i]);
-        }
+        
+        //just empty the node, the garbage will be collected at the next compaction
+        node = default;
 
         return ref node;
     }
@@ -607,12 +520,23 @@ public class VoxelOctree : IEnumerable<VoxelOctree.VoxelLeafNode>
     private void ResizeNodes(int newCapacity)
     {
         var oldNodes = Nodes;
-        Nodes = new Node[newCapacity];
+        Nodes = ArrayPool<Node>.Shared.Rent(newCapacity);
+        Nodes.AsSpan().Clear();
         oldNodes.AsSpan(0, (int)NodeCount).CopyTo(Nodes);
 
+        if (oldNodes.Length > 0)
+            ArrayPool<Node>.Shared.Return(oldNodes);
+
         var oldParentIndices = ParentNodeIndices;
-        ParentNodeIndices = new int[newCapacity];
+        ParentNodeIndices = ArrayPool<int>.Shared.Rent(newCapacity);
+        ParentNodeIndices.AsSpan().Clear();
         oldParentIndices.AsSpan(0, (int)NodeCount).CopyTo(ParentNodeIndices);
+        
+        //Fill the rest with invalid indices
+        ParentNodeIndices.AsSpan((int)NodeCount).Fill(InvalidIndex);
+
+        if (oldParentIndices.Length > 1)
+            ArrayPool<int>.Shared.Return(oldParentIndices);
     }
 
     private void ResizeData(int newCapacity)

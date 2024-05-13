@@ -65,6 +65,7 @@ public class LocalGameState(
         renderManager.MaxFrameRate = 60;
         renderManager.StartRendering();
         
+        gameTimer.SetTargetTicksPerSecond(60);
         gameTimer.Reset();
 
         inputHandler.InputConsumer = InputConsumer.InputActions;

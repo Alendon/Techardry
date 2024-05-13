@@ -30,16 +30,17 @@ public partial class TrackChunk : ASystem
         foreach (var currentEntity in _componentQuery)
         {
             var position = currentEntity.GetPosition();
-            var currentChunk = new Int3((int) (position.Value.X / Chunk.Size), (int) (position.Value.Y / Chunk.Size),
-                (int) (position.Value.Z / Chunk.Size));
+            var currentChunk = new Int3((int)(position.Value.X / Chunk.Size), (int)(position.Value.Y / Chunk.Size),
+                (int)(position.Value.Z / Chunk.Size));
             ref var lastChunk = ref currentEntity.GetLastChunk();
 
-            if (lastChunk.Value == currentChunk) continue;
+            if (lastChunk.HasValue && lastChunk.Value == currentChunk) continue;
 
-            techardryWorld.ChunkManager.PlayerChunkChanged(lastChunk.Value, currentChunk,
+            techardryWorld.ChunkManager.PlayerChunkChanged(lastChunk.HasValue ? lastChunk.Value : null, currentChunk,
                 World.EntityManager.GetEntityOwner(currentEntity.Entity));
 
             lastChunk.Value = currentChunk;
+            lastChunk.HasValue = true;
             lastChunk.Dirty = true;
         }
     }

@@ -29,6 +29,7 @@
             <TextBlock Text="{Binding LookingAtText}" Foreground="White" Margin="5,2" />
             <TextBlock Text="{Binding BlockSizeText}" Foreground="White" Margin="5,1" />
             <TextBlock Text="{Binding FpsText}" Foreground="White" Margin="5,1" />
+            <TextBlock Text="{Binding TpsText}" Foreground="White" Margin="5,1" />
             <TextBlock Text="{Binding CurrentLookingAtBlockText}" Foreground="White" Margin="5,1" />
             <TextBlock Text="{Binding CurrentHeldBlockText}" Foreground="White" Margin="5,1" />
             

@@ -23,6 +23,8 @@ public class WorldGenerator(
     {
         var chunk = new Chunk(chunkPosition, techardryWorld, playerHandler, networkHandler, blockHandler,
             textureAtlasHandler);
+        
+        chunk.Octree.CompactingEnabled = false;
 
         var realChunkPosition = new Vector3(chunkPosition.X * Chunk.Size, chunkPosition.Y * Chunk.Size,
             chunkPosition.Z * Chunk.Size);
@@ -58,6 +60,9 @@ public class WorldGenerator(
                 }
             }
         }
+        
+        chunk.Octree.CompactingEnabled = true;
+        chunk.Octree.Compact(true);
 
         return chunk;
     }

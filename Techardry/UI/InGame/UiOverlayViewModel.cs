@@ -16,6 +16,7 @@ public partial class UiOverlayViewModel : ViewModelNavigator
     [ObservableProperty] private int _fps;
     [ObservableProperty] private string _currentHeldBlock = string.Empty;
     [ObservableProperty] private string _currentLookingAtBlock = string.Empty;
+    [ObservableProperty] private int _tps;
 
     public string PlayerPositionText =>
         $"Player Position: {PlayerPosition.X:F2}, {PlayerPosition.Y:F2}, {PlayerPosition.Z:F2}";
@@ -25,6 +26,7 @@ public partial class UiOverlayViewModel : ViewModelNavigator
     public string FpsText => $"FPS: {Fps}";
     public string CurrentHeldBlockText => $"Current Held Block: {CurrentHeldBlock}";
     public string CurrentLookingAtBlockText => $"Current Looking At Block: {CurrentLookingAtBlock}";
+    public string TpsText => $"TPS: {Tps}";
 
 
     protected override Task LoadAsync()
@@ -44,6 +46,7 @@ public partial class UiOverlayViewModel : ViewModelNavigator
                 nameof(Fps) => nameof(FpsText),
                 nameof(CurrentHeldBlock) => nameof(CurrentHeldBlockText),
                 nameof(CurrentLookingAtBlock) => nameof(CurrentLookingAtBlockText),
+                nameof(Tps) => nameof(TpsText),
                 _ => null
             };
 

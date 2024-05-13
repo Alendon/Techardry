@@ -21,11 +21,7 @@ void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT
 
 uint voxelNode_GetChildren(uint tree, uint nodeIndex, uint childIndex);
 uint voxelNode_GetDataIndex(uint tree, uint nodeIndex);
-uint voxelNode_GetNodeIndex(uint tree, uint nodeIndex);
-uint voxelNode_GetParentIndex(uint tree, uint nodeIndex);
-uint voxelNode_GetParentChildIndex(uint tree, uint nodeIndex);
 bool voxelNode_IsLeaf(uint tree, uint nodeIndex);
-uint voxelNode_GetDepth(uint tree, uint nodeIndex);
 bool voxelNode_IsEmpty(uint tree, uint nodeIndex);
 uint voxelData_GetColor(uint tree, uint voxelIndex);
 float voxelData_GetTextureStartX(uint tree, uint voxelIndex);
@@ -298,52 +294,26 @@ void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT
     }
 }
 
-#define NodeSize 6
+#define NodeSize 1
 
 #define Node_Children_Offset 0
 uint voxelNode_GetChildren(uint tree, uint nodeIndex, uint childIndex){
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Children_Offset] + childIndex;
+    uint dataChildIndex = chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize];
+    return (dataChildIndex & 0x7FFFFFFFu) + childIndex;
 }
-#undef Node_Children_Offset
 
-#define Node_DataIndex_Offset 1
 uint voxelNode_GetDataIndex(uint tree, uint nodeIndex){
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_DataIndex_Offset];
+    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize];
 }
-#undef Node_DataIndex_Offset
-
-#define Node_Index_Offset 2
-uint voxelNode_GetNodeIndex(uint tree, uint nodeIndex){
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_Index_Offset];
-}
-#undef Node_Index_Offset
-
-#define Node_ParentIndex_Offset 3
-uint voxelNode_GetParentIndex(uint tree, uint nodeIndex){
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_ParentIndex_Offset];
-}
-#undef Node_ParentIndex_Offset
-
-#define Node_AdditionalData_Offset 4
-
-uint voxelNode_GetParentChildIndex(uint tree, uint nodeIndex){
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0x7;
-}
-
 
 bool voxelNode_IsLeaf(uint tree, uint nodeIndex){
-    return voxelNode_GetChildren(tree, nodeIndex, 0) == 0xFFFFFFFF;
-}
-
-uint voxelNode_GetDepth(uint tree, uint nodeIndex){
-    return (chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize + Node_AdditionalData_Offset] & 0xF0) >> 4;
+    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize] < 0x80000000u;
 }
 
 bool voxelNode_IsEmpty(uint tree, uint nodeIndex){
-    return voxelNode_GetDataIndex(tree, nodeIndex) == 0xFFFFFFFF;
+    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize] == 0;
 }
-#undef Node_AdditionalData_Offset
-
+#undef Node_Children_Offset
 
 #define VoxelSize 5
 

@@ -84,12 +84,12 @@ public class ChunkManager : IDisposable
 
         if (oldChunk is null && newChunk is not null)
         {
-            chunksToUnload = Enumerable.Empty<Int3>();
+            chunksToUnload = [];
             chunksToLoad = AreaAroundChunk(newChunk.Value);
         }
         else if (oldChunk is not null && newChunk is null)
         {
-            chunksToLoad = Enumerable.Empty<Int3>();
+            chunksToLoad = [];
             chunksToUnload = AreaAroundChunk(oldChunk.Value);
         }
         else if (oldChunk is not null && newChunk is not null)
@@ -99,8 +99,8 @@ public class ChunkManager : IDisposable
         }
         else
         {
-            chunksToLoad = Enumerable.Empty<Int3>();
-            chunksToUnload = Enumerable.Empty<Int3>();
+            chunksToLoad = [];
+            chunksToUnload = [];
         }
 
         List<Int3> toLoad = new();
@@ -178,15 +178,15 @@ public class ChunkManager : IDisposable
         IEnumerable<Int3> AreaAroundChunk(Int3 chunk)
         {
             //calculate all positions in the render area around the chunk
-            for (var x = chunk.X - TechardryMod.Instance!.ServerRenderDistance;
+            for (var x = chunk.X - TechardryMod.Instance!.ServerRenderDistance - 1;
                  x <= chunk.X + TechardryMod.Instance.ServerRenderDistance;
                  x++)
             {
-                for (int y = chunk.Y - TechardryMod.Instance.ServerRenderDistance;
+                for (var y = chunk.Y - TechardryMod.Instance.ServerRenderDistance - 1;
                      y <= chunk.Y + TechardryMod.Instance.ServerRenderDistance;
                      y++)
                 {
-                    for (int z = chunk.Z - TechardryMod.Instance.ServerRenderDistance;
+                    for (var z = chunk.Z - TechardryMod.Instance.ServerRenderDistance - 1;
                          z <= chunk.Z + TechardryMod.Instance.ServerRenderDistance;
                          z++)
                     {
@@ -264,7 +264,7 @@ public class ChunkManager : IDisposable
                 }
                 
                 chunk.SetOctree(octree);
-                EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition));
+                EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition, UpdateChunkEvent.ChunkUpdateKind.Octree));
             }
         }
 
@@ -317,6 +317,8 @@ public class ChunkManager : IDisposable
         }
         
         chunk.SetBlock(blockPos, blockId, depth, rotation);
+        
+        EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPos, UpdateChunkEvent.ChunkUpdateKind.Voxel));
     }
 
     public Identification GetBlockId(Vector3 blockPos)
@@ -427,13 +429,19 @@ public record struct RemoveChunkEvent(TechardryWorld ContainingWorld, Int3 Chunk
 }
 
 /// <summary>
-///  Event that is fired when a chunk object is updated. This does not include block updates
+///  Event that is fired when a chunk object is updated
 /// </summary>
 /// <param name="ContainingWorld"> The world the chunk was updated in</param>
 /// <param name="ChunkPosition"> The position of the chunk that was updated</param>
 [RegisterEvent("update_chunk")]
-public record struct UpdateChunkEvent(TechardryWorld ContainingWorld, Int3 ChunkPosition) : IEvent
+public record struct UpdateChunkEvent(TechardryWorld ContainingWorld, Int3 ChunkPosition, UpdateChunkEvent.ChunkUpdateKind UpdateKind) : IEvent
 {
     public static Identification Identification => EventIDs.UpdateChunk;
     public static bool ModificationAllowed => false;
+
+    public enum ChunkUpdateKind
+    {
+        Voxel,
+        Octree
+    }
 }

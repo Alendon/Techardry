@@ -10,6 +10,7 @@ namespace Techardry.Components.Common;
 public struct LastChunk : IComponent
 {
     public Int3 Value;
+    public bool HasValue;
 
     public void PopulateWithDefaultValues()
     {
@@ -17,12 +18,13 @@ public struct LastChunk : IComponent
 
     public void Serialize(DataWriter writer, IWorld world, Entity entity)
     {
+        writer.Put(HasValue);
         Value.Serialize(writer);
     }
 
     public bool Deserialize(DataReader reader, IWorld world, Entity entity)
     {
-        return Int3.TryDeserialize(reader, out Value);
+        return reader.TryGetBool(out HasValue) && Int3.TryDeserialize(reader, out Value);
     }
 
     public void IncreaseRefCount()
