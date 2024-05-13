@@ -16,6 +16,8 @@ using Techardry.World;
 
 namespace Techardry.Systems.Common;
 
+//TODO find a way to prevent two systems accessing the physics world at the same time
+
 [RegisterSystem("chunk_physics_lifetime")]
 [ExecuteInSystemGroup<InitializationSystemGroup>]
 [ExecuteAfter<PhysicsInitializationSystem>]

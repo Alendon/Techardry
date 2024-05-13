@@ -37,28 +37,22 @@ public class ChunkManager : IDisposable
     private Task _currentWaitTasks = Task.CompletedTask;
 
     private readonly CancellationTokenSource _cancellationTokenSource = new();
-
-    public event Action<Int3> ChunkAdded = delegate { };
-    public event Action<Int3> ChunkUpdated = delegate { };
-    public event Action<Int3> ChunkRemoved = delegate { };
-
+    
     private INetworkHandler NetworkHandler { get; }
     private IPlayerHandler PlayerHandler { get; }
     private ITextureAtlasHandler TextureAtlasHandler { get; }
     private IBlockHandler BlockHandler { get; }
-    private IInputDataManager? InputDataManager { get; }
     private IEventBus EventBus { get; }
 
 
     public ChunkManager(TechardryWorld parentWorld, INetworkHandler networkHandler, IPlayerHandler playerHandler,
-        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? inputDataManager, IEventBus eventBus)
+        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IEventBus eventBus)
     {
         _parentWorld = parentWorld;
         NetworkHandler = networkHandler;
         PlayerHandler = playerHandler;
         TextureAtlasHandler = textureAtlasHandler;
         BlockHandler = blockHandler;
-        InputDataManager = inputDataManager;
         EventBus = eventBus;
 
         IEntityManager.PostEntityCreateEvent += OnEntityCreate;
@@ -245,9 +239,6 @@ public class ChunkManager : IDisposable
             
             EventBus.InvokeEvent(new RemoveChunkEvent(_parentWorld, chunkToUnload));
             chunk.Dispose();
-            
-            if (!_parentWorld.IsServerWorld)
-                InputDataManager?.RemoveKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkToUnload);
         }
 
 
@@ -259,9 +250,6 @@ public class ChunkManager : IDisposable
             _activeChunkCreations.TryRemove(toLoad.ChunkPosition, out _);
 
             EventBus.InvokeEvent(new AddChunkEvent(_parentWorld, chunkPosition));
-            
-            if (!_parentWorld.IsServerWorld)
-                InputDataManager?.SetKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition, chunk.Octree);
         }
 
         if (!_parentWorld.IsServerWorld)
@@ -277,9 +265,6 @@ public class ChunkManager : IDisposable
                 
                 chunk.SetOctree(octree);
                 EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition));
-
-                if (!_parentWorld.IsServerWorld)
-                    InputDataManager?.SetKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition, octree);
             }
         }
 
@@ -332,8 +317,6 @@ public class ChunkManager : IDisposable
         }
         
         chunk.SetBlock(blockPos, blockId, depth, rotation);
-
-        ChunkUpdated(chunkPos);
     }
 
     public Identification GetBlockId(Vector3 blockPos)

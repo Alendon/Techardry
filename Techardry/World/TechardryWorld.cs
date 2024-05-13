@@ -64,13 +64,12 @@ public class TechardryWorld : IWorld
 
     public TechardryWorld(INetworkHandler networkHandler, IPlayerHandler playerHandler,
         IArchetypeManager archetypeManager, IComponentManager componentManager, IModManager modManager,
-        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? renderDataManager,
-        IEventBus eventBus, bool isServerWorld)
+        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IEventBus eventBus, bool isServerWorld)
     {
         IsServerWorld = isServerWorld;
 
         ChunkManager = new ChunkManager(this, networkHandler, playerHandler, textureAtlasHandler, blockHandler,
-            renderDataManager, eventBus);
+            eventBus);
 
         _entityManager = new EntityManager(this, archetypeManager, playerHandler, networkHandler);
         _systemManager = new SystemManager(this, componentManager, modManager);
