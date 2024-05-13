@@ -8,7 +8,9 @@ using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Graphics.Render.Managers;
 using MintyCore.Network;
+using MintyCore.Registries;
 using MintyCore.Utils;
+using MintyCore.Utils.Events;
 using Serilog;
 using Techardry.Blocks;
 using Techardry.Components.Common;
@@ -23,7 +25,7 @@ namespace Techardry.World;
 public class ChunkManager : IDisposable
 {
     private readonly TechardryWorld _parentWorld;
-    private readonly ConcurrentDictionary<Int3, ChunkEntry> _chunks = new();
+    private readonly ConcurrentDictionary<Int3, Chunk> _chunks = new();
     private readonly ConcurrentDictionary<Int3, ConcurrentDictionary<ushort, object?>> _chunkPlayers = new();
 
     private readonly ConcurrentUniqueQueue<ChunkLoadEntry> _chunksToLoad = new();
@@ -45,10 +47,11 @@ public class ChunkManager : IDisposable
     private ITextureAtlasHandler TextureAtlasHandler { get; }
     private IBlockHandler BlockHandler { get; }
     private IInputDataManager? InputDataManager { get; }
+    private IEventBus EventBus { get; }
 
 
     public ChunkManager(TechardryWorld parentWorld, INetworkHandler networkHandler, IPlayerHandler playerHandler,
-        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? inputDataManager)
+        ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? inputDataManager, IEventBus eventBus)
     {
         _parentWorld = parentWorld;
         NetworkHandler = networkHandler;
@@ -56,6 +59,7 @@ public class ChunkManager : IDisposable
         TextureAtlasHandler = textureAtlasHandler;
         BlockHandler = blockHandler;
         InputDataManager = inputDataManager;
+        EventBus = eventBus;
 
         IEntityManager.PostEntityCreateEvent += OnEntityCreate;
         IEntityManager.PreEntityDeleteEvent += OnEntityDelete;
@@ -237,14 +241,11 @@ public class ChunkManager : IDisposable
     {
         while (_chunksToUnload.TryDequeue(out var chunkToUnload))
         {
-            if (!_chunks.Remove(chunkToUnload, out var chunkEntry)) continue;
-
-            _parentWorld.PhysicsWorld.Simulation.Statics.Remove(chunkEntry.StaticHandle);
-            chunkEntry.Chunk.Dispose();
-            _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
-
-            ChunkRemoved(chunkToUnload);
-
+            if (!_chunks.Remove(chunkToUnload, out var chunk)) continue;
+            
+            EventBus.InvokeEvent(new RemoveChunkEvent(_parentWorld, chunkToUnload));
+            chunk.Dispose();
+            
             if (!_parentWorld.IsServerWorld)
                 InputDataManager?.RemoveKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkToUnload);
         }
@@ -253,18 +254,12 @@ public class ChunkManager : IDisposable
         while (_chunksToLoad.TryDequeue(out var toLoad))
         {
             var (chunkPosition, chunk) = toLoad;
-            VoxelCollider collider = chunk.CreateCollider();
-            var shape = _parentWorld.PhysicsWorld.Simulation.Shapes.Add(collider);
-            var bodyHandle = _parentWorld.PhysicsWorld.Simulation.Statics.Add(
-                new StaticDescription(
-                    new Vector3(chunkPosition.X, chunkPosition.Y, chunkPosition.Z) *
-                    Chunk.Size, shape));
 
-            _chunks.TryAdd(toLoad.ChunkPosition, new ChunkEntry(toLoad.Chunk, bodyHandle, shape));
+            _chunks.TryAdd(toLoad.ChunkPosition, toLoad.Chunk);
             _activeChunkCreations.TryRemove(toLoad.ChunkPosition, out _);
 
-            ChunkAdded(chunkPosition);
-
+            EventBus.InvokeEvent(new AddChunkEvent(_parentWorld, chunkPosition));
+            
             if (!_parentWorld.IsServerWorld)
                 InputDataManager?.SetKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition, chunk.Octree);
         }
@@ -274,38 +269,21 @@ public class ChunkManager : IDisposable
             while (_chunksToUpdate.TryDequeue(out var toUpdate))
             {
                 var (chunkPosition, octree) = toUpdate;
-                if (!_chunks.TryGetValue(chunkPosition, out var chunkEntry))
+                if (!_chunks.TryGetValue(chunkPosition, out var chunk))
                 {
                     Log.Error("Chunk to update was not found: {ChunkPosition}", chunkPosition);
                     continue;
                 }
-
-                var (chunk, staticHandle, shape) = chunkEntry;
-
+                
                 chunk.SetOctree(octree);
-
-                //destroy physics objects
-                _parentWorld.PhysicsWorld.Simulation.Statics.Remove(staticHandle);
-                _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(shape);
-
-                //create new physics objects
-                var collider = chunk.CreateCollider();
-                shape = _parentWorld.PhysicsWorld.Simulation.Shapes.Add(collider);
-                staticHandle = _parentWorld.PhysicsWorld.Simulation.Statics.Add(
-                    new StaticDescription(
-                        new Vector3(chunkPosition.X, chunkPosition.Y, chunkPosition.Z) *
-                        Chunk.Size, shape));
-
-                _chunks[chunkPosition] = new ChunkEntry(chunk, staticHandle, shape);
-
-                ChunkUpdated(chunkPosition);
+                EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition));
 
                 if (!_parentWorld.IsServerWorld)
                     InputDataManager?.SetKeyIndexedInputData(RenderInputDataIDs.Voxel, chunkPosition, octree);
             }
         }
 
-        foreach (var (chunk, _, _) in _chunks.Values)
+        foreach (var chunk in _chunks.Values)
         {
             chunk.Update();
         }
@@ -321,9 +299,8 @@ public class ChunkManager : IDisposable
 
     public bool TryGetChunk(Int3 chunkPosition, [MaybeNullWhen(false)] out Chunk chunk)
     {
-        if (_chunks.TryGetValue(chunkPosition, out var chunkEntry))
+        if (_chunks.TryGetValue(chunkPosition, out chunk))
         {
-            chunk = chunkEntry.Chunk;
             return true;
         }
 
@@ -348,14 +325,12 @@ public class ChunkManager : IDisposable
     public void SetBlock(Int3 chunkPos, Vector3 blockPos, Identification blockId, int depth,
         BlockRotation rotation = BlockRotation.None)
     {
-        if (!_chunks.TryGetValue(chunkPos, out var chunkEntry))
+        if (!_chunks.TryGetValue(chunkPos, out var chunk))
         {
             Log.Error("Chunk to set block in was not found: {ChunkPos}", chunkPos);
             return;
         }
-
-        var (chunk, _, _) = chunkEntry;
-
+        
         chunk.SetBlock(blockPos, blockId, depth, rotation);
 
         ChunkUpdated(chunkPos);
@@ -376,18 +351,15 @@ public class ChunkManager : IDisposable
 
     public Identification GetBlockId(Int3 chunkPos, Vector3 blockPos)
     {
-        if (!_chunks.TryGetValue(chunkPos, out var chunkEntry))
+        if (!_chunks.TryGetValue(chunkPos, out var chunk))
         {
             Log.Error("Chunk to get block in was not found: {ChunkPos}", chunkPos);
             return BlockIDs.Air;
         }
 
-        var (chunk, _, _) = chunkEntry;
         return chunk.GetBlockId(blockPos);
     }
-
-    record ChunkEntry(Chunk Chunk, StaticHandle StaticHandle, TypedIndex Shape);
-
+    
     //Basically a tuple but the comparison only uses the chunk position
     internal struct ChunkLoadEntry
     {
@@ -413,11 +385,10 @@ public class ChunkManager : IDisposable
 
     public void Dispose()
     {
-        foreach (var chunkEntry in _chunks.Values)
+        foreach (var (position, chunk) in _chunks)
         {
-            _parentWorld.PhysicsWorld.Simulation.Statics.Remove(chunkEntry.StaticHandle);
-            _parentWorld.PhysicsWorld.Simulation.Shapes.Remove(chunkEntry.Shape);
-            chunkEntry.Chunk.Dispose();
+            EventBus.InvokeEvent(new RemoveChunkEvent(_parentWorld, position));
+            chunk.Dispose();
         }
 
         _chunks.Clear();
@@ -446,4 +417,40 @@ public class ChunkManager : IDisposable
 
         _chunksToUnload.TryEnqueue(chunkPosition);
     }
+}
+
+/// <summary>
+/// Event that is fired when a chunk is added to the world
+/// </summary>
+/// <param name="ContainingWorld"> The world the chunk was added to</param>
+/// <param name="ChunkPosition"> The position of the chunk that was added</param>
+[RegisterEvent("add_chunk")]
+public record struct AddChunkEvent(TechardryWorld ContainingWorld, Int3 ChunkPosition) : IEvent
+{
+    public static Identification Identification => EventIDs.AddChunk;
+    public static bool ModificationAllowed => false;
+}
+
+/// <summary>
+///  Event that is fired when a chunk is removed from the world
+/// </summary>
+/// <param name="ContainingWorld"> The world the chunk was removed from</param>
+/// <param name="ChunkPosition"> The position of the chunk that was removed</param>
+[RegisterEvent("remove_chunk")]
+public record struct RemoveChunkEvent(TechardryWorld ContainingWorld, Int3 ChunkPosition) : IEvent
+{
+    public static Identification Identification => EventIDs.RemoveChunk;
+    public static bool ModificationAllowed => false;
+}
+
+/// <summary>
+///  Event that is fired when a chunk object is updated. This does not include block updates
+/// </summary>
+/// <param name="ContainingWorld"> The world the chunk was updated in</param>
+/// <param name="ChunkPosition"> The position of the chunk that was updated</param>
+[RegisterEvent("update_chunk")]
+public record struct UpdateChunkEvent(TechardryWorld ContainingWorld, Int3 ChunkPosition) : IEvent
+{
+    public static Identification Identification => EventIDs.UpdateChunk;
+    public static bool ModificationAllowed => false;
 }

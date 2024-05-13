@@ -41,7 +41,13 @@ public partial class TestInteractionSystem(
             var dir = entity.GetCamera().Forward;
 
             var hit = world.PhysicsWorld.RayCast(pos, dir, 100,
-                out var tResult, out _, out var normal);
+                out var tResult, out var collidableReference, out var normal);
+
+            if (!world.PhysicsWorld.Simulation.Statics.StaticExists(collidableReference.StaticHandle)) continue;
+            
+            world.PhysicsWorld.Simulation.Statics.GetDescription(collidableReference.StaticHandle, out var staticDescription);
+            if (staticDescription.Shape.Type != VoxelCollider.Id) continue;
+            
             var blockPos = pos + dir * tResult;
 
             var blockId = BlockIDs.Air;

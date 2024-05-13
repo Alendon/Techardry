@@ -60,7 +60,7 @@ void raycast(in Ray ray, inout Result result){
                 int tree = masterBvhIndices.indices[masterBvh.nodes[nodeIndex].leftFirst + i];
                 raycast_tree(ray, tree, result);
                 if (result.fail)
-                return;
+                    return;
             }
 
             if (stackIndex == 0) break;

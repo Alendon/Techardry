@@ -14,6 +14,7 @@ using MintyCore.Network;
 using MintyCore.Physics;
 using MintyCore.Registries;
 using MintyCore.Utils;
+using MintyCore.Utils.Events;
 using Serilog;
 using Techardry.Blocks;
 using Techardry.Components.Common.Physic;
@@ -64,12 +65,12 @@ public class TechardryWorld : IWorld
     public TechardryWorld(INetworkHandler networkHandler, IPlayerHandler playerHandler,
         IArchetypeManager archetypeManager, IComponentManager componentManager, IModManager modManager,
         ITextureAtlasHandler textureAtlasHandler, IBlockHandler blockHandler, IInputDataManager? renderDataManager,
-        bool isServerWorld)
+        IEventBus eventBus, bool isServerWorld)
     {
         IsServerWorld = isServerWorld;
 
         ChunkManager = new ChunkManager(this, networkHandler, playerHandler, textureAtlasHandler, blockHandler,
-            renderDataManager);
+            renderDataManager, eventBus);
 
         _entityManager = new EntityManager(this, archetypeManager, playerHandler, networkHandler);
         _systemManager = new SystemManager(this, componentManager, modManager);

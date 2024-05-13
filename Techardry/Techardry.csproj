@@ -41,6 +41,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <Folder Include="Render\shaders\" />
         <Folder Include="Resources\shaders\ui\" />
         <Folder Include="Resources\shaders\voxels\" />
     </ItemGroup>
