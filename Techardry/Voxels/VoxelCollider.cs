@@ -46,11 +46,11 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
 
             var octree = collider.Octree;
 
-            for (var j = 0; j < octree.DataCount; j++)
+            for (var j = 0; j < octree.NodeCount; j++)
             {
-                ref var owner = ref octree.GetNode(octree.Data.ownerNodes[j]);
+                ref var node = ref octree.GetNode((uint)j);
 
-                if (owner.IsEmpty) continue;
+                if (!node.IsLeaf() || node.IsEmpty()) continue;
 
                 collider.GetPosedLocalChild(j, out var childData, out var childPose);
 
@@ -78,11 +78,11 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         Tree.ConvertBoxToCentroidWithExtent(min, max, out var origin, out var expansion);
         TreeRay.CreateFrom(origin, sweep, maximumT, out var ray);
 
-        for (var i = 0; i < octree.DataCount; i++)
+        for (var i = 0; i < octree.NodeCount; i++)
         {
-            ref var owner = ref octree.GetNode(octree.Data.ownerNodes[i]);
+            ref var node = ref octree.GetNode((uint)i);
 
-            if (owner.IsEmpty) continue;
+            if (!node.IsLeaf() || node.IsEmpty()) continue;
 
             GetPosedLocalChild(i, out var childData, out var childPose);
 
@@ -335,12 +335,12 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
                 || (t0.X > maximumT && t0.Y > maximumT && t0.Z > maximumT))
                 continue;
 
-            if (node.IsLeaf)
+            if (node.IsLeaf())
             {
-                if (node.IsEmpty)
+                if (node.IsEmpty())
                     continue;
 
-                if (!hitHandler.AllowTest((int) node.DataIndex))
+                if (!hitHandler.AllowTest((int) node.GetDataIndex()))
                     continue;
 
                 float t;
@@ -374,7 +374,7 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
                     normal = ray.Direction.Z > 0 ? new Vector3(0, 0, -1) : new Vector3(0, 0, 1);
                 }
 
-                hitHandler.OnRayHit(ray, ref maximumT, t, normal, (int) node.DataIndex);
+                hitHandler.OnRayHit(ray, ref maximumT, t, normal, (int) node.GetDataIndex());
 
                 if (t >= maximumT)
                     return;
@@ -427,15 +427,15 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
     public void GetLocalChild(int childIndex, out Box childData)
     {
         using var octreeLock = Octree.AcquireReadLock();
-        var node = Octree.GetNode(Octree.Data.ownerNodes[childIndex]);
+        ref var node = ref Octree.GetNode((uint)childIndex);
 
-        if (node.IsEmpty)
+        if (!node.IsLeaf() || node.IsEmpty())
         {
             childData = default;
             return;
         }
 
-        var size = node.GetSize();
+        var size = Octree.NodeGetSize(ref node);
         childData = new Box(size, size, size);
     }
 
@@ -444,16 +444,16 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         using var octreeLock = Octree.AcquireReadLock();
         var octree = Octree;
 
-        ref var node = ref octree.GetNode(octree.Data.ownerNodes[childIndex]);
+        ref var node = ref octree.GetNode((uint)childIndex);
         childPose = RigidPose.Identity;
         childData = default;
 
-        if (node.IsEmpty)
+        if (!node.IsLeaf() || node.IsEmpty())
         {
             return;
         }
 
-        node.GetLocationData(out childPose.Position, out var size);
+        octree.GetNodeLocationData(ref node, out childPose.Position, out var size);
         childPose.Position += new Vector3(size * 0.5f);
         childData = new Box(size, size, size);
     }
@@ -462,15 +462,15 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
     {
         using var octreeLock = Octree.AcquireReadLock();
         var octree = Octree;
-        var node = octree.GetNode(octree.Data.ownerNodes[childIndex]);
+        var node = octree.GetNode((uint)childIndex);
 
-        if (node.IsEmpty)
+        if (!node.IsLeaf() || node.IsEmpty())
         {
             childData = default;
             return;
         }
 
-        var halfSize = node.GetSize() * 0.5f;
+        var halfSize = octree.NodeGetSize(ref node) * 0.5f;
         GatherScatter.GetFirst(ref childData.HalfHeight) = halfSize;
         GatherScatter.GetFirst(ref childData.HalfWidth) = halfSize;
         GatherScatter.GetFirst(ref childData.HalfLength) = halfSize;
@@ -481,5 +481,6 @@ public unsafe struct VoxelCollider : IHomogeneousCompoundShape<Box, BoxWide>
         _octreeHandle.Free();
     }
 
-    public int ChildCount => (int) Octree.DataCount;
+    //TODO: Is there a way to get the proper leaf count and index those leaves?
+    public int ChildCount => (int) Octree.NodeCount;
 }
