@@ -71,7 +71,7 @@ bool resultHit(Result result){
     return !floatEquals(result.t, FloatMax);
 }
 
-layout(buffer_reference, std430, buffer_reference_align=4) readonly buffer UniformTree
+layout(buffer_reference, std430, buffer_reference_align=4) buffer UniformTree
 {
     uint treeType;
     //deconstruct the inverse transform mat4 into 16 floats

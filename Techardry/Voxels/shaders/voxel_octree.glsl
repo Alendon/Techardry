@@ -3,7 +3,7 @@
 
 #include "common.glsl"
 
-layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer ChunkOctree
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer ChunkOctree
 {
     uint treeType;
     //deconstruct the inverse transform mat4 into 16 floats
@@ -19,10 +19,12 @@ int octree_GetNextNode(vec3 tm, ivec3 c);
 int octree_GetNextChildIndex(int currentChildIndex, vec3 t0, vec3 t1, vec3 tm);
 void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out vec3 childT1);
 
-uint voxelNode_GetChildren(uint64_t tree, uint nodeIndex, uint childIndex);
+uint voxelNode_GetValue(uint64_t tree, uint nodeIndex);
+uint voxelNode_GetChildrenDirect(uint nodeValue, uint childIndex);
+bool voxelNode_IsLeafDirect(uint nodeValue);
+bool voxelNode_IsEmptyDirect(uint nodeValue);
+
 uint voxelNode_GetDataIndex(uint64_t tree, uint nodeIndex);
-bool voxelNode_IsLeaf(uint64_t tree, uint nodeIndex);
-bool voxelNode_IsEmpty(uint64_t tree, uint nodeIndex);
 uint voxelData_GetColor(uint64_t tree, uint voxelIndex);
 float voxelData_GetTextureStartX(uint64_t tree, uint voxelIndex);
 float voxelData_GetTextureStartY(uint64_t tree, uint voxelIndex);
@@ -71,18 +73,22 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
 
     struct StackEntry{
         uint nodeIndex;
+        uint nodeValue;
         int lastChildIndex;
         vec3 t0;
         vec3 t1;
     } stack[MaxDepth + 1];
 
     int stackIndex = 0;
-    stack[0] = StackEntry(0, -1, t0, t1);
+    stack[0] = StackEntry(0, 0, -1, t0, t1);
+    stack[0].nodeValue = voxelNode_GetValue(tree, 0);
 
     int counter = 0;
 
-    while (stackIndex >= 0){
+    while (true){
 
+        if(stackIndex < 0) return;
+        
         counter++;
         if (counter > 1000){
             result.tree = tree;
@@ -91,24 +97,22 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
             return;
         }
 
-        //Split definition and declaration to avoid a false error from the glsl plugin
-        StackEntry currentEntry;
-        currentEntry = stack[stackIndex];
+        t0 = stack[stackIndex].t0;
+        t1 = stack[stackIndex].t1;
 
+        uint node = stack[stackIndex].nodeIndex;
+        uint nodeValue = stack[stackIndex].nodeValue;
+        int lastChildIndex = stack[stackIndex].lastChildIndex;
+        
         stackIndex--;
-
-        t0 = currentEntry.t0;
-        t1 = currentEntry.t1;
-
-        uint node = currentEntry.nodeIndex;
 
         if (t1.x < 0 || t1.y < 0 || t1.z < 0 || max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
             continue;
         }
 
-        if (voxelNode_IsLeaf(tree, node)){
+        if (voxelNode_IsLeafDirect(nodeValue)){
             //We found a leaf.
-            if (voxelNode_IsEmpty(tree, node)){
+            if (voxelNode_IsEmptyDirect(nodeValue)){
                 continue;
             }
             else {
@@ -151,7 +155,6 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
 
         vec3 tm = (t0 + t1) * 0.5;
 
-        int lastChildIndex = currentEntry.lastChildIndex;
         int nextChildIndex = octree_GetNextChildIndex(lastChildIndex, t0, t1, tm);
 
         if (nextChildIndex >= 8){
@@ -165,13 +168,13 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
         octree_GetChildT(nextChildIndex, t0, t1, tm, childT0, childT1);
 
         stackIndex++;
-        currentEntry.lastChildIndex = nextChildIndex;
-        stack[stackIndex] = currentEntry;
+        stack[stackIndex].lastChildIndex = nextChildIndex;
 
         stackIndex++;
 
-        uint nodeChildren = voxelNode_GetChildren(tree, node, nextChildIndex ^ childIndexModifier);
-        stack[stackIndex] = StackEntry(nodeChildren, -1, childT0, childT1);
+        uint nodeChildren = voxelNode_GetChildrenDirect(nodeValue, nextChildIndex ^ childIndexModifier);
+        uint nodeChildrenValue = voxelNode_GetValue(tree, nodeChildren);
+        stack[stackIndex] = StackEntry(nodeChildren, nodeChildrenValue, -1, childT0, childT1);
     }
 }
 
@@ -301,27 +304,27 @@ ChunkOctree getChunkOctree(uint64_t tree){
 #define NodeSize 1
 
 #define Node_Children_Offset 0
-uint voxelNode_GetChildren(uint64_t tree, uint nodeIndex, uint childIndex){
-    ChunkOctree chunkOctree = getChunkOctree(tree);
-    uint data = chunkOctree.data[nodeIndex];
-    data = data & 0x7FFFFFFFu;
-    data = data + childIndex;
-    return data;
-    
-    //return (getChunkOctree(tree).data[nodeIndex] & 0x7FFFFFFFu) + childIndex;
-}
 
 uint voxelNode_GetDataIndex(uint64_t tree, uint nodeIndex){
     return getChunkOctree(tree).data[nodeIndex];
 }
 
-bool voxelNode_IsLeaf(uint64_t tree, uint nodeIndex){
-    return getChunkOctree(tree).data[nodeIndex] < 0x80000000u;
+uint voxelNode_GetValue(uint64_t tree, uint nodeIndex){
+    return getChunkOctree(tree).data[nodeIndex];
 }
 
-bool voxelNode_IsEmpty(uint64_t tree, uint nodeIndex){
-    return getChunkOctree(tree).data[nodeIndex] == 0;
+uint voxelNode_GetChildrenDirect(uint nodeValue, uint childIndex){
+    return (nodeValue & 0x7FFFFFFFu) + childIndex;
 }
+
+bool voxelNode_IsLeafDirect(uint nodeValue){
+    return nodeValue < 0x80000000u;
+}
+
+bool voxelNode_IsEmptyDirect(uint nodeValue){
+    return nodeValue == 0;
+}
+
 #undef Node_Children_Offset
 
 #define VoxelSize 5
