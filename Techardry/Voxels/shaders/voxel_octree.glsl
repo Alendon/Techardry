@@ -3,7 +3,7 @@
 
 #include "common.glsl"
 
-layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_OCTREE_BINDING) readonly buffer ChunkOctree
+layout(buffer_reference, std430, buffer_reference_align = 4) readonly buffer ChunkOctree
 {
     uint treeType;
     //deconstruct the inverse transform mat4 into 16 floats
@@ -12,24 +12,24 @@ layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_OCTREE_BINDING) 
     float transposedNormalMatrix[9];
     uint nodeCount;
     uint data[];
-} chunkOctrees[];
+};
 
 int octree_GetFirstNode(vec3 t0, vec3 tm);
 int octree_GetNextNode(vec3 tm, ivec3 c);
 int octree_GetNextChildIndex(int currentChildIndex, vec3 t0, vec3 t1, vec3 tm);
 void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT0, out vec3 childT1);
 
-uint voxelNode_GetChildren(uint tree, uint nodeIndex, uint childIndex);
-uint voxelNode_GetDataIndex(uint tree, uint nodeIndex);
-bool voxelNode_IsLeaf(uint tree, uint nodeIndex);
-bool voxelNode_IsEmpty(uint tree, uint nodeIndex);
-uint voxelData_GetColor(uint tree, uint voxelIndex);
-float voxelData_GetTextureStartX(uint tree, uint voxelIndex);
-float voxelData_GetTextureStartY(uint tree, uint voxelIndex);
-float voxelData_GetTextureSizeX(uint tree, uint voxelIndex);
-float voxelData_GetTextureSizeY(uint tree, uint voxelIndex);
+uint voxelNode_GetChildren(uint64_t tree, uint nodeIndex, uint childIndex);
+uint voxelNode_GetDataIndex(uint64_t tree, uint nodeIndex);
+bool voxelNode_IsLeaf(uint64_t tree, uint nodeIndex);
+bool voxelNode_IsEmpty(uint64_t tree, uint nodeIndex);
+uint voxelData_GetColor(uint64_t tree, uint voxelIndex);
+float voxelData_GetTextureStartX(uint64_t tree, uint voxelIndex);
+float voxelData_GetTextureStartY(uint64_t tree, uint voxelIndex);
+float voxelData_GetTextureSizeX(uint64_t tree, uint voxelIndex);
+float voxelData_GetTextureSizeY(uint64_t tree, uint voxelIndex);
 
-void raycastChunk(in Ray ray, int tree, inout Result result){
+void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
 
     Ray originalRay = ray;
     
@@ -294,61 +294,70 @@ void octree_GetChildT(int childIndex, vec3 t0, vec3 t1, vec3 tm, out vec3 childT
     }
 }
 
+ChunkOctree getChunkOctree(uint64_t tree){
+    return ChunkOctree(tree);
+}
+
 #define NodeSize 1
 
 #define Node_Children_Offset 0
-uint voxelNode_GetChildren(uint tree, uint nodeIndex, uint childIndex){
-    uint dataChildIndex = chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize];
-    return (dataChildIndex & 0x7FFFFFFFu) + childIndex;
+uint voxelNode_GetChildren(uint64_t tree, uint nodeIndex, uint childIndex){
+    ChunkOctree chunkOctree = getChunkOctree(tree);
+    uint data = chunkOctree.data[nodeIndex];
+    data = data & 0x7FFFFFFFu;
+    data = data + childIndex;
+    return data;
+    
+    //return (getChunkOctree(tree).data[nodeIndex] & 0x7FFFFFFFu) + childIndex;
 }
 
-uint voxelNode_GetDataIndex(uint tree, uint nodeIndex){
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize];
+uint voxelNode_GetDataIndex(uint64_t tree, uint nodeIndex){
+    return getChunkOctree(tree).data[nodeIndex];
 }
 
-bool voxelNode_IsLeaf(uint tree, uint nodeIndex){
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize] < 0x80000000u;
+bool voxelNode_IsLeaf(uint64_t tree, uint nodeIndex){
+    return getChunkOctree(tree).data[nodeIndex] < 0x80000000u;
 }
 
-bool voxelNode_IsEmpty(uint tree, uint nodeIndex){
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeIndex * NodeSize] == 0;
+bool voxelNode_IsEmpty(uint64_t tree, uint nodeIndex){
+    return getChunkOctree(tree).data[nodeIndex] == 0;
 }
 #undef Node_Children_Offset
 
 #define VoxelSize 5
 
 #define Voxel_Color_Offset 0
-uint voxelData_GetColor(uint tree, uint voxelIndex){
-    uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
+uint voxelData_GetColor(uint64_t tree, uint voxelIndex){
+    uint nodeCount = getChunkOctree(tree).nodeCount;
+    return getChunkOctree(tree).data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_Color_Offset];
 }
 #undef Voxel_Color_Offset
 
 #define Voxel_TextureStartX_Offset 1
-float voxelData_GetTextureStartX(uint tree, uint voxelIndex){
-    uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return uintBitsToFloat(chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset]);
+float voxelData_GetTextureStartX(uint64_t tree, uint voxelIndex){
+    uint nodeCount = getChunkOctree(tree).nodeCount;
+    return uintBitsToFloat(getChunkOctree(tree).data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartX_Offset]);
 }
 #undef Voxel_TextureStartX_Offset
 
 #define Voxel_TextureStartY_Offset 2
-float voxelData_GetTextureStartY(uint tree, uint voxelIndex){
-    uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return uintBitsToFloat(chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset]);
+float voxelData_GetTextureStartY(uint64_t tree, uint voxelIndex){
+    uint nodeCount = getChunkOctree(tree).nodeCount;
+    return uintBitsToFloat(getChunkOctree(tree).data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureStartY_Offset]);
 }
 #undef Voxel_TextureStartY_Offset
 
 #define Voxel_TextureSizeX_Offset 3
-float voxelData_GetTextureSizeX(uint tree, uint voxelIndex){
-    uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return uintBitsToFloat(chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset]);
+float voxelData_GetTextureSizeX(uint64_t tree, uint voxelIndex){
+    uint nodeCount = getChunkOctree(tree).nodeCount;
+    return uintBitsToFloat(getChunkOctree(tree).data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeX_Offset]);
 }
 #undef Voxel_TextureSizeX_Offset
 
 #define Voxel_TextureSizeY_Offset 4
-float voxelData_GetTextureSizeY(uint tree, uint voxelIndex){
-    uint nodeCount = chunkOctrees[nonuniformEXT(tree)].nodeCount;
-    return uintBitsToFloat(chunkOctrees[nonuniformEXT(tree)].data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset]);
+float voxelData_GetTextureSizeY(uint64_t tree, uint voxelIndex){
+    uint nodeCount = getChunkOctree(tree).nodeCount;
+    return uintBitsToFloat(getChunkOctree(tree).data[nodeCount * NodeSize + voxelIndex * VoxelSize + Voxel_TextureSizeY_Offset]);
 }
 #undef Voxel_TextureSizeY_Offset
 #undef VoxelSize

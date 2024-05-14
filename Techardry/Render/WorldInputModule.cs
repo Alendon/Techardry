@@ -14,14 +14,16 @@ using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
 using Techardry.Voxels;
-using Int3 = Techardry.Utils.Int3;
 using MathHelper = MintyCore.Utils.Maths.MathHelper;
 
 namespace Techardry.Render;
 
 [RegisterInputDataModule("world")]
 [UsedImplicitly]
-public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkanEngine) : InputModule
+public class WorldInputModule(
+    IMemoryManager memoryManager,
+    IVulkanEngine vulkanEngine,
+    IDescriptorSetManager descriptorSetManager) : InputModule
 {
     private Func<VoxelIntermediateData?>? _voxelBufferAccessor;
     private Func<WorldIntermediateData>? _worldDataAccessor;
@@ -46,8 +48,8 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
         }
 
         var worldData = _worldDataAccessor();
-        
-        if(!voxelBuffer.Buffers.Any())
+
+        if (!voxelBuffer.Buffers.Any())
             return;
 
         var octrees = voxelBuffer.Buffers.ToArray();
@@ -61,34 +63,31 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
         }).ToArray();
 
         var bvh = new MasterBvhTree(boundingBoxes);
-
-        var nodes = bvh.Nodes;
-        var indices = bvh.TreeIndices;
-
-        ApplyBufferData(commandBuffer, nodes, ref _stagingNodeBuffer, ref worldData.BvhNodeBuffer);
-        ApplyBufferData(commandBuffer, indices, ref _stagingIndexBuffer, ref worldData.BvhIndexBuffer);
-
-        UpdateDescriptorSets(worldData, octrees);
-    }
-
-    private unsafe void UpdateDescriptorSets(WorldIntermediateData worldData,
-        KeyValuePair<Int3, MemoryBuffer>[] octrees)
-    {
-        if (worldData.WorldDataDescriptorPool.Handle == default || worldData.DescriptorSetCapacity < octrees.Length)
+        
+        var reorderedPointers = new ulong[octrees.Length];
+        //take the tree indices from the bvh and reorder the pointers of the octrees
+        for (var i = 0; i < bvh.TreeIndices.Length; i++)
         {
-            RecreateDescriptor(worldData,
-                octrees.Length);
+            reorderedPointers[i] = octrees[bvh.TreeIndices[i]].address;
         }
 
-        var writeArray = ArrayPool<WriteDescriptorSet>.Shared.Rent((int)(worldData.DescriptorSetCapacity + 2));
-        var writeGcHandle = GCHandle.Alloc(writeArray, GCHandleType.Pinned);
-        var writeSpan = writeArray.AsSpan(0, (int)worldData.DescriptorSetCapacity + 2);
 
-        var descriptorBufferArray = ArrayPool<DescriptorBufferInfo>.Shared.Rent((int)worldData.DescriptorSetCapacity);
-        var descriptorBufferGcHandle = GCHandle.Alloc(descriptorBufferArray, GCHandleType.Pinned);
-        var descriptorBufferSpan = descriptorBufferArray.AsSpan(0, (int)worldData.DescriptorSetCapacity);
+        var nodes = bvh.Nodes;
 
-        var descriptorIndex = 0;
+        ApplyBufferData(commandBuffer, nodes, ref _stagingNodeBuffer, ref worldData.BvhNodeBuffer);
+        ApplyBufferData(commandBuffer, reorderedPointers, ref _stagingIndexBuffer, ref worldData.BvhIndexBuffer);
+
+        UpdateDescriptorSets(worldData);
+    }
+
+    private unsafe void UpdateDescriptorSets(WorldIntermediateData worldData)
+    {
+        if (worldData.WorldDataDescriptorSet.Handle == default)
+        {
+            worldData.WorldDataDescriptorSet = descriptorSetManager.AllocateDescriptorSet(DescriptorSetIDs.Render);
+        }
+
+        Span<WriteDescriptorSet> write = stackalloc WriteDescriptorSet[2];
 
         //bvh node buffer
         var nodeBufferInfo = new DescriptorBufferInfo
@@ -96,7 +95,7 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
             Buffer = worldData.BvhNodeBuffer!.Buffer,
             Range = worldData.BvhNodeBuffer.Size
         };
-        writeSpan[descriptorIndex] = new()
+        write[0] = new()
         {
             SType = StructureType.WriteDescriptorSet,
             DstSet = worldData.WorldDataDescriptorSet,
@@ -105,7 +104,6 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
             DescriptorType = DescriptorType.StorageBuffer,
             PBufferInfo = &nodeBufferInfo
         };
-        descriptorIndex++;
 
         //bvh index buffer
         var indexBufferInfo = new DescriptorBufferInfo
@@ -113,7 +111,7 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
             Buffer = worldData.BvhIndexBuffer!.Buffer,
             Range = worldData.BvhIndexBuffer.Size
         };
-        writeSpan[descriptorIndex] = new()
+        write[1] = new()
         {
             SType = StructureType.WriteDescriptorSet,
             DstSet = worldData.WorldDataDescriptorSet,
@@ -122,84 +120,8 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
             DescriptorType = DescriptorType.StorageBuffer,
             PBufferInfo = &indexBufferInfo
         };
-        descriptorIndex++;
 
-        for (uint currentOctree = 0; currentOctree < octrees.Length; currentOctree++, descriptorIndex++)
-        {
-            descriptorBufferSpan[(int)currentOctree] = new()
-            {
-                Buffer = octrees[currentOctree].Value.Buffer,
-                Range = octrees[currentOctree].Value.Size
-            };
-            writeSpan[descriptorIndex] = new()
-            {
-                SType = StructureType.WriteDescriptorSet,
-                DstSet = worldData.WorldDataDescriptorSet,
-                DstBinding = 2,
-                DescriptorCount = 1,
-                DescriptorType = DescriptorType.StorageBuffer,
-                PBufferInfo = (DescriptorBufferInfo*)Unsafe.AsPointer(ref descriptorBufferSpan[(int)currentOctree]),
-                DstArrayElement = currentOctree
-            };
-        }
-        
-        vulkanEngine.Vk.UpdateDescriptorSets(vulkanEngine.Device, writeSpan[..descriptorIndex], ReadOnlySpan<CopyDescriptorSet>.Empty);
-
-        descriptorBufferGcHandle.Free();
-        ArrayPool<DescriptorBufferInfo>.Shared.Return(descriptorBufferArray);
-
-        writeGcHandle.Free();
-        ArrayPool<WriteDescriptorSet>.Shared.Return(writeArray);
-    }
-
-    const int AdditionalDescriptorSets = 2;
-    private unsafe void RecreateDescriptor(WorldIntermediateData worldData, int octreesLength)
-    {
-        // We need to allocate 2 additional sets for the bvh buffer (node and index)
-        var alignedOctreesLength = (uint)MathHelper.CeilPower2(octreesLength);
-        worldData.DescriptorSetCapacity = alignedOctreesLength;
-
-        if (worldData.WorldDataDescriptorPool.Handle != default)
-        {
-            vulkanEngine.Vk.DestroyDescriptorPool(vulkanEngine.Device, worldData.WorldDataDescriptorPool, null);
-        }
-
-        var poolSize = new DescriptorPoolSize()
-        {
-            Type = DescriptorType.StorageBuffer,
-            DescriptorCount = alignedOctreesLength + AdditionalDescriptorSets
-        };
-
-        var createInfo = new DescriptorPoolCreateInfo()
-        {
-            SType = StructureType.DescriptorPoolCreateInfo,
-            MaxSets = 1,
-            PoolSizeCount = 1,
-            PPoolSizes = &poolSize
-        };
-
-        VulkanUtils.Assert(vulkanEngine.Vk.CreateDescriptorPool(vulkanEngine.Device, createInfo, null,
-            out worldData.WorldDataDescriptorPool));
-
-        var variableAllocateInfo = new DescriptorSetVariableDescriptorCountAllocateInfo()
-        {
-            SType = StructureType.DescriptorSetVariableDescriptorCountAllocateInfo,
-            DescriptorSetCount = 1,
-            PDescriptorCounts = &alignedOctreesLength
-        };
-
-        var layout = RenderObjects.RenderDescriptorLayout;
-        var allocateInfo = new DescriptorSetAllocateInfo()
-        {
-            SType = StructureType.DescriptorSetAllocateInfo,
-            PNext = &variableAllocateInfo,
-            DescriptorPool = worldData.WorldDataDescriptorPool,
-            DescriptorSetCount = 1,
-            PSetLayouts = &layout
-        };
-
-        VulkanUtils.Assert(vulkanEngine.Vk.AllocateDescriptorSets(vulkanEngine.Device, allocateInfo,
-            out worldData.WorldDataDescriptorSet));
+        vulkanEngine.Vk.UpdateDescriptorSets(vulkanEngine.Device, write, ReadOnlySpan<CopyDescriptorSet>.Empty);
     }
 
     private void ApplyBufferData<TData>(ManagedCommandBuffer commandBuffer, TData[] data,
@@ -240,7 +162,7 @@ public class WorldInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
         _stagingNodeBuffer?.Dispose();
         _stagingIndexBuffer = null;
         _stagingNodeBuffer = null;
-        
+
         _voxelBufferAccessor = null;
         _worldDataAccessor = null;
     }

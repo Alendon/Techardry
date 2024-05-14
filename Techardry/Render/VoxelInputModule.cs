@@ -76,7 +76,13 @@ public class VoxelInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
 
             commandBuffer.CopyBuffer(stagingBuffer, buffer);
 
-            intermediateData.SetNewBuffer(chunkPosition, octree.Version, buffer);
+            var address = vulkanEngine.Vk.GetBufferDeviceAddress(vulkanEngine.Device, new BufferDeviceAddressInfo()
+            {
+                SType = StructureType.BufferDeviceAddressInfo,
+                Buffer = buffer.Buffer,
+            });
+
+            intermediateData.SetNewBuffer(chunkPosition, octree.Version, buffer, address);
         }
 
         intermediateData.ReleaseOldUnusedBuffers();
@@ -123,7 +129,8 @@ public class VoxelInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
     private MemoryBuffer CreateBuffer(uint size)
     {
         return memoryManager.CreateBuffer(
-            BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit,
+            BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit |
+            BufferUsageFlags.ShaderDeviceAddressBit,
             size,
             [vulkanEngine.GraphicQueue.familyIndex],
             MemoryPropertyFlags.DeviceLocalBit,

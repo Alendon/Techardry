@@ -62,7 +62,7 @@ public class LocalGameState(
         renderModuleManager.SetModuleActive(RenderModuleIDs.AvaloniaUi, true);
         renderModuleManager.SetModuleActive(Identifications.RenderModuleIDs.World, true);
        
-        renderManager.MaxFrameRate = 60;
+        renderManager.MaxFrameRate = int.MaxValue;
         renderManager.StartRendering();
         
         gameTimer.SetTargetTicksPerSecond(60);

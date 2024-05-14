@@ -14,8 +14,8 @@ public class VoxelIntermediateData : IntermediateData
     private readonly Dictionary<Int3, ChunkBufferInfo> _oldBuffers = new();
     private readonly Dictionary<Int3, ChunkBufferInfo> _buffers = new();
 
-    public IEnumerable<KeyValuePair<Int3, MemoryBuffer>> Buffers =>
-        _buffers.Select(x => new KeyValuePair<Int3, MemoryBuffer>(x.Key, x.Value.Buffer));
+    public (Int3 position, ulong address)[] Buffers =>
+        _buffers.Select(x => (x.Key, x.Value.Address)).ToArray();
 
     public bool TryUseOldBuffer(Int3 position, uint version)
     {
@@ -31,12 +31,13 @@ public class VoxelIntermediateData : IntermediateData
         return true;
     }
 
-    public void SetNewBuffer(Int3 position, uint version, MemoryBuffer buffer)
+    public void SetNewBuffer(Int3 position, uint version, MemoryBuffer buffer, ulong address)
     {
         _buffers.Add(position, new ChunkBufferInfo
         {
             Buffer = buffer,
-            Version = version
+            Version = version,
+            Address = address
         });
     }
 
@@ -89,6 +90,7 @@ public class VoxelIntermediateData : IntermediateData
     {
         public required MemoryBuffer Buffer;
         public required uint Version;
+        public required ulong Address;
 
         private int _refCount = 1;
 

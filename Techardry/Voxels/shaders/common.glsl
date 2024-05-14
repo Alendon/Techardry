@@ -15,7 +15,7 @@ struct Result{
     vec3 normal;
     vec2 uv;
     float t;
-    int tree;
+    uint64_t tree;
     bool fail;
     vec3 failColor;
 };
@@ -71,48 +71,53 @@ bool resultHit(Result result){
     return !floatEquals(result.t, FloatMax);
 }
 
-//This is the general layout / header of all trees which are contained in the master bvh
-layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_OCTREE_BINDING) readonly buffer UniformTree
+layout(buffer_reference, std430, buffer_reference_align=4) readonly buffer UniformTree
 {
     uint treeType;
-//deconstruct the inverse transform mat4 into 16 floats
+    //deconstruct the inverse transform mat4 into 16 floats
     float inverseTransformMatrix[16];
     float transformMatrix[16];
     float transposedNormalMatrix[9];
     uint data[];
-} trees[];
+};
 
-mat4 getTreeInverseTransform(int tree){
+mat4 getTreeInverseTransform(uint64_t tree){
+    UniformTree treeRef = UniformTree(tree);
+    
     return mat4(
-    trees[nonuniformEXT(tree)].inverseTransformMatrix[0], trees[nonuniformEXT(tree)].inverseTransformMatrix[1], trees[nonuniformEXT(tree)].inverseTransformMatrix[2], trees[nonuniformEXT(tree)].inverseTransformMatrix[3],
-    trees[nonuniformEXT(tree)].inverseTransformMatrix[4], trees[nonuniformEXT(tree)].inverseTransformMatrix[5], trees[nonuniformEXT(tree)].inverseTransformMatrix[6], trees[nonuniformEXT(tree)].inverseTransformMatrix[7],
-    trees[nonuniformEXT(tree)].inverseTransformMatrix[8], trees[nonuniformEXT(tree)].inverseTransformMatrix[9], trees[nonuniformEXT(tree)].inverseTransformMatrix[10], trees[nonuniformEXT(tree)].inverseTransformMatrix[11],
-    trees[nonuniformEXT(tree)].inverseTransformMatrix[12], trees[nonuniformEXT(tree)].inverseTransformMatrix[13], trees[nonuniformEXT(tree)].inverseTransformMatrix[14], trees[nonuniformEXT(tree)].inverseTransformMatrix[15]
+    treeRef.inverseTransformMatrix[0], treeRef.inverseTransformMatrix[1],  treeRef.inverseTransformMatrix[2],  treeRef.inverseTransformMatrix[3],
+    treeRef.inverseTransformMatrix[4], treeRef.inverseTransformMatrix[5],  treeRef.inverseTransformMatrix[6],  treeRef.inverseTransformMatrix[7],
+    treeRef.inverseTransformMatrix[8], treeRef.inverseTransformMatrix[9],  treeRef.inverseTransformMatrix[10], treeRef.inverseTransformMatrix[11],
+    treeRef.inverseTransformMatrix[12],treeRef.inverseTransformMatrix[13], treeRef.inverseTransformMatrix[14], treeRef.inverseTransformMatrix[15]
     );
 }
 
-mat4 getTreeTransform(int tree){
+mat4 getTreeTransform(uint64_t tree){
+    UniformTree treeRef = UniformTree(tree);
+    
     return mat4(
-    trees[nonuniformEXT(tree)].transformMatrix[0], trees[nonuniformEXT(tree)].transformMatrix[1], trees[nonuniformEXT(tree)].transformMatrix[2], trees[nonuniformEXT(tree)].transformMatrix[3],
-    trees[nonuniformEXT(tree)].transformMatrix[4], trees[nonuniformEXT(tree)].transformMatrix[5], trees[nonuniformEXT(tree)].transformMatrix[6], trees[nonuniformEXT(tree)].transformMatrix[7],
-    trees[nonuniformEXT(tree)].transformMatrix[8], trees[nonuniformEXT(tree)].transformMatrix[9], trees[nonuniformEXT(tree)].transformMatrix[10], trees[nonuniformEXT(tree)].transformMatrix[11],
-    trees[nonuniformEXT(tree)].transformMatrix[12], trees[nonuniformEXT(tree)].transformMatrix[13], trees[nonuniformEXT(tree)].transformMatrix[14], trees[nonuniformEXT(tree)].transformMatrix[15]
+    treeRef.transformMatrix[0],  treeRef.transformMatrix[1],  treeRef.transformMatrix[2],  treeRef.transformMatrix[3],
+    treeRef.transformMatrix[4],  treeRef.transformMatrix[5],  treeRef.transformMatrix[6],  treeRef.transformMatrix[7],
+    treeRef.transformMatrix[8],  treeRef.transformMatrix[9],  treeRef.transformMatrix[10], treeRef.transformMatrix[11],
+    treeRef.transformMatrix[12], treeRef.transformMatrix[13], treeRef.transformMatrix[14], treeRef.transformMatrix[15]
     );
 }
 
-mat3 getTreeTransposedNormalMatrix(int tree){
+mat3 getTreeTransposedNormalMatrix(uint64_t tree){
+    UniformTree treeRef = UniformTree(tree);
+    
     return mat3(
-    trees[nonuniformEXT(tree)].transposedNormalMatrix[0], trees[nonuniformEXT(tree)].transposedNormalMatrix[1], trees[nonuniformEXT(tree)].transposedNormalMatrix[2],
-    trees[nonuniformEXT(tree)].transposedNormalMatrix[3], trees[nonuniformEXT(tree)].transposedNormalMatrix[4], trees[nonuniformEXT(tree)].transposedNormalMatrix[5],
-    trees[nonuniformEXT(tree)].transposedNormalMatrix[6], trees[nonuniformEXT(tree)].transposedNormalMatrix[7], trees[nonuniformEXT(tree)].transposedNormalMatrix[8]
+    treeRef.transposedNormalMatrix[0], treeRef.transposedNormalMatrix[1], treeRef.transposedNormalMatrix[2],
+    treeRef.transposedNormalMatrix[3], treeRef.transposedNormalMatrix[4], treeRef.transposedNormalMatrix[5],
+    treeRef.transposedNormalMatrix[6], treeRef.transposedNormalMatrix[7], treeRef.transposedNormalMatrix[8]
     );
 }
 
-vec3 normalToWorldSpace(vec3 normal, int tree){
+vec3 normalToWorldSpace(vec3 normal, uint64_t tree){
     return normalize(getTreeTransposedNormalMatrix(tree) * normal);
 }
 
-float tToWorldSpace(float t, vec3 rayDirection, int tree){
+float tToWorldSpace(float t, vec3 rayDirection, uint64_t tree){
     return t * length(getTreeTransform(tree) * vec4(rayDirection, 0));
 }
 

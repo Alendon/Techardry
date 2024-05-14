@@ -15,12 +15,7 @@ public class WorldIntermediateData : IntermediateData
     
     
     public DescriptorSet WorldDataDescriptorSet;
-    public DescriptorPool WorldDataDescriptorPool;
-    
-    /// <summary>
-    /// How many chunks/entity buffers can be stored in the descriptor set
-    /// </summary>
-    public uint DescriptorSetCapacity;
+
 
     public override void Clear()
     {

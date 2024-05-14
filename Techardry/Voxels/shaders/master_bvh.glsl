@@ -12,10 +12,10 @@ layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_MASTER_BVH_BINDI
     BvhNode nodes[];
 } masterBvh;
 
-layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_MASTER_BVH_INDICES_BINDING) readonly buffer MasterBvhIndices
+layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_MASTER_BVH_INDICES_BINDING) readonly buffer MasterBvhPointers
 {
-    int indices[];
-} masterBvhIndices;
+    uint64_t  pointers[];
+} masterBvhPointers;
 
 
 
@@ -24,7 +24,7 @@ bool bvhNode_IsLeaf(in BvhNode node);
 AABB bvhNode_GetAABB(in BvhNode node);
 
 
-void raycast_tree(in Ray ray, in int tree, inout Result result){
+void raycast_tree(in Ray ray, in uint64_t tree, inout Result result){
     //transform the ray into the tree's local space
     mat4 inverseTransform = getTreeInverseTransform(tree);
     
@@ -35,8 +35,8 @@ void raycast_tree(in Ray ray, in int tree, inout Result result){
     ray.direction = normalize(rayDirection.xyz);
     ray.inverseDirection = 1.0 / ray.direction;
 
-
-    switch (trees[tree].treeType){
+    UniformTree treeRef = UniformTree(tree);
+    switch (treeRef.treeType){
         case VOXEL_OCTREE_TYPE:
         raycastChunk(ray, tree, result);
         break;
@@ -57,7 +57,7 @@ void raycast(in Ray ray, inout Result result){
     {
         if (bvhNode_IsLeaf(masterBvh.nodes[nodeIndex])){
             for (int i = 0; i < masterBvh.nodes[nodeIndex].count; i++){
-                int tree = masterBvhIndices.indices[masterBvh.nodes[nodeIndex].leftFirst + i];
+                uint64_t tree = masterBvhPointers.pointers[masterBvh.nodes[nodeIndex].leftFirst + i];
                 raycast_tree(ray, tree, result);
                 if (result.fail)
                     return;

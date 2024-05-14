@@ -110,38 +110,13 @@ public static class RenderObjects
                 }
             ]
         };
-
-    [RegisterExternalDescriptorSet("render")]
-    public static ExternalDescriptorSetInfo ExternalRenderDescriptorRegisterInfo => new()
+    
+    
+    [RegisterDescriptorSet("render")]
+    public static DescriptorSetInfo RenderDescriptorSet => new()
     {
-        Layout = RenderDescriptorLayout
-    };
-
-    public static DescriptorSetLayout RenderDescriptorLayout { get; private set; }
-
-    public static unsafe void CreateRenderDescriptorLayout(IVulkanEngine vulkanEngine)
-    {
-        if (RenderDescriptorLayout.Handle != default)
-        {
-            Log.Warning("Render descriptor layout already created");
-            return;
-        }
-
-        var bindingFlags = stackalloc DescriptorBindingFlags[]
-        {
-            DescriptorBindingFlags.None,
-            DescriptorBindingFlags.None,
-            DescriptorBindingFlags.VariableDescriptorCountBit | DescriptorBindingFlags.PartiallyBoundBit
-        };
-        DescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsCreateInfo = new()
-        {
-            SType = StructureType.DescriptorSetLayoutBindingFlagsCreateInfo,
-            BindingCount = 3,
-            PBindingFlags = bindingFlags
-        };
-
-        var descriptorBindings = stackalloc DescriptorSetLayoutBinding[]
-        {
+        Bindings =
+        [
             new DescriptorSetLayoutBinding()
             {
                 Binding = 0,
@@ -155,39 +130,8 @@ public static class RenderObjects
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.StorageBuffer,
                 StageFlags = ShaderStageFlags.FragmentBit
-            },
-            new DescriptorSetLayoutBinding()
-            {
-                Binding = 2,
-                DescriptorCount = 1_000_000,
-                DescriptorType = DescriptorType.StorageBuffer,
-                StageFlags = ShaderStageFlags.FragmentBit
             }
-        };
-
-        DescriptorSetLayoutCreateInfo createInfo = new()
-        {
-            SType = StructureType.DescriptorSetLayoutCreateInfo,
-            PNext = &bindingFlagsCreateInfo,
-            BindingCount = 3,
-            PBindings = descriptorBindings
-        };
-
-        VulkanUtils.Assert(vulkanEngine.Vk.CreateDescriptorSetLayout(vulkanEngine.Device, createInfo,
-            null, out var renderDescriptorLayout));
-        RenderDescriptorLayout = renderDescriptorLayout;
-    }
-
-    public static unsafe void DestroyRenderDescriptorLayout(IVulkanEngine vulkanEngine)
-    {
-        if (RenderDescriptorLayout.Handle == default)
-        {
-            Log.Warning("Render descriptor layout already destroyed");
-            return;
-        }
-
-        vulkanEngine.Vk.DestroyDescriptorSetLayout(vulkanEngine.Device, RenderDescriptorLayout,
-            null);
-        RenderDescriptorLayout = default;
-    }
+        ],
+        DescriptorSetsPerPool = 32
+    };
 }

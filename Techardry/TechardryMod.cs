@@ -45,17 +45,14 @@ public sealed class TechardryMod : IMod
             DescriptorBindingPartiallyBound = true,
             ShaderStorageBufferArrayNonUniformIndexing = true,
             DescriptorBindingVariableDescriptorCount = true,
+            BufferDeviceAddress = true,
+            BufferDeviceAddressCaptureReplay = true
         });
     }
 
     public void Load()
     {
         Log.Information("Loading TechardryMod");
-
-        if (!EngineConfiguration.HeadlessModeActive)
-        {
-            Voxels.RenderObjects.CreateRenderDescriptorLayout(VulkanEngine);
-        }
     }
     
     public void PostLoad()
@@ -97,7 +94,6 @@ public sealed class TechardryMod : IMod
         if (!EngineConfiguration.HeadlessModeActive)
         {
             VulkanEngine.WaitForAll();
-            Voxels.RenderObjects.DestroyRenderDescriptorLayout(VulkanEngine);
         }
     }
 

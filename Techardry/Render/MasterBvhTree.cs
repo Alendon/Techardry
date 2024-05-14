@@ -15,10 +15,9 @@ public class MasterBvhTree
     private const float FloatTolerance = 0.0001f;
     private const int BinCount = 8;
 
-    public MasterBvhTree(IEnumerable<BoundingBox> localTreesBoundingBoxes)
+    public MasterBvhTree(IList<BoundingBox> localTreesBoundingBoxes)
     {
-        _localTreesBoundingBoxes = localTreesBoundingBoxes as BoundingBox[] ??
-                                   localTreesBoundingBoxes as IList<BoundingBox> ?? localTreesBoundingBoxes.ToArray();
+        _localTreesBoundingBoxes = localTreesBoundingBoxes;
         Nodes = new Node[_localTreesBoundingBoxes.Count * 2 - 1];
         TreeIndices = new int[_localTreesBoundingBoxes.Count];
 
