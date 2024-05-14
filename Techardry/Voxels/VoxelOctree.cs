@@ -295,7 +295,7 @@ public class VoxelOctree
     /// </summary>
     public void Compact(bool force)
     {
-        if (lastCompactedVersion + CompactRate > Version && !force)
+        if (lastCompactedVersion + CompactRate > Version && !force || !CompactingEnabled)
             return;
         
         lastCompactedVersion = Version;
@@ -405,16 +405,13 @@ public class VoxelOctree
         return ref node;
     }
 
-    private ref Node GetChildNode(ref Node node, byte position)
-    {
-        return ref Nodes[node.GetChildIndex(position)];
-    }
-
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private ref Node GetParentNode(ref Node node)
     {
         return ref Nodes[NodeParentIndex(ref node)];
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private ref Node GetChildNode(ref Node node, Vector3 position, int depth)
     {
         var childIndex = GetChildIndex(position, depth);
@@ -507,11 +504,13 @@ public class VoxelOctree
         return index;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     private void SetData(ref Node node, VoxelData data)
     {
         node.SetDataIndex(GetOrCreateDataIndex(data));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     internal VoxelData GetVoxelData(ref Node node)
     {
         return Data.voxels[node.GetDataIndex()];
@@ -599,6 +598,7 @@ public class VoxelOctree
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public byte NodeGetDepth(ref Node node)
     {
         byte depth = 0;
@@ -614,11 +614,13 @@ public class VoxelOctree
         return depth;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     public float NodeGetSize(ref Node node)
     {
         return (float)Dimensions / (1 << NodeGetDepth(ref node));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining | MethodImplOptions.AggressiveOptimization)]
     internal static byte GetChildIndex(Vector3 position, int depth)
     {
         float sizeCurrentLayer = Dimensions / MathF.Pow(2, depth);
