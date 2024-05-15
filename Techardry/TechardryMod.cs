@@ -38,32 +38,45 @@ public sealed class TechardryMod : IMod
         Timer.SetTargetTicksPerSecond(60);
         Instance = this;
         VulkanEngine.AddDeviceExtension(ModName, "VK_KHR_shader_non_semantic_info", true);
-        VulkanEngine.AddDeviceFeatureExension(new PhysicalDeviceVulkan12Features()
+
+        VulkanEngine.OnDeviceCreation += OnVulkanDeviceCreation;
+    }
+
+    private unsafe void OnVulkanDeviceCreation()
+    {
+        //the replay capability is not supported on every device and is not required for the mod to work
+
+        PhysicalDeviceVulkan12Features supportedFeatures = new(StructureType.PhysicalDeviceVulkan12Features);
+        PhysicalDeviceFeatures2 features = new()
         {
-            SType = StructureType.PhysicalDeviceVulkan12Features,
-            RuntimeDescriptorArray = true,
-            DescriptorBindingPartiallyBound = true,
-            ShaderStorageBufferArrayNonUniformIndexing = true,
-            DescriptorBindingVariableDescriptorCount = true,
+            SType = StructureType.PhysicalDeviceFeatures2,
+            PNext = &supportedFeatures
+        };
+
+        VulkanEngine.Vk.GetPhysicalDeviceFeatures2(VulkanEngine.PhysicalDevice, &features);
+
+        VulkanEngine.DeviceFeaturesVulkan12 = VulkanEngine.DeviceFeaturesVulkan12 with
+        {
             BufferDeviceAddress = true,
-            BufferDeviceAddressCaptureReplay = true
-        });
+            BufferDeviceAddressCaptureReplay = supportedFeatures.BufferDeviceAddressCaptureReplay
+        };
     }
 
     public void Load()
     {
         Log.Information("Loading TechardryMod");
     }
-    
+
     public void PostLoad()
     {
         EngineConfiguration.DefaultGameState = GameStateIDs.MainMenu;
         EngineConfiguration.DefaultHeadlessGameState = GameStateIDs.Headless;
-        
+
         _playerEventBinding = new EventBinding<PlayerEvent>(EventBus, OnPlayerEvent);
     }
 
     private EventBinding<PlayerEvent>? _playerEventBinding;
+
     private EventResult OnPlayerEvent(PlayerEvent e)
     {
         if (e.Type == PlayerEvent.EventType.Ready && e.ServerSide)

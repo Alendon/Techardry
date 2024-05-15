@@ -1,4 +1,5 @@
 ﻿using System.Numerics;
+using Avalonia.Threading;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Graphics.Render.Managers;
@@ -45,13 +46,14 @@ public partial class TestInteractionSystem(
                 out var tResult, out var collidableReference, out var normal);
 
             if (!world.PhysicsWorld.Simulation.Statics.StaticExists(collidableReference.StaticHandle)) continue;
-            
-            world.PhysicsWorld.Simulation.Statics.GetDescription(collidableReference.StaticHandle, out var staticDescription);
+
+            world.PhysicsWorld.Simulation.Statics.GetDescription(collidableReference.StaticHandle,
+                out var staticDescription);
             if (staticDescription.Shape.Type != VoxelCollider.Id)
             {
                 hit = false;
             }
-            
+
             var blockPos = pos + dir * tResult;
 
             var blockId = BlockIDs.Air;
@@ -62,15 +64,24 @@ public partial class TestInteractionSystem(
 
             if (viewLocator.GetViewModel(ViewModelIDs.UiOverlay) is UiOverlayViewModel viewModel)
             {
-                viewModel.LookingAt = hit ? blockPos : new Vector3(float.NaN);
-                viewModel.PlayerPosition = pos;
-                viewModel.BlockSize = (float)Math.Pow(2, -(depth - VoxelOctree.SizeOneDepth));
-                viewModel.CurrentLookingAtBlock =
-                    modManager.RegistryManager.GetObjectStringId(blockId.Mod, blockId.Category, blockId.Object);
-                viewModel.CurrentHeldBlock = modManager.RegistryManager.GetObjectStringId(currentBlock.Mod,
-                    currentBlock.Category, currentBlock.Object);
-                viewModel.Fps = renderManager.FrameRate;
-                viewModel.Tps = timer.TicksPerSecond;
+                if (lastUpdate?.Status is DispatcherOperationStatus.Aborted or DispatcherOperationStatus.Completed
+                    or null)
+                {
+                    var lookingAtPos = hit ? blockPos : new Vector3(float.NaN);
+
+                    lastUpdate = Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        viewModel.LookingAt = lookingAtPos;
+                        viewModel.PlayerPosition = pos;
+                        viewModel.BlockSize = (float)Math.Pow(2, -(depth - VoxelOctree.SizeOneDepth));
+                        viewModel.CurrentLookingAtBlock =
+                            modManager.RegistryManager.GetObjectStringId(blockId.Mod, blockId.Category, blockId.Object);
+                        viewModel.CurrentHeldBlock = modManager.RegistryManager.GetObjectStringId(currentBlock.Mod,
+                            currentBlock.Category, currentBlock.Object);
+                        viewModel.Fps = renderManager.FrameRate;
+                        viewModel.Tps = timer.TicksPerSecond;
+                    });
+                }
             }
 
             if (!hit)
@@ -100,6 +111,7 @@ public partial class TestInteractionSystem(
     static bool BlockPlaceIssued = false;
     static bool BlockBreakIssued = false;
     static int depth = VoxelOctree.SizeOneDepth;
+    private DispatcherOperation? lastUpdate;
 
 
     [RegisterInputAction("place_block")]

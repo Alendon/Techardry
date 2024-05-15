@@ -4,12 +4,10 @@
   "ModProject": "Techardry",
   "Configuration": "Debug",
   "ShaderInputFolders": [
-    "Voxels/shaders",
-    "Render/shaders"
+    "Voxels/shaders"
   ],
   "ShaderOutputFolders": [
-    "shaders/voxels",
-    "shaders"
+    "shaders/voxels"
   ],
   "ShaderDebugging": false,
   "ResourceFolder": "Resources"
