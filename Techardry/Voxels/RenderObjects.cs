@@ -14,6 +14,9 @@ public static class RenderObjects
     [RegisterShader("voxel_frag", "voxels/vox_render_frag.spv")]
     public static ShaderInfo VoxelFrag => new(ShaderStageFlags.FragmentBit);
 
+    [RegisterShader("voxel_beam_frag", "voxels/vox_beam_frag.spv")]
+    public static ShaderInfo VoxelBeamFrag => new(ShaderStageFlags.FragmentBit);
+
     [RegisterShader("voxel_vert", "voxels/vox_render_vert.spv")]
     public static ShaderInfo VoxelVert => new(ShaderStageFlags.VertexBit);
 
@@ -59,9 +62,17 @@ public static class RenderObjects
             ],
             DescriptorSets =
             [
+                //the camera
                 Identifications.DescriptorSetIDs.CameraData,
+
+                //the texture atlas
                 DescriptorSetIDs.SampledTexture,
-                Identifications.DescriptorSetIDs.Render
+
+                //world data - bvh
+                Identifications.DescriptorSetIDs.Render,
+
+                //beam data
+                DescriptorSetIDs.SampledRenderTexture
             ],
             DynamicStates = [DynamicState.Scissor, DynamicState.Viewport],
             RasterizationInfo =
@@ -98,8 +109,8 @@ public static class RenderObjects
                 ]
             },
             DepthStencilInfo = default,
-            VertexAttributeDescriptions = Array.Empty<VertexInputAttributeDescription>(),
-            VertexInputBindingDescriptions = Array.Empty<VertexInputBindingDescription>(),
+            VertexAttributeDescriptions = [],
+            VertexInputBindingDescriptions = [],
             PushConstantRanges =
             [
                 new PushConstantRange()
@@ -110,8 +121,62 @@ public static class RenderObjects
                 }
             ]
         };
-    
-    
+
+
+    [RegisterGraphicsPipeline("voxel_beam")]
+    public static GraphicsPipelineDescription VoxelBeamPipeline(IVulkanEngine vulkanEngine) =>
+        new()
+        {
+            Flags = 0,
+            Scissors = [new Rect2D()],
+            Shaders = [ShaderIDs.VoxelBeamFrag, ShaderIDs.VoxelVert],
+            Topology = PrimitiveTopology.TriangleList,
+            Viewports = [new Viewport()],
+            DescriptorSets =
+            [
+                Identifications.DescriptorSetIDs.CameraData,
+                Identifications.DescriptorSetIDs.Render
+            ],
+            DynamicStates = [DynamicState.Scissor, DynamicState.Viewport],
+            RasterizationInfo =
+            {
+                CullMode = CullModeFlags.None,
+                FrontFace = FrontFace.Clockwise,
+                PolygonMode = PolygonMode.Fill,
+                LineWidth = 1
+            },
+            RenderDescription = new DynamicRenderingDescription
+            {
+                ColorAttachmentFormats = [Format.R32Sfloat]
+            },
+            SampleCount = SampleCountFlags.Count1Bit,
+            SubPass = 1,
+            BasePipelineHandle = default,
+            BasePipelineIndex = 0,
+            ColorBlendInfo =
+            {
+                Attachments =
+                [
+                    new PipelineColorBlendAttachmentState
+                    {
+                        BlendEnable = Vk.True,
+                        AlphaBlendOp = BlendOp.Add,
+                        ColorBlendOp = BlendOp.Add,
+                        ColorWriteMask = ColorComponentFlags.RBit,
+                        SrcColorBlendFactor = BlendFactor.One,
+                        SrcAlphaBlendFactor = BlendFactor.SrcAlpha,
+                        DstAlphaBlendFactor = BlendFactor.OneMinusSrcAlpha,
+                        DstColorBlendFactor = BlendFactor.Zero
+                    }
+                ]
+            },
+            DepthStencilInfo = default,
+            VertexAttributeDescriptions = [],
+            VertexInputBindingDescriptions = [],
+            PushConstantRanges = []
+        };
+
+
     [RegisterDescriptorSet("render")]
     public static DescriptorSetInfo RenderDescriptorSet => new()
     {

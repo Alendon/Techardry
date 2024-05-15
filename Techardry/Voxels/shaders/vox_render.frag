@@ -12,6 +12,11 @@
 #define SampleCount 1
 #define MaxPathLength 1
 
+#define CAMERA_DATA_SET 0
+#define TEXTURE_ATLAS_SET 1
+#define RENDER_DATA_SET 2
+#define BEAM_SET 3
+
 
 layout (location = 0) in vec3 in_position;
 layout (location = 0) out vec3 out_color;
@@ -20,12 +25,11 @@ layout (push_constant) uniform PushConstants {
     uint frame;
 } pushConstants;
 
-layout (set = 1, binding = 0) uniform sampler2D tex;
+layout (set = TEXTURE_ATLAS_SET, binding = 0) uniform sampler2D tex;
+layout (set = BEAM_SET, binding = 0) uniform sampler2D beamTex;
 
-#define CAMERA_DATA_SET 0
 #include "camera.glsl"
 
-#define RENDER_DATA_SET 2
 #define RENDER_DATA_SET_MASTER_BVH_BINDING 0
 #define RENDER_DATA_SET_MASTER_BVH_INDICES_BINDING 1
 #define RENDER_DATA_SET_OCTREE_BINDING 2
@@ -41,10 +45,12 @@ layout (set = 1, binding = 0) uniform sampler2D tex;
 vec3 pathtrace(Ray ray, inout uvec2 randomSeed) {
     vec3 color = vec3(0);
     vec3 attenuation = vec3(1);
-
+    
+    
+    
     #define MAX_BOUNCES MaxPathLength
     for (int i = 0; i < MAX_BOUNCES; i++){
-        Result result = resultEmpty();
+        Result result = resultEmpty();        
         raycast(ray, result);
 
         if (result.fail){
@@ -103,11 +109,22 @@ void main()
     float y = screenPos.y * angle;
 
     vec3 direction = normalize(forward + x * right + y * upward);
+    
+    vec2 uv = (in_position.xy + vec2(1)) / 2;
+    vec2 texSize = textureSize(beamTex, 0);
+    vec2 texelSize = 1 / texSize;
+    
+    float startT = FloatMax;
+    
+    for(int x = -1; x <= 1; x++) {
+    for(int y = -1; y <= 1; y++) {
+        startT = min(startT, texture(beamTex, uv + (texelSize * vec2(x,y)) ).r);
+    }}
 
     Ray ray;
-    ray.origin = camPos;
-    ray.direction = normalize(direction);
-    ray.inverseDirection = 1 / ray.direction;
+    ray.origin = camPos + startT * direction;
+    ray.direction = direction;
+    ray.inverseDirection = 1 / direction;
 
     uvec2 randomSeed = uvec2(gl_FragCoord.xy) * 4241 ^ uvec2(pushConstants.frame * 4637, pushConstants.frame * 4759);
 

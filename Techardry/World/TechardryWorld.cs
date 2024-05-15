@@ -225,7 +225,7 @@ public class TechardryWorld : IWorld
         {
             _physicsTask = _physicsTask.ContinueWith(_ =>
             {
-                PhysicsWorld.StepSimulation(PhysicsWorld.FixedDeltaTime);
+                PhysicsWorld.StepSimulation();
             });
 
             _elapsedTotalSeconds -= PhysicsWorld.FixedDeltaTime;

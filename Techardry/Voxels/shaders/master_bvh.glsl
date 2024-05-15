@@ -106,11 +106,15 @@ AABB bvhNode_GetAABB(in BvhNode node){
 }
 
 vec3 resultGetColor(in Result result){
+    #ifndef BEAM_CALCULATION
     uint voxel = voxelNode_GetDataIndex(result.tree, result.nodeIndex);
     vec2 texStart = vec2(voxelData_GetTextureStartX(result.tree, voxel), voxelData_GetTextureStartY(result.tree, voxel));
     vec2 texSize = vec2(voxelData_GetTextureSizeX(result.tree, voxel), voxelData_GetTextureSizeY(result.tree, voxel));
     vec2 texEnd = texStart + texSize;
     return texture(tex, mix(texStart, texEnd, result.uv)).rgb;
+    #else
+    return vec3(1.0, 0.0, 0.0);
+    #endif
 }
 
 
