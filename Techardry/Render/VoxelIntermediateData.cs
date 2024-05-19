@@ -1,4 +1,5 @@
-﻿using DotNext.Collections.Generic;
+﻿using System.Buffers;
+using DotNext.Collections.Generic;
 using MintyCore.Graphics.Render.Data;
 using MintyCore.Graphics.VulkanObjects;
 using MintyCore.Registries;
@@ -13,9 +14,33 @@ public class VoxelIntermediateData : IntermediateData
 {
     private readonly Dictionary<Int3, ChunkBufferInfo> _oldBuffers = new();
     private readonly Dictionary<Int3, ChunkBufferInfo> _buffers = new();
+    public ulong Version { get; private set; } = 0;
+    private ulong _lastBufferVersion = 0;
+    private (Int3 position, ulong address)[] _buffersArray = ArrayPool<(Int3, ulong)>.Shared.Rent(256);
+    private int _buffersLength = 0;
 
-    public (Int3 position, ulong address)[] Buffers =>
-        _buffers.Select(x => (x.Key, x.Value.Address)).ToArray();
+    public Span<(Int3 position, ulong address)> Buffers
+    {
+        get
+        {
+            if(_lastBufferVersion == Version) return _buffersArray.AsSpan()[.._buffersLength];
+            _lastBufferVersion = Version;
+            
+            if(_buffersArray.Length < _buffers.Count)
+            {
+                ArrayPool<(Int3, ulong)>.Shared.Return(_buffersArray);
+                _buffersArray = ArrayPool<(Int3, ulong)>.Shared.Rent(_buffers.Count);
+            }
+            
+            _buffersLength = 0;
+            foreach (var (position, bufferInfo) in _buffers)
+            {
+                _buffersArray[_buffersLength++] = (position, bufferInfo.Address);
+            }
+            
+            return _buffersArray.AsSpan()[.._buffersLength];
+        }
+    }
 
     public bool TryUseOldBuffer(Int3 position, uint version)
     {
@@ -39,6 +64,8 @@ public class VoxelIntermediateData : IntermediateData
             Version = version,
             Address = address
         });
+        
+        Version++;
     }
 
     public void ReleaseOldUnusedBuffers()
@@ -56,6 +83,7 @@ public class VoxelIntermediateData : IntermediateData
         if (previousData is not VoxelIntermediateData previousVoxelData)
             return;
 
+        Version = previousVoxelData.Version;
         _oldBuffers.AddAll(previousVoxelData._buffers);
 
         foreach (var (_, bufferInfo) in previousVoxelData._buffers)

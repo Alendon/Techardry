@@ -3,6 +3,7 @@ using MintyCore.ECS;
 using MintyCore.Network;
 using MintyCore.Registries;
 using MintyCore.Utils;
+using Serilog;
 using Techardry.Blocks;
 using Techardry.Identifications;
 using Techardry.Render;
@@ -45,7 +46,7 @@ public partial class ChunkDataMessage : IMessage
             return false;
 
         techardryWorld.ChunkManager.UpdateChunk(ChunkPosition, Octree);
-
+        
         return true;
     }
 

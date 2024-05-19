@@ -30,7 +30,7 @@ public partial class CreateChunk : IMessage
         if(!WorldHandler.TryGetWorld(GameType.Client, WorldId, out var world) || world is not TechardryWorld techardryWorld)
             return false;
 
-        techardryWorld.ChunkManager.AddChunk(ChunkPosition);
+        techardryWorld.ChunkManager.CreateChunk(ChunkPosition);
 
         return true;
     }

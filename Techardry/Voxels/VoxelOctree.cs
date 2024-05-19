@@ -93,10 +93,7 @@ public class VoxelOctree
         {
             if (value > NodeCapacity)
                 NodeCapacity = value;
-
-            if (value * 4 < NodeCapacity)
-                NodeCapacity = value * 2;
-
+            
             _nodeCount = value;
         }
     }
@@ -181,9 +178,9 @@ public class VoxelOctree
         SetData(ref node, data);
 
         ValidateTree();
-        
+
         Compact(false);
-        
+
         Version += deletionOccured ? 10u : 1u;
     }
 
@@ -200,10 +197,11 @@ public class VoxelOctree
             ref var node = ref Nodes[i];
 
             if (node.IsEmpty() || !node.IsLeaf()) continue;
-            
+
             //skip nodes that are not connected to the root node
             //this means that they were deleted and not compacted yet
-            if(i != 0 && ParentNodeIndices[i] == InvalidIndex) continue;
+            // i!=0 because the 0 node is the root node, which has an invalid parent index
+            if (i != 0 && ParentNodeIndices[i] == InvalidIndex) continue;
 
             GetNodeLocationData(ref node, out var position, out _);
             var depth = NodeGetDepth(ref node);
@@ -240,7 +238,6 @@ public class VoxelOctree
                 || !reader.TryGetVector3(out var position)
                 || !VoxelData.Deserialize(reader, out var data))
             {
-                octree = null;
                 return false;
             }
 
@@ -259,32 +256,32 @@ public class VoxelOctree
             if (Nodes[i] != default)
                 throw new Exception("Node array not cleared");
         }
-        
+
         //check the parent node indices
         //after the root node, all indices should be repeated 8 times (the children in memory)
         //also each parent index (except invalid) should only be present in 1 group of 8 children
-        
+
         for (var i = 1; i < NodeCount; i += ChildCount)
         {
             //if the remaining nodes are less than 8 stop
-            if(i + ChildCount > NodeCount) break;
-            
+            if (i + ChildCount > NodeCount) break;
+
             var parentIndex = ParentNodeIndices[i];
-            
-            
+
+
             for (var j = 0; j < ChildCount; j++)
             {
                 if (ParentNodeIndices[i + j] != parentIndex)
                     throw new Exception("Parent index not repeated 8 times");
             }
-            
-            if(parentIndex == InvalidIndex) continue;
-            
+
+            if (parentIndex == InvalidIndex) continue;
+
             ref var parent = ref Nodes[parentIndex];
-            if(parent.IsLeaf())
+            if (parent.IsLeaf())
                 throw new Exception("Parent node is a leaf");
-            
-            if(parent.GetChildIndex(0) != i)
+
+            if (parent.GetChildIndex(0) != i)
                 throw new Exception("Parent index not matching first child index");
         }
     }
@@ -295,30 +292,46 @@ public class VoxelOctree
     /// </summary>
     public void Compact(bool force)
     {
-        if (lastCompactedVersion + CompactRate > Version && !force || !CompactingEnabled)
-            return;
-        
+        if (!force && (lastCompactedVersion + CompactRate > Version || !CompactingEnabled)) return;
+
         lastCompactedVersion = Version;
-        
+
+        MergeUpwards(ref GetRootNode());
+
         var newNodes = ArrayPool<Node>.Shared.Rent((int)NodeCount);
         var newParentNodeIndices = ArrayPool<int>.Shared.Rent((int)NodeCount);
-        
+
         newNodes.AsSpan().Clear();
         newParentNodeIndices.AsSpan().Clear();
-        
+
         var newCount = 1;
         newParentNodeIndices[0] = InvalidIndex;
         CompactInternal(0, 0);
-        
+
         ArrayPool<Node>.Shared.Return(Nodes);
         ArrayPool<int>.Shared.Return(ParentNodeIndices);
         
+        if(newCount * 4 < newNodes.Length)
+        {
+            var smallerNodes = ArrayPool<Node>.Shared.Rent(newCount);
+            var smallerParentNodeIndices = ArrayPool<int>.Shared.Rent(newCount);
+            
+            newNodes.AsSpan(0, newCount).CopyTo(smallerNodes);
+            newParentNodeIndices.AsSpan(0, newCount).CopyTo(smallerParentNodeIndices);
+            
+            ArrayPool<Node>.Shared.Return(newNodes);
+            ArrayPool<int>.Shared.Return(newParentNodeIndices);
+            
+            newNodes = smallerNodes;
+            newParentNodeIndices = smallerParentNodeIndices;
+        }
+
         Nodes = newNodes;
         ParentNodeIndices = newParentNodeIndices;
-        NodeCount = (uint)newCount;
+        _nodeCount = (uint)newCount;
 
         ValidateTree();
-        
+
         void CompactInternal(int oldNodeIndex, int newNodeIndex)
         {
             ref var oldNode = ref Nodes[oldNodeIndex];
@@ -329,7 +342,7 @@ public class VoxelOctree
                 newNodes[newNodeIndex] = oldNode;
                 return;
             }
-            
+
             ref var newNode = ref newNodes[newNodeIndex];
 
             var childBaseIndex = (uint)newCount;
@@ -346,6 +359,32 @@ public class VoxelOctree
                 CompactInternal((int)oldChildIndex, (int)childBaseIndex + i);
             }
         }
+    }
+
+    private void MergeUpwards(ref Node currentNode)
+    {
+        if (currentNode.IsLeaf()) return;
+
+        for (var i = 0u; i < ChildCount; i++)
+        {
+            MergeUpwards(ref GetNode(currentNode.GetChildIndex(i)));
+        }
+
+        ref var firstChild = ref GetNode(currentNode.GetChildIndex(0));
+        if (!firstChild.IsLeaf()) return;
+
+        var firstChildData = GetVoxelData(ref firstChild);
+
+        for (var i = 1u; i < ChildCount; i++)
+        {
+            ref var child = ref GetNode(currentNode.GetChildIndex(i));
+            if (!child.IsLeaf()) return;
+
+            if (GetVoxelData(ref child) != firstChildData) return;
+        }
+
+        currentNode = DeleteChildren(ref currentNode);
+        SetData(ref currentNode, firstChildData);
     }
 
     public ref Node GetOrCreateNode(Vector3 pos, int targetDepth)
@@ -394,11 +433,11 @@ public class VoxelOctree
         {
             var childIndex = node.GetChildIndex(i);
             ref var childNode = ref Nodes[childIndex];
-            
+
             DeleteChildren(ref childNode);
             ParentNodeIndices[childIndex] = InvalidIndex;
         }
-        
+
         //just empty the node, the garbage will be collected at the next compaction
         node = default;
 
@@ -570,6 +609,12 @@ public class VoxelOctree
     /// </summary>
     public void GetNodeLocationData(ref Node node, out Vector3 position, out float size)
     {
+        //early exit if the node is the root node
+        position = Vector3.Zero;
+        size = Dimensions;
+        
+        if (NodeIndex(ref node) == RootNodeIndex) return;
+        
         //split the calculation into 2 separate parts
         //the first part calculates the related child indices, forming a path to the node
         //the second part calculates the location and size of the node based on the path
@@ -587,9 +632,6 @@ public class VoxelOctree
 
             node = ref Nodes[parentIndex];
         }
-
-        position = Vector3.Zero;
-        size = Dimensions;
 
         for (var i = written - 1; i >= 0; i--)
         {
@@ -738,7 +780,12 @@ public class VoxelOctree
     public class OctreeDebugView
     {
         public NodeDebugView? RootNode { get; }
+
+        public ulong TotalAllocatedMemory => (ulong)_octree.NodeCount * (ulong)Unsafe.SizeOf<Node>() +
+                                             (ulong)_octree.DataCount * (ulong)Unsafe.SizeOf<VoxelData>();
+
         internal VoxelOctree _octree;
+
 
         public OctreeDebugView(VoxelOctree octree)
         {

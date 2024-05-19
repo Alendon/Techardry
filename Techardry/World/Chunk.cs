@@ -2,6 +2,7 @@
 using DotNext.Diagnostics;
 using DotNext.Threading;
 using MintyCore;
+using MintyCore.ECS;
 using MintyCore.Network;
 using MintyCore.Utils;
 using Serilog;
@@ -19,7 +20,7 @@ public class Chunk : IDisposable
 
     public Int3 Position { get; }
     internal VoxelOctree Octree { get; set; }
-    public uint Version { get; set; } = 1;
+    public uint Version { get; set; }
     public uint LastSyncedVersion { get; set; }
     public Timestamp LastSyncedTime { get; set; }
 
@@ -27,6 +28,9 @@ public class Chunk : IDisposable
     private readonly IPlayerHandler _playerHandler;
     private readonly INetworkHandler _networkHandler;
     private readonly IBlockHandler _blockHandler;
+    
+    private HashSet<Entity> _associatedPlayerEntities = new();
+    private HashSet<ushort> _associatedPlayers = new();
 
     public Chunk(Int3 chunkPos, TechardryWorld parentWorld, IPlayerHandler playerHandler,
         INetworkHandler networkHandler, IBlockHandler blockHandler, ITextureAtlasHandler textureAtlasHandler) : this(
@@ -44,6 +48,49 @@ public class Chunk : IDisposable
         _playerHandler = playerHandler;
         _networkHandler = networkHandler;
         _blockHandler = blockHandler;
+    }
+
+    public void AddPlayerEntity(Entity entity)
+    {
+        if(!ParentWorld.IsServerWorld)
+            throw new InvalidOperationException("Entity tracking is only available on the server");
+        
+        _associatedPlayerEntities.Add(entity);
+        UpdateAssociatedPlayers();
+    }
+    
+    public void RemovePlayerEntity(Entity entity)
+    {
+        if(!ParentWorld.IsServerWorld)
+            throw new InvalidOperationException("Entity tracking is only available on the server");
+        
+        _associatedPlayerEntities.Remove(entity);
+        UpdateAssociatedPlayers();
+    }
+    
+    private void UpdateAssociatedPlayers()
+    {
+        if(!ParentWorld.IsServerWorld)
+            throw new InvalidOperationException("Entity tracking is only available on the server");
+        
+        var oldPlayers = _associatedPlayers;
+        _associatedPlayers =
+            _associatedPlayerEntities.Select(x => ParentWorld.EntityManager.GetEntityOwner(x)).ToHashSet();
+        
+        var addedPlayers = _associatedPlayers.Except(oldPlayers);
+        var removedPlayers = oldPlayers.Except(_associatedPlayers);
+
+        var createChunkMessage = _networkHandler.CreateMessage<CreateChunk>();
+        createChunkMessage.ChunkPosition = Position;
+        createChunkMessage.WorldId = ParentWorld.Identification;
+        
+        createChunkMessage.Send(addedPlayers);
+        
+        var removeChunkMessage = _networkHandler.CreateMessage<ReleaseChunk>();
+        removeChunkMessage.ChunkPosition = Position;
+        removeChunkMessage.WorldId = ParentWorld.Identification;
+        
+        removeChunkMessage.Send(removedPlayers);
     }
 
 
@@ -71,7 +118,7 @@ public class Chunk : IDisposable
         chunkData.Octree = Octree;
         chunkData.WorldId = ParentWorld.Identification;
 
-        chunkData.Send(_playerHandler.GetConnectedPlayers());
+        chunkData.Send(_associatedPlayers);
 
         LastSyncedVersion = Version;
         LastSyncedTime = new Timestamp();
@@ -142,6 +189,11 @@ public class Chunk : IDisposable
 
     public void Dispose()
     {
+        if(ParentWorld.IsServerWorld)
+        {
+            _associatedPlayerEntities.Clear();
+            UpdateAssociatedPlayers();
+        }
     }
 
     public void SetOctree(VoxelOctree octree)

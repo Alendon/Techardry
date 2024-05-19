@@ -49,24 +49,28 @@ public class WorldInputModule(
 
         var worldData = _worldDataAccessor();
 
-        if (!voxelBuffer.Buffers.Any())
-            return;
+        if (voxelBuffer.Buffers.Length == 0 || worldData.LastVoxelIntermediateVersion == voxelBuffer.Version) return;
 
-        var octrees = voxelBuffer.Buffers.ToArray();
-        var boundingBoxes = octrees.Select(x =>
+
+        var boundingBoxesArray = ArrayPool<BoundingBox>.Shared.Rent(voxelBuffer.Buffers.Length);
+        var boundingBoxes = boundingBoxesArray.AsSpan()[..voxelBuffer.Buffers.Length];
+
+        for (var index = 0; index < voxelBuffer.Buffers.Length; index++)
         {
-            var (position, _) = x;
+            var (position, _) = voxelBuffer.Buffers[index];
             var bMin = new Vector3(position.X, position.Y, position.Z) * VoxelOctree.Dimensions;
             var bMax = bMin + new Vector3(VoxelOctree.Dimensions);
 
-            return new BoundingBox(bMin, bMax);
-        }).ToArray();
+            boundingBoxes[index] = new BoundingBox(bMin, bMax);
+        }
+
+        var octrees = voxelBuffer.Buffers;
 
         var bvh = new MasterBvhTree(boundingBoxes);
-        
-        var reorderedPointers = new ulong[octrees.Length];
+
+        var reorderedPointers = new ulong[boundingBoxes.Length];
         //take the tree indices from the bvh and reorder the pointers of the octrees
-        for (var i = 0; i < bvh.TreeIndices.Length; i++)
+        for (var i = 0; i < reorderedPointers.Length; i++)
         {
             reorderedPointers[i] = octrees[bvh.TreeIndices[i]].address;
         }
@@ -75,9 +79,14 @@ public class WorldInputModule(
         var nodes = bvh.Nodes;
 
         ApplyBufferData(commandBuffer, nodes, ref _stagingNodeBuffer, ref worldData.BvhNodeBuffer);
-        ApplyBufferData(commandBuffer, reorderedPointers, ref _stagingIndexBuffer, ref worldData.BvhIndexBuffer);
+        ApplyBufferData(commandBuffer, reorderedPointers.AsSpan(), ref _stagingIndexBuffer, ref worldData.BvhIndexBuffer);
 
         UpdateDescriptorSets(worldData);
+
+        ArrayPool<BoundingBox>.Shared.Return(boundingBoxesArray);
+        bvh.Dispose();
+        
+        worldData.LastVoxelIntermediateVersion = voxelBuffer.Version;
     }
 
     private unsafe void UpdateDescriptorSets(WorldIntermediateData worldData)
@@ -124,7 +133,7 @@ public class WorldInputModule(
         vulkanEngine.Vk.UpdateDescriptorSets(vulkanEngine.Device, write, ReadOnlySpan<CopyDescriptorSet>.Empty);
     }
 
-    private void ApplyBufferData<TData>(ManagedCommandBuffer commandBuffer, TData[] data,
+    private void ApplyBufferData<TData>(ManagedCommandBuffer commandBuffer, Span<TData> data,
         ref MemoryBuffer? stagingBuffer, ref MemoryBuffer? gpuBuffer) where TData : unmanaged
     {
         Span<uint> queueIndices = [vulkanEngine.GraphicQueue.familyIndex];
@@ -150,7 +159,7 @@ public class WorldInputModule(
         }
 
         var stagingSpan = stagingBuffer.MapAs<TData>();
-        data.AsSpan().CopyTo(stagingSpan);
+        data.CopyTo(stagingSpan);
         stagingBuffer.Unmap();
 
         commandBuffer.CopyBuffer(stagingBuffer, gpuBuffer);

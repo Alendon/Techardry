@@ -25,9 +25,7 @@ public sealed class TechardryMod : IMod
     public required IEngineConfiguration EngineConfiguration { [UsedImplicitly] init; private get; }
     public required IGameTimer Timer { [UsedImplicitly] init; private get; }
     public required IEventBus EventBus { [UsedImplicitly] init; private get; }
-
-    public int ServerRenderDistance { get; set; } = 2;
-
+    
     public void Dispose()
     {
         Log.Information("Disposing TechardryMod");

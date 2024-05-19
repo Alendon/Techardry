@@ -4,7 +4,6 @@
 #extension GL_EXT_buffer_reference2: require
 #extension GL_EXT_shader_explicit_arithmetic_types_int64: require
 
-
 #define Dimensions 16
 #define MaxDepth 10
 #define FloatMax 1e+30
@@ -17,16 +16,15 @@
 #define RENDER_DATA_SET 2
 #define BEAM_SET 3
 
+layout(location = 0) in vec3 in_position;
+layout(location = 0) out vec3 out_color;
 
-layout (location = 0) in vec3 in_position;
-layout (location = 0) out vec3 out_color;
-
-layout (push_constant) uniform PushConstants {
+layout(push_constant) uniform PushConstants {
     uint frame;
 } pushConstants;
 
-layout (set = TEXTURE_ATLAS_SET, binding = 0) uniform sampler2D tex;
-layout (set = BEAM_SET, binding = 0) uniform sampler2D beamTex;
+layout(set = TEXTURE_ATLAS_SET, binding = 0) uniform sampler2D tex;
+layout(set = BEAM_SET, binding = 0) uniform sampler2D beamTex;
 
 #include "camera.glsl"
 
@@ -41,19 +39,16 @@ layout (set = BEAM_SET, binding = 0) uniform sampler2D beamTex;
 
 #define UseFakeLighting
 
-
 vec3 pathtrace(Ray ray, inout uvec2 randomSeed) {
     vec3 color = vec3(0);
     vec3 attenuation = vec3(1);
-    
-    
-    
+
     #define MAX_BOUNCES MaxPathLength
-    for (int i = 0; i < MAX_BOUNCES; i++){
-        Result result = resultEmpty();        
+    for (int i = 0; i < MAX_BOUNCES; i++) {
+        Result result = resultEmpty();
         raycast(ray, result);
 
-        if (result.fail){
+        if (result.fail) {
             return /* pink */ vec3(1, 0, 1);
         }
 
@@ -65,7 +60,7 @@ vec3 pathtrace(Ray ray, inout uvec2 randomSeed) {
         intensity = intensity * intensity * intensity;
         intensity = intensity * 0.5 + 0.5;
         color = resultGetColor(result) * intensity;
-        
+
         #else
 
         vec3 hitPos = ray.origin + ray.direction * result.t;
@@ -103,23 +98,23 @@ void main()
     float fov = camera.data.HFov;
     float angle = tan(fov / 2);
 
-
     float ratio = camera.data.AspectRatio;
     float x = screenPos.x * ratio * angle;
     float y = screenPos.y * angle;
 
     vec3 direction = normalize(forward + x * right + y * upward);
-    
+
     vec2 uv = (in_position.xy + vec2(1)) / 2;
     vec2 texSize = textureSize(beamTex, 0);
     vec2 texelSize = 1 / texSize;
-    
+
     float startT = FloatMax;
-    
-    for(int x = -1; x <= 1; x++) {
-    for(int y = -1; y <= 1; y++) {
-        startT = min(startT, texture(beamTex, uv + (texelSize * vec2(x,y)) ).r);
-    }}
+
+    for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+            startT = min(startT, texture(beamTex, uv + (texelSize * vec2(x, y))).r);
+        }
+    }
 
     Ray ray;
     ray.origin = camPos + startT * direction;

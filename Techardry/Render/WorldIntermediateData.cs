@@ -12,6 +12,7 @@ public class WorldIntermediateData : IntermediateData
 {
     public MemoryBuffer? BvhNodeBuffer;
     public MemoryBuffer? BvhIndexBuffer;
+    public ulong LastVoxelIntermediateVersion = ulong.MaxValue;
     
     
     public DescriptorSet WorldDataDescriptorSet;

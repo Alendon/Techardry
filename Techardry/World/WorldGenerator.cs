@@ -1,30 +1,80 @@
-﻿using System.Numerics;
-using MintyCore;
-using MintyCore.Network;
-using Techardry.Blocks;
+﻿using System.Collections.Concurrent;
+using System.Numerics;
+using DotNext.Threading;
+using MintyCore.Utils.Events;
+using Serilog;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
-using Techardry.Render;
 using Techardry.Utils;
 
 namespace Techardry.World;
 
-public class WorldGenerator(
-    TechardryWorld techardryWorld,
-    WorldGeneratorSettings settings,
-    IPlayerHandler playerHandler,
-    INetworkHandler networkHandler,
-    IBlockHandler blockHandler,
-    ITextureAtlasHandler textureAtlasHandler)
+public class WorldGenerator(WorldGeneratorSettings settings, IEventBus eventBus)
 {
     private readonly FastNoiseLite _noise = settings.Noise;
 
-    public Chunk GenerateChunk(Int3 chunkPosition)
+    private volatile bool _running;
+    private Thread[] _worldGenThreads = [];
+
+    private readonly BlockingCollection<Chunk> _chunksToGenerate = new(new ConcurrentQueue<Chunk>());
+
+    public void StartWorldGenThreads()
     {
-        var chunk = new Chunk(chunkPosition, techardryWorld, playerHandler, networkHandler, blockHandler,
-            textureAtlasHandler);
+        var threadCount = Environment.ProcessorCount / 4;
+        threadCount = Math.Max(1, threadCount);
+        _running = true;
+
+        _worldGenThreads = new Thread[threadCount];
+        for (int i = 0; i < threadCount; i++)
+        {
+            _worldGenThreads[i] = new Thread(WorldGenWorker);
+            _worldGenThreads[i].Name = $"WorldGenThread-{i}";
+            _worldGenThreads[i].Start();
+        }
+    }
+
+    public void StopWorldGenThreads()
+    {
+        _chunksToGenerate.CompleteAdding();
+
+        _running = false;
+        foreach (var thread in _worldGenThreads)
+        {
+            thread.Join();
+        }
+    }
+
+    public void EnqueueChunkGeneration(Chunk chunk)
+    {
+        if (!_running)
+        {
+            Log.Warning("Tried to enqueue chunk generation while world generator is not running");
+            return;
+        }
+        
+        _chunksToGenerate.Add(chunk);
+    }
+
+    private void WorldGenWorker()
+    {
+        foreach (var chunk in _chunksToGenerate.GetConsumingEnumerable())
+        {
+            GenerateChunk(chunk);
+
+            if (_chunksToGenerate.Count == 0)
+            {
+                Log.Information("All current chunks generated, waiting for more");
+            }
+        }
+    }
+
+    private void GenerateChunk(Chunk chunk)
+    {
+        var chunkPosition = chunk.Position;
+        using var octreeLock = chunk.Octree.AcquireWriteLock();
         
         chunk.Octree.CompactingEnabled = false;
+        
 
         var realChunkPosition = new Vector3(chunkPosition.X * Chunk.Size, chunkPosition.Y * Chunk.Size,
             chunkPosition.Z * Chunk.Size);
@@ -60,10 +110,11 @@ public class WorldGenerator(
                 }
             }
         }
-        
+
         chunk.Octree.CompactingEnabled = true;
         chunk.Octree.Compact(true);
 
-        return chunk;
+        eventBus.InvokeEvent(new UpdateChunkEvent(chunk.ParentWorld, chunk.Position,
+            UpdateChunkEvent.ChunkUpdateKind.Octree));
     }
 }

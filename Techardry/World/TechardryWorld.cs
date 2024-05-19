@@ -78,10 +78,12 @@ public class TechardryWorld : IWorld
         noise.SetNoiseType(FastNoiseLite.NoiseType.Perlin);
         noise.SetFrequency(0.02f);
 
-        WorldGenerator = new WorldGenerator(this, new WorldGeneratorSettings()
+        WorldGenerator = new WorldGenerator(new WorldGeneratorSettings()
         {
             Noise = noise
-        }, playerHandler, networkHandler, blockHandler, textureAtlasHandler);
+        }, eventBus);
+        if(IsServerWorld)
+            WorldGenerator.StartWorldGenThreads();
 
         var narrowPhase = new MintyNarrowPhaseCallback(new SpringSettings(30f, 1f), 1f, 2f);
 
@@ -167,6 +169,8 @@ public class TechardryWorld : IWorld
     {
         if (isDisposed) return;
         isDisposed = true;
+
+        WorldGenerator.StopWorldGenThreads();
 
         ChunkManager.Dispose();
 

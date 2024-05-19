@@ -1,34 +1,41 @@
-﻿using System.Numerics;
+﻿using System.Buffers;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using BepuUtilities;
 
 namespace Techardry.Render;
 
-public class MasterBvhTree
+public ref struct MasterBvhTree
 {
-    internal readonly Node[] Nodes;
-    private readonly IList<BoundingBox> _localTreesBoundingBoxes;
-    internal readonly int[] TreeIndices;
+    internal readonly Node[] NodesArray;
+    internal readonly Span<Node> Nodes;
+    private readonly Span<BoundingBox> _localTreesBoundingBoxes;
+    internal readonly int[] TreeIndicesArray;
+    internal readonly Span<int> TreeIndices;
     private int _nodesUsed = 2;
 
 
     private const float FloatTolerance = 0.0001f;
     private const int BinCount = 8;
 
-    public MasterBvhTree(IList<BoundingBox> localTreesBoundingBoxes)
+    public MasterBvhTree(Span<BoundingBox> localTreesBoundingBoxes)
     {
         _localTreesBoundingBoxes = localTreesBoundingBoxes;
-        Nodes = new Node[_localTreesBoundingBoxes.Count * 2 - 1];
-        TreeIndices = new int[_localTreesBoundingBoxes.Count];
 
-        for (var i = 0; i < _localTreesBoundingBoxes.Count; i++)
+        NodesArray = ArrayPool<Node>.Shared.Rent(_localTreesBoundingBoxes.Length * 2 - 1);
+        Nodes = NodesArray.AsSpan(0, _localTreesBoundingBoxes.Length * 2 - 1);
+
+        TreeIndicesArray = ArrayPool<int>.Shared.Rent(_localTreesBoundingBoxes.Length);
+        TreeIndices = TreeIndicesArray.AsSpan(0, _localTreesBoundingBoxes.Length);
+
+        for (var i = 0; i < _localTreesBoundingBoxes.Length; i++)
         {
             TreeIndices[i] = i;
         }
 
         Nodes[0] = new Node
         {
-            treeCount = _localTreesBoundingBoxes.Count,
+            treeCount = _localTreesBoundingBoxes.Length,
             leftFirst = 0
         };
 
@@ -91,22 +98,22 @@ public class MasterBvhTree
         ref var node = ref Nodes[nodeIndex];
 
         if (node.treeCount <= 2) return;
-        
+
         var extent = node.Bounds.Max - node.Bounds.Min;
         var axis = 0;
         if (extent.Y > extent.X)
             axis = 1;
         if (extent.Z > extent[axis])
             axis = 2;
-        
+
         var splitPos = node.Bounds.Min + new Vector3(extent[axis] * 0.5f);
-        
+
         var i = node.leftFirst;
         var j = i + node.treeCount - 1;
 
         while (i <= j)
         {
-            if(GetCenter(_localTreesBoundingBoxes[TreeIndices[i]])[axis] < splitPos[axis])
+            if (GetCenter(_localTreesBoundingBoxes[TreeIndices[i]])[axis] < splitPos[axis])
                 i++;
             else
             {
@@ -114,31 +121,31 @@ public class MasterBvhTree
                 j--;
             }
         }
-        
+
         var leftCount = i - node.leftFirst;
         if (leftCount == 0 || leftCount == node.treeCount) return;
-        
+
         var leftChildIndex = _nodesUsed++;
         var rightChildIndex = _nodesUsed++;
-        
+
         Nodes[leftChildIndex] = new()
         {
             leftFirst = node.leftFirst,
             treeCount = leftCount
         };
-        
+
         Nodes[rightChildIndex] = new()
         {
             leftFirst = i,
             treeCount = node.treeCount - leftCount
         };
-        
+
         node.leftFirst = leftChildIndex;
         node.treeCount = 0;
-        
+
         UpdateBounds(leftChildIndex);
         UpdateBounds(rightChildIndex);
-        
+
         NaiveSubdivide(leftChildIndex);
         NaiveSubdivide(rightChildIndex);
     }
@@ -265,5 +272,11 @@ public class MasterBvhTree
     {
         public BoundingBox Bounds;
         public int Count;
+    }
+
+    public void Dispose()
+    {
+        ArrayPool<Node>.Shared.Return(NodesArray);
+        ArrayPool<int>.Shared.Return(TreeIndicesArray);
     }
 }

@@ -26,18 +26,7 @@ public class ChunkManager : IDisposable
 {
     private readonly TechardryWorld _parentWorld;
     private readonly ConcurrentDictionary<Int3, Chunk> _chunks = new();
-    private readonly ConcurrentDictionary<Int3, ConcurrentDictionary<ushort, object?>> _chunkPlayers = new();
 
-    private readonly ConcurrentUniqueQueue<ChunkLoadEntry> _chunksToLoad = new();
-    private readonly ConcurrentUniqueQueue<Int3> _chunksToUnload = new();
-    private readonly ConcurrentQueue<(Int3, VoxelOctree)> _chunksToUpdate = new();
-
-    private readonly ConcurrentDictionary<Int3, object?> _activeChunkCreations = new();
-    private readonly List<Task> _newChunkUpdateTasks = new();
-    private Task _currentWaitTasks = Task.CompletedTask;
-
-    private readonly CancellationTokenSource _cancellationTokenSource = new();
-    
     private INetworkHandler NetworkHandler { get; }
     private IPlayerHandler PlayerHandler { get; }
     private ITextureAtlasHandler TextureAtlasHandler { get; }
@@ -54,176 +43,34 @@ public class ChunkManager : IDisposable
         TextureAtlasHandler = textureAtlasHandler;
         BlockHandler = blockHandler;
         EventBus = eventBus;
-
-        IEntityManager.PostEntityCreateEvent += OnEntityCreate;
-        IEntityManager.PreEntityDeleteEvent += OnEntityDelete;
     }
 
-    public void PlayerChunkChanged(Int3? oldChunk, Int3? newChunk, ushort player)
-    {
-        if (!_parentWorld.IsServerWorld)
-            throw new InvalidOperationException("Player Chunk Changes can only be processed on the server");
-
-        Task.Run(() => ProcessPlayerChunkChanged(oldChunk, newChunk, player), _cancellationTokenSource.Token);
-    }
-
-    private void CreateChunk(Int3 chunkPosition)
+    public void CreateChunk(Int3 chunkPosition)
     {
         if (_chunks.ContainsKey(chunkPosition))
             return;
 
-        var chunk = _parentWorld.WorldGenerator.GenerateChunk(chunkPosition);
+        var chunk = new Chunk(chunkPosition, _parentWorld, PlayerHandler, NetworkHandler, BlockHandler,
+            TextureAtlasHandler);
 
-        _chunksToLoad.TryEnqueue(new ChunkLoadEntry { ChunkPosition = chunkPosition, Chunk = chunk });
+        _chunks.TryAdd(chunkPosition, chunk);
+
+        EventBus.InvokeEvent(new AddChunkEvent(_parentWorld, chunkPosition));
+        
+        if (_parentWorld.IsServerWorld)
+            _parentWorld.WorldGenerator.EnqueueChunkGeneration(chunk);
     }
 
-    private void ProcessPlayerChunkChanged(Int3? oldChunk, Int3? newChunk, ushort player)
+    internal void RemoveChunk(Int3 chunkPosition)
     {
-        IEnumerable<Int3> chunksToLoad;
-        IEnumerable<Int3> chunksToUnload;
-
-        if (oldChunk is null && newChunk is not null)
+        if (!_chunks.TryGetValue(chunkPosition, out var chunk))
         {
-            chunksToUnload = [];
-            chunksToLoad = AreaAroundChunk(newChunk.Value);
-        }
-        else if (oldChunk is not null && newChunk is null)
-        {
-            chunksToLoad = [];
-            chunksToUnload = AreaAroundChunk(oldChunk.Value);
-        }
-        else if (oldChunk is not null && newChunk is not null)
-        {
-            chunksToLoad = AreaAroundChunk(newChunk.Value).Except(AreaAroundChunk(oldChunk.Value));
-            chunksToUnload = AreaAroundChunk(oldChunk.Value).Except(AreaAroundChunk(newChunk.Value));
-        }
-        else
-        {
-            chunksToLoad = [];
-            chunksToUnload = [];
+            Log.Error("Chunk to remove was not found: {ChunkPosition}", chunkPosition);
+            return;
         }
 
-        List<Int3> toLoad = new();
-        List<Int3> toUnload = new();
-
-
-        foreach (var chunk in chunksToLoad)
-        {
-            _chunkPlayers.AddOrUpdate(chunk,
-                _ =>
-                {
-                    var dic = new ConcurrentDictionary<ushort, object?>();
-                    dic.TryAdd(player, null);
-                    toLoad.Add(chunk);
-                    return dic;
-                }
-                , (_, players) =>
-                {
-                    players.TryAdd(player, null);
-                    return players;
-                });
-
-            var createMessage = NetworkHandler.CreateMessage<CreateChunk>();
-            createMessage.ChunkPosition = chunk;
-            createMessage.WorldId = _parentWorld.Identification;
-
-            createMessage.Send(player);
-        }
-
-        foreach (var chunk in chunksToUnload)
-        {
-            if (!_chunkPlayers.TryGetValue(chunk, out var players))
-            {
-                Log.Error("Player {Player} tried to unload chunk {Chunk} but it was not loaded", player, chunk);
-                continue;
-            }
-
-            players.TryRemove(player, out _);
-
-            var releaseMessage = NetworkHandler.CreateMessage<ReleaseChunk>();
-            releaseMessage.ChunkPosition = chunk;
-            releaseMessage.WorldId = _parentWorld.Identification;
-            releaseMessage.Send(player);
-
-            if (players.Count != 0) continue;
-
-            _chunkPlayers.TryRemove(chunk, out _);
-            toUnload.Add(chunk);
-        }
-
-
-        foreach (var chunk in toUnload)
-        {
-            _chunksToUnload.TryEnqueue(chunk);
-        }
-
-
-        foreach (var chunk in toLoad)
-        {
-            if (_chunks.ContainsKey(chunk)) continue;
-
-            if (!_activeChunkCreations.TryAdd(chunk, null)) continue;
-
-            var newTask = _currentWaitTasks.ContinueWith(_ => CreateChunk(chunk), _cancellationTokenSource.Token);
-
-            _newChunkUpdateTasks.Add(newTask);
-            var maxConcurrencyLevel = Task.Factory.Scheduler?.MaximumConcurrencyLevel ?? 4;
-            if (_newChunkUpdateTasks.Count < maxConcurrencyLevel / 4) continue;
-
-            _currentWaitTasks = Task.WhenAll(_newChunkUpdateTasks);
-            _newChunkUpdateTasks.Clear();
-        }
-
-
-        IEnumerable<Int3> AreaAroundChunk(Int3 chunk)
-        {
-            //calculate all positions in the render area around the chunk
-            for (var x = chunk.X - TechardryMod.Instance!.ServerRenderDistance - 1;
-                 x <= chunk.X + TechardryMod.Instance.ServerRenderDistance;
-                 x++)
-            {
-                for (var y = chunk.Y - TechardryMod.Instance.ServerRenderDistance - 1;
-                     y <= chunk.Y + TechardryMod.Instance.ServerRenderDistance;
-                     y++)
-                {
-                    for (var z = chunk.Z - TechardryMod.Instance.ServerRenderDistance - 1;
-                         z <= chunk.Z + TechardryMod.Instance.ServerRenderDistance;
-                         z++)
-                    {
-                        yield return new Int3(x, y, z);
-                    }
-                }
-            }
-        }
-    }
-
-
-    private void OnEntityDelete(IWorld world, Entity entity)
-    {
-        if (world != _parentWorld) return;
-        if (entity.ArchetypeId != ArchetypeIDs.TestCamera) return;
-
-        var player = _parentWorld.EntityManager.GetEntityOwner(entity);
-        var position = _parentWorld.EntityManager.GetComponent<Position>(entity);
-        var chunkPos = new Int3((int)position.Value.X / Chunk.Size, (int)position.Value.Y / Chunk.Size,
-            (int)position.Value.Z / Chunk.Size);
-
-        PlayerChunkChanged(chunkPos, null, player);
-    }
-
-    private void OnEntityCreate(IWorld world, Entity entity)
-    {
-        if (world != _parentWorld || world is { IsServerWorld: false }) return;
-        if (entity.ArchetypeId != ArchetypeIDs.TestCamera) return;
-
-        var player = _parentWorld.EntityManager.GetEntityOwner(entity);
-        var position = _parentWorld.EntityManager.GetComponent<Position>(entity);
-        var chunkPos = new Int3((int)position.Value.X / Chunk.Size, (int)position.Value.Y / Chunk.Size,
-            (int)position.Value.Z / Chunk.Size);
-
-        _parentWorld.EntityManager.GetComponent<LastChunk>(entity).Value = chunkPos;
-
-        PlayerChunkChanged(null, chunkPos, player);
+        EventBus.InvokeEvent(new RemoveChunkEvent(_parentWorld, chunkPosition));
+        chunk.Dispose();
     }
 
     public IEnumerable<Int3> GetLoadedChunks()
@@ -233,53 +80,10 @@ public class ChunkManager : IDisposable
 
     public void Update()
     {
-        while (_chunksToUnload.TryDequeue(out var chunkToUnload))
-        {
-            if (!_chunks.Remove(chunkToUnload, out var chunk)) continue;
-            
-            EventBus.InvokeEvent(new RemoveChunkEvent(_parentWorld, chunkToUnload));
-            chunk.Dispose();
-        }
-
-
-        while (_chunksToLoad.TryDequeue(out var toLoad))
-        {
-            var (chunkPosition, chunk) = toLoad;
-
-            _chunks.TryAdd(toLoad.ChunkPosition, toLoad.Chunk);
-            _activeChunkCreations.TryRemove(toLoad.ChunkPosition, out _);
-
-            EventBus.InvokeEvent(new AddChunkEvent(_parentWorld, chunkPosition));
-        }
-
-        if (!_parentWorld.IsServerWorld)
-        {
-            while (_chunksToUpdate.TryDequeue(out var toUpdate))
-            {
-                var (chunkPosition, octree) = toUpdate;
-                if (!_chunks.TryGetValue(chunkPosition, out var chunk))
-                {
-                    Log.Error("Chunk to update was not found: {ChunkPosition}", chunkPosition);
-                    continue;
-                }
-                
-                chunk.SetOctree(octree);
-                EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition, UpdateChunkEvent.ChunkUpdateKind.Octree));
-            }
-        }
-
-        foreach (var chunk in _chunks.Values)
+        foreach (var (_, chunk) in _chunks)
         {
             chunk.Update();
         }
-    }
-
-    public void UpdateChunk(Int3 chunkPosition, VoxelOctree octree)
-    {
-        if (_parentWorld.IsServerWorld)
-            throw new InvalidOperationException("Client tried to update chunk on server");
-
-        _chunksToUpdate.Enqueue((chunkPosition, octree));
     }
 
     public bool TryGetChunk(Int3 chunkPosition, [MaybeNullWhen(false)] out Chunk chunk)
@@ -315,9 +119,9 @@ public class ChunkManager : IDisposable
             Log.Error("Chunk to set block in was not found: {ChunkPos}", chunkPos);
             return;
         }
-        
+
         chunk.SetBlock(blockPos, blockId, depth, rotation);
-        
+
         EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPos, UpdateChunkEvent.ChunkUpdateKind.Voxel));
     }
 
@@ -344,29 +148,7 @@ public class ChunkManager : IDisposable
 
         return chunk.GetBlockId(blockPos);
     }
-    
-    //Basically a tuple but the comparison only uses the chunk position
-    internal struct ChunkLoadEntry
-    {
-        public Int3 ChunkPosition;
-        public Chunk Chunk;
 
-        public override bool Equals(object? obj)
-        {
-            return obj is ChunkLoadEntry entry && ChunkPosition.Equals(entry.ChunkPosition);
-        }
-
-        public override int GetHashCode()
-        {
-            return ChunkPosition.GetHashCode();
-        }
-
-        public void Deconstruct(out Int3 chunkPosition, out Chunk chunk)
-        {
-            chunkPosition = ChunkPosition;
-            chunk = Chunk;
-        }
-    }
 
     public void Dispose()
     {
@@ -379,28 +161,38 @@ public class ChunkManager : IDisposable
         _chunks.Clear();
     }
 
-    internal void AddChunk(Int3 chunkPosition)
+    public void RemoveEntityFromChunk(Int3 chunkToUnload, Entity entity)
     {
-        if (_parentWorld.IsServerWorld)
-            throw new InvalidOperationException("Chunks can only be manually added to the client world");
-
-        _chunksToLoad.TryEnqueue(new ChunkLoadEntry()
+        if (!_chunks.TryGetValue(chunkToUnload, out var chunk))
         {
-            ChunkPosition = chunkPosition,
-            Chunk = new Chunk(chunkPosition, _parentWorld, PlayerHandler, NetworkHandler, BlockHandler,
-                TextureAtlasHandler)
-        });
+            Log.Error("Chunk to remove entity from was not found: {Chunk}", chunkToUnload);
+            return;
+        }
+        
+        chunk.RemovePlayerEntity(entity);
     }
 
-
-    internal void RemoveChunk(Int3 chunkPosition)
+    public void AddEntityToChunk(Int3 chunkToLoad, Entity entity)
     {
-        if (_parentWorld.IsServerWorld)
+        if (!_chunks.TryGetValue(chunkToLoad, out var chunk))
         {
-            throw new InvalidOperationException("Chunks can only be manually removed from the client world");
+            Log.Error("Chunk to add entity to was not found: {Chunk}", chunkToLoad);
+            return;
         }
 
-        _chunksToUnload.TryEnqueue(chunkPosition);
+        chunk.AddPlayerEntity(entity);
+    }
+
+    public void UpdateChunk(Int3 chunkPosition, VoxelOctree octree)
+    {
+        if(!_chunks.TryGetValue(chunkPosition, out var chunk))
+        {
+            Log.Error("Chunk to update was not found: {ChunkPosition}", chunkPosition);
+            return;
+        }
+        
+        chunk.SetOctree(octree);
+        EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition, UpdateChunkEvent.ChunkUpdateKind.Octree));
     }
 }
 
@@ -434,7 +226,10 @@ public record struct RemoveChunkEvent(TechardryWorld ContainingWorld, Int3 Chunk
 /// <param name="ContainingWorld"> The world the chunk was updated in</param>
 /// <param name="ChunkPosition"> The position of the chunk that was updated</param>
 [RegisterEvent("update_chunk")]
-public record struct UpdateChunkEvent(TechardryWorld ContainingWorld, Int3 ChunkPosition, UpdateChunkEvent.ChunkUpdateKind UpdateKind) : IEvent
+public record struct UpdateChunkEvent(
+    TechardryWorld ContainingWorld,
+    Int3 ChunkPosition,
+    UpdateChunkEvent.ChunkUpdateKind UpdateKind) : IEvent
 {
     public static Identification Identification => EventIDs.UpdateChunk;
     public static bool ModificationAllowed => false;

@@ -26,6 +26,8 @@ public class VoxelInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
 
     private Func<VoxelIntermediateData>? _intermediateDataFunc;
 
+    public override bool UpdateAlways => true;
+
     public override void Setup()
     {
         _inputData = ModuleDataAccessor.UseDictionaryInputData<Int3, VoxelOctree>(RenderInputDataIDs.Voxel, this);
@@ -42,10 +44,13 @@ public class VoxelInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
         }
 
         FreeOldStagingBuffers();
+        
+        var voxelOctrees = _inputData.AcquireData();
+        if (voxelOctrees.Count == 0) return;
 
         var intermediateData = _intermediateDataFunc();
 
-        foreach (var (chunkPosition, octree) in _inputData.AcquireData())
+        foreach (var (chunkPosition, octree) in voxelOctrees)
         {
             if (intermediateData.TryUseOldBuffer(chunkPosition, octree.Version))
             {
