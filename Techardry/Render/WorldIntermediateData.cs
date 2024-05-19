@@ -10,8 +10,9 @@ namespace Techardry.Render;
 [RegisterIntermediateRenderDataByType("world")]
 public class WorldIntermediateData : IntermediateData
 {
-    public MemoryBuffer? BvhNodeBuffer;
-    public MemoryBuffer? BvhIndexBuffer;
+    public MemoryBuffer? WorldGridBuffer;
+    public MemoryBuffer? WorldGridHeaderBuffer;
+    
     public ulong LastVoxelIntermediateVersion = ulong.MaxValue;
     
     
@@ -25,8 +26,8 @@ public class WorldIntermediateData : IntermediateData
 
     public override void Dispose()
     {
-        BvhNodeBuffer?.Dispose();
-        BvhIndexBuffer?.Dispose();
+        WorldGridBuffer?.Dispose();
+        WorldGridHeaderBuffer?.Dispose();
         
         //TODO Dispose descriptor set and pool
     }

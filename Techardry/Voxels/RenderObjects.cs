@@ -182,13 +182,15 @@ public static class RenderObjects
     {
         Bindings =
         [
+            //world grid header
             new DescriptorSetLayoutBinding()
             {
                 Binding = 0,
                 DescriptorCount = 1,
-                DescriptorType = DescriptorType.StorageBuffer,
+                DescriptorType = DescriptorType.UniformBuffer,
                 StageFlags = ShaderStageFlags.FragmentBit
             },
+            //world grid
             new DescriptorSetLayoutBinding()
             {
                 Binding = 1,

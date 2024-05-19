@@ -14,6 +14,7 @@ using MintyCore.Utils;
 using Silk.NET.Vulkan;
 using Techardry.Identifications;
 using Techardry.Voxels;
+using Int3 = Techardry.Utils.Int3;
 using MathHelper = MintyCore.Utils.Maths.MathHelper;
 
 namespace Techardry.Render;
@@ -28,8 +29,8 @@ public class WorldInputModule(
     private Func<VoxelIntermediateData?>? _voxelBufferAccessor;
     private Func<WorldIntermediateData>? _worldDataAccessor;
 
-    private MemoryBuffer? _stagingNodeBuffer;
-    private MemoryBuffer? _stagingIndexBuffer;
+    private MemoryBuffer? _stagingWorldBuffer;
+    private MemoryBuffer? _stagingWorldHeaderBuffer;
 
     public override void Setup()
     {
@@ -52,40 +53,30 @@ public class WorldInputModule(
         if (voxelBuffer.Buffers.Length == 0 || worldData.LastVoxelIntermediateVersion == voxelBuffer.Version) return;
 
 
-        var boundingBoxesArray = ArrayPool<BoundingBox>.Shared.Rent(voxelBuffer.Buffers.Length);
-        var boundingBoxes = boundingBoxesArray.AsSpan()[..voxelBuffer.Buffers.Length];
+        var min = Int3.MaxValue;
+        var max = Int3.MinValue;
 
-        for (var index = 0; index < voxelBuffer.Buffers.Length; index++)
+        foreach (var (position, _) in voxelBuffer.Buffers)
         {
-            var (position, _) = voxelBuffer.Buffers[index];
-            var bMin = new Vector3(position.X, position.Y, position.Z) * VoxelOctree.Dimensions;
-            var bMax = bMin + new Vector3(VoxelOctree.Dimensions);
-
-            boundingBoxes[index] = new BoundingBox(bMin, bMax);
+            min = Int3.Min(min, position);
+            max = Int3.Max(max, position);
         }
 
-        var octrees = voxelBuffer.Buffers;
+        using var worldGrid = new WorldGrid(min, max);
 
-        var bvh = new MasterBvhTree(boundingBoxes);
-
-        var reorderedPointers = new ulong[boundingBoxes.Length];
-        //take the tree indices from the bvh and reorder the pointers of the octrees
-        for (var i = 0; i < reorderedPointers.Length; i++)
+        foreach (var (position, address) in voxelBuffer.Buffers)
         {
-            reorderedPointers[i] = octrees[bvh.TreeIndices[i]].address;
+            worldGrid.InsertChunk(position, address);
         }
 
+        ApplyBufferData(commandBuffer, worldGrid.Cells, ref _stagingWorldBuffer, ref worldData.WorldGridBuffer,
+            BufferUsageFlags.StorageBufferBit);
 
-        var nodes = bvh.Nodes;
-
-        ApplyBufferData(commandBuffer, nodes, ref _stagingNodeBuffer, ref worldData.BvhNodeBuffer);
-        ApplyBufferData(commandBuffer, reorderedPointers.AsSpan(), ref _stagingIndexBuffer, ref worldData.BvhIndexBuffer);
+        ApplyBufferData(commandBuffer, [worldGrid.Header], ref _stagingWorldHeaderBuffer,
+            ref worldData.WorldGridHeaderBuffer, BufferUsageFlags.UniformBufferBit);
 
         UpdateDescriptorSets(worldData);
 
-        ArrayPool<BoundingBox>.Shared.Return(boundingBoxesArray);
-        bvh.Dispose();
-        
         worldData.LastVoxelIntermediateVersion = voxelBuffer.Version;
     }
 
@@ -96,45 +87,48 @@ public class WorldInputModule(
             worldData.WorldDataDescriptorSet = descriptorSetManager.AllocateDescriptorSet(DescriptorSetIDs.Render);
         }
 
-        Span<WriteDescriptorSet> write = stackalloc WriteDescriptorSet[2];
-
-        //bvh node buffer
-        var nodeBufferInfo = new DescriptorBufferInfo
+        var worldGridHeaderBufferInfo = new DescriptorBufferInfo
         {
-            Buffer = worldData.BvhNodeBuffer!.Buffer,
-            Range = worldData.BvhNodeBuffer.Size
+            Buffer = worldData.WorldGridHeaderBuffer!.Buffer,
+            Range = worldData.WorldGridHeaderBuffer.Size
         };
-        write[0] = new()
+        var worldGridBufferInfo = new DescriptorBufferInfo
         {
-            SType = StructureType.WriteDescriptorSet,
-            DstSet = worldData.WorldDataDescriptorSet,
-            DstBinding = 0,
-            DescriptorCount = 1,
-            DescriptorType = DescriptorType.StorageBuffer,
-            PBufferInfo = &nodeBufferInfo
+            Buffer = worldData.WorldGridBuffer!.Buffer,
+            Range = worldData.WorldGridBuffer.Size
         };
 
-        //bvh index buffer
-        var indexBufferInfo = new DescriptorBufferInfo
-        {
-            Buffer = worldData.BvhIndexBuffer!.Buffer,
-            Range = worldData.BvhIndexBuffer.Size
-        };
-        write[1] = new()
-        {
-            SType = StructureType.WriteDescriptorSet,
-            DstSet = worldData.WorldDataDescriptorSet,
-            DstBinding = 1,
-            DescriptorCount = 1,
-            DescriptorType = DescriptorType.StorageBuffer,
-            PBufferInfo = &indexBufferInfo
-        };
 
-        vulkanEngine.Vk.UpdateDescriptorSets(vulkanEngine.Device, write, ReadOnlySpan<CopyDescriptorSet>.Empty);
+        ReadOnlySpan<WriteDescriptorSet> writes =
+        [
+            new WriteDescriptorSet()
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = worldData.WorldDataDescriptorSet,
+                DstBinding = 0,
+                DstArrayElement = 0,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.UniformBuffer,
+                PBufferInfo = &worldGridHeaderBufferInfo
+            },
+            new WriteDescriptorSet()
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = worldData.WorldDataDescriptorSet,
+                DstBinding = 1,
+                DstArrayElement = 0,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.StorageBuffer,
+                PBufferInfo = &worldGridBufferInfo
+            }
+        ];
+
+        vulkanEngine.Vk.UpdateDescriptorSets(vulkanEngine.Device, writes, ReadOnlySpan<CopyDescriptorSet>.Empty);
     }
 
     private void ApplyBufferData<TData>(ManagedCommandBuffer commandBuffer, Span<TData> data,
-        ref MemoryBuffer? stagingBuffer, ref MemoryBuffer? gpuBuffer) where TData : unmanaged
+        ref MemoryBuffer? stagingBuffer, ref MemoryBuffer? gpuBuffer, BufferUsageFlags bufferKind)
+        where TData : unmanaged
     {
         Span<uint> queueIndices = [vulkanEngine.GraphicQueue.familyIndex];
         var size = (ulong)(data.Length * (uint)Unsafe.SizeOf<TData>());
@@ -153,7 +147,7 @@ public class WorldInputModule(
         {
             gpuBuffer?.Dispose();
 
-            gpuBuffer = memoryManager.CreateBuffer(BufferUsageFlags.TransferDstBit | BufferUsageFlags.StorageBufferBit,
+            gpuBuffer = memoryManager.CreateBuffer(BufferUsageFlags.TransferDstBit | bufferKind,
                 alignedSize, queueIndices,
                 MemoryPropertyFlags.DeviceLocalBit, false);
         }
@@ -167,10 +161,11 @@ public class WorldInputModule(
 
     public override void Dispose()
     {
-        _stagingIndexBuffer?.Dispose();
-        _stagingNodeBuffer?.Dispose();
-        _stagingIndexBuffer = null;
-        _stagingNodeBuffer = null;
+        _stagingWorldBuffer?.Dispose();
+        _stagingWorldBuffer = null;
+        
+        _stagingWorldHeaderBuffer?.Dispose();
+        _stagingWorldHeaderBuffer = null;
 
         _voxelBufferAccessor = null;
         _worldDataAccessor = null;

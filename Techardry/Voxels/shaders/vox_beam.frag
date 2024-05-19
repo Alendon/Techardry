@@ -22,9 +22,8 @@ layout (location = 0) out float out_depth;
 #include "camera.glsl"
 
 #define RENDER_DATA_SET 1
-#define RENDER_DATA_SET_MASTER_BVH_BINDING 0
-#define RENDER_DATA_SET_MASTER_BVH_INDICES_BINDING 1
-#define RENDER_DATA_SET_OCTREE_BINDING 2
+#define RENDER_DATA_SET_WORLD_GRID_HEADER_BINDING 0
+#define RENDER_DATA_SET_WORLD_GRID_BINDING 1
 
 #include "master_bvh.glsl"
 #include "pathtracing_helper.glsl"

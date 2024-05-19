@@ -5,11 +5,6 @@ struct Ray{
     vec3 origin, direction, inverseDirection;
 };
 
-struct AABB{
-    vec3 min;
-    vec3 max;
-};
-
 struct Result{
     uint nodeIndex;
     vec3 normal;
@@ -41,26 +36,24 @@ bool floatEquals(float a, float b){
     return abs(a - b) < dynamicEpsilon;
 }
 
-float intersectBoundingBox(in Ray ray, in AABB aabb, float currentT){
-    float tx1 = (aabb.min.x - ray.origin.x) * ray.inverseDirection.x;
-    float tx2 = (aabb.max.x - ray.origin.x) * ray.inverseDirection.x;
-    float tmin = min(tx1, tx2);
-    float tmax = max(tx1, tx2);
+bool intersectBoundingBox(Ray ray, vec3 minBounds, vec3 maxBounds, out float tMin) {
+    vec3 invDir = ray.inverseDirection;
+    vec3 t0s = (minBounds - ray.origin) * invDir;
+    vec3 t1s = (maxBounds - ray.origin) * invDir;
 
-    float ty1 = (aabb.min.y - ray.origin.y) * ray.inverseDirection.y;
-    float ty2 = (aabb.max.y - ray.origin.y) * ray.inverseDirection.y;
-    tmin = max(tmin, min(ty1, ty2));
-    tmax = min(tmax, max(ty1, ty2));
+    vec3 tSmaller = min(t0s, t1s);
+    vec3 tLarger = max(t0s, t1s);
 
-    float tz1 = (aabb.min.z - ray.origin.z) * ray.inverseDirection.z;
-    float tz2 = (aabb.max.z - ray.origin.z) * ray.inverseDirection.z;
-    tmin = max(tmin, min(tz1, tz2));
-    tmax = min(tmax, max(tz1, tz2));
+    tMin = max(max(tSmaller.x, tSmaller.y), tSmaller.z);
+    float tMax = min(min(tLarger.x, tLarger.y), tLarger.z);
 
-    if(tmax >= tmin && tmin < currentT && tmax > 0){
-        return tmin;
-    }
-    return FloatMax;
+    return tMin <= tMax && tMax > 0.0;
+}
+
+bool isInBoundingBox(vec3 point, vec3 minBounds, vec3 maxBounds){
+    return point.x >= minBounds.x && point.x <= maxBounds.x &&
+           point.y >= minBounds.y && point.y <= maxBounds.y &&
+           point.z >= minBounds.z && point.z <= maxBounds.z;
 }
 
 Result resultEmpty(){

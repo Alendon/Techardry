@@ -7,27 +7,28 @@
 #include "common.glsl"
 #include "voxel_octree.glsl"
 
-layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_MASTER_BVH_BINDING) readonly buffer MasterBvh
+layout(set = RENDER_DATA_SET, binding = RENDER_DATA_SET_WORLD_GRID_HEADER_BINDING) uniform WorldGridHeader
 {
-    BvhNode nodes[];
-} masterBvh;
+//minimum point of the grid. Stored as chunk coordinates (not world coordinates)
+    int minX;
+    int minY;
+    int minZ;
 
-layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_MASTER_BVH_INDICES_BINDING) readonly buffer MasterBvhPointers
+//size of the grid in chunks
+    int sizeX;
+    int sizeY;
+    int sizeZ;
+} worldGridHeader;
+
+layout(std430, set = RENDER_DATA_SET, binding = RENDER_DATA_SET_WORLD_GRID_BINDING) readonly buffer WorldGrid
 {
-    uint64_t  pointers[];
-} masterBvhPointers;
-
-
-
-
-bool bvhNode_IsLeaf(in BvhNode node);
-AABB bvhNode_GetAABB(in BvhNode node);
-
+    uint64_t chunkPointers[];
+} worldGrid;
 
 void raycast_tree(in Ray ray, in uint64_t tree, inout Result result){
     //transform the ray into the tree's local space
     mat4 inverseTransform = getTreeInverseTransform(tree);
-    
+
     vec4 rayOrigin = inverseTransform * vec4(ray.origin, 1);
     vec4 rayDirection = inverseTransform * vec4(ray.direction, 0);
 
@@ -49,60 +50,57 @@ void raycast_tree(in Ray ray, in uint64_t tree, inout Result result){
 
 void raycast(in Ray ray, inout Result result){
 
-    int nodeIndex = 0;
-    int stack[BvhStackSize];
-    int stackIndex = 0;
+    ivec3 gridMin = ivec3(worldGridHeader.minX, worldGridHeader.minY, worldGridHeader.minZ);
+    ivec3 gridSize = ivec3(worldGridHeader.sizeX, worldGridHeader.sizeY, worldGridHeader.sizeZ);
 
-    while (true)
-    {
-        if (bvhNode_IsLeaf(masterBvh.nodes[nodeIndex])){
-            for (int i = 0; i < masterBvh.nodes[nodeIndex].count; i++){
-                uint64_t tree = masterBvhPointers.pointers[masterBvh.nodes[nodeIndex].leftFirst + i];
-                raycast_tree(ray, tree, result);
-                if (result.fail)
-                    return;
+    vec3 cellSize = vec3(Dimensions);
+
+    //calculate the current position in the cell
+    vec3 normalizedPosition = (ray.origin - vec3(gridMin) * cellSize) / cellSize;
+    ivec3 currentCell = ivec3(floor(normalizedPosition));
+
+    vec3 deltaDist = abs(vec3(length(ray.direction)) / ray.direction);
+    ivec3 step = ivec3(sign(ray.direction));
+    vec3 sideDist = (sign(ray.direction) * (vec3(currentCell) - normalizedPosition) + (sign(ray.direction) * 0.5) + 0.5) * deltaDist;
+
+    while (currentCell.x >= 0 && currentCell.x < gridSize.x &&
+    currentCell.y >= 0 && currentCell.y < gridSize.y &&
+    currentCell.z >= 0 && currentCell.z < gridSize.z){
+
+        int cellIndex = currentCell.x + currentCell.y * gridSize.x + currentCell.z * gridSize.x * gridSize.y;
+        uint64_t tree = worldGrid.chunkPointers[cellIndex];
+
+        if (tree != 0) {
+            Result tempResult = resultEmpty();
+            raycast_tree(ray, tree, tempResult);
+
+            if (tempResult.t < result.t) {
+                result = tempResult;
+                return;
             }
-
-            if (stackIndex == 0) break;
-            nodeIndex = stack[--stackIndex];
-            continue;
         }
 
-        int child1 = masterBvh.nodes[nodeIndex].leftFirst;
-        int child2 = child1 + 1;
-
-        float dist1 = intersectBoundingBox(ray, bvhNode_GetAABB(masterBvh.nodes[child1]), result.t);
-        float dist2 = intersectBoundingBox(ray, bvhNode_GetAABB(masterBvh.nodes[child2]), result.t);
-
-        if (dist1 > dist2){
-            int tempChild = child1;
-            child1 = child2;
-            child2 = tempChild;
-
-            float tempDist = dist1;
-            dist1 = dist2;
-            dist2 = tempDist;
-        }
-
-        if (floatEquals(dist1, FloatMax)){
-            if (stackIndex == 0) break;
-            nodeIndex = stack[--stackIndex];
+        if (sideDist.x < sideDist.y) {
+            if (sideDist.x < sideDist.z) {
+                sideDist.x += deltaDist.x;
+                currentCell.x += step.x;
+            }
+            else {
+                sideDist.z += deltaDist.z;
+                currentCell.z += step.z;
+            }
         }
         else {
-            nodeIndex = child1;
-            if (!floatEquals(dist2, FloatMax)){
-                stack[stackIndex++] = child2;
+            if (sideDist.y < sideDist.z) {
+                sideDist.y += deltaDist.y;
+                currentCell.y += step.y;
+            }
+            else {
+                sideDist.z += deltaDist.z;
+                currentCell.z += step.z;
             }
         }
     }
-}
-
-bool bvhNode_IsLeaf(in BvhNode node){
-    return node.count > 0;
-}
-
-AABB bvhNode_GetAABB(in BvhNode node){
-    return AABB(vec3(node.minX, node.minY, node.minZ), vec3(node.maxX, node.maxY, node.maxZ));
 }
 
 vec3 resultGetColor(in Result result){
