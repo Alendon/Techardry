@@ -56,7 +56,7 @@ public class ChunkManager : IDisposable
         _chunks.TryAdd(chunkPosition, chunk);
 
         EventBus.InvokeEvent(new AddChunkEvent(_parentWorld, chunkPosition));
-        
+
         if (_parentWorld.IsServerWorld)
             _parentWorld.WorldGenerator.EnqueueChunkGeneration(chunk);
     }
@@ -125,6 +125,52 @@ public class ChunkManager : IDisposable
         EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPos, UpdateChunkEvent.ChunkUpdateKind.Voxel));
     }
 
+    public void SetBlocks(IEnumerable<Vector3> blockPositions, Identification blockId, int depth)
+    {
+        // Create a dictionary to store the chunks and their associated block positions
+        var chunkBlockPositions = new Dictionary<Int3, List<Vector3>>();
+
+        // Iterate over the blockPositions
+        foreach (var blockPos in blockPositions)
+        {
+            // Calculate the chunk position for each block position
+            Int3 chunkPos = new((int)blockPos.X / Chunk.Size, (int)blockPos.Y / Chunk.Size,
+                (int)blockPos.Z / Chunk.Size);
+            if (blockPos.X < 0)
+                chunkPos.X -= 1;
+            if (blockPos.Y < 0)
+                chunkPos.Y -= 1;
+            if (blockPos.Z < 0)
+                chunkPos.Z -= 1;
+
+            // Check if the chunk is already in the dictionary
+            if (!chunkBlockPositions.TryGetValue(chunkPos, out var positions))
+            {
+                // If it's not, add a new entry to the dictionary with the chunk and a new list containing the current block position
+                positions = new List<Vector3>();
+                chunkBlockPositions[chunkPos] = positions;
+            }
+
+            // Add the block position to the list of block positions for that chunk
+            positions.Add(blockPos);
+        }
+
+        // Iterate over the dictionary
+        foreach (var (chunkPosition, positions) in chunkBlockPositions)
+        {
+            // For each entry, get the chunk
+            if (_chunks.TryGetValue(chunkPosition, out var chunk))
+            {
+                // Call the SetBlocks method on the chunk with the list of block positions
+                // Note: The SetBlocks method is not implemented yet
+                chunk.SetBlocks(positions, blockId, depth);
+            }
+
+            EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition,
+                UpdateChunkEvent.ChunkUpdateKind.Voxel));
+        }
+    }
+
     public Identification GetBlockId(Vector3 blockPos)
     {
         Int3 chunkPos = new((int)blockPos.X / Chunk.Size, (int)blockPos.Y / Chunk.Size, (int)blockPos.Z / Chunk.Size);
@@ -168,7 +214,7 @@ public class ChunkManager : IDisposable
             Log.Error("Chunk to remove entity from was not found: {Chunk}", chunkToUnload);
             return;
         }
-        
+
         chunk.RemovePlayerEntity(entity);
     }
 
@@ -185,14 +231,15 @@ public class ChunkManager : IDisposable
 
     public void UpdateChunk(Int3 chunkPosition, VoxelOctree octree)
     {
-        if(!_chunks.TryGetValue(chunkPosition, out var chunk))
+        if (!_chunks.TryGetValue(chunkPosition, out var chunk))
         {
             Log.Error("Chunk to update was not found: {ChunkPosition}", chunkPosition);
             return;
         }
-        
+
         chunk.SetOctree(octree);
-        EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition, UpdateChunkEvent.ChunkUpdateKind.Octree));
+        EventBus.InvokeEvent(new UpdateChunkEvent(_parentWorld, chunkPosition,
+            UpdateChunkEvent.ChunkUpdateKind.Octree));
     }
 }
 

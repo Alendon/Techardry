@@ -30,22 +30,34 @@ public partial class ChunkDataMessage : IMessage
         ChunkPosition.Serialize(writer);
         WorldId.Serialize(writer);
         Octree.Serialize(writer);
+        
+        Log.Debug("Send chunk data for {ChunkPosition}", ChunkPosition);
     }
 
     public bool Deserialize(DataReader reader)
     {
-        if (IsServer) return false;
+        Log.Debug("Start receiving chunk data");
+        if (IsServer)
+        {
+            return false;
+        }
 
         if (!Int3.TryDeserialize(reader, out ChunkPosition) ||
             !Identification.Deserialize(reader, out WorldId) ||
             !VoxelOctree.TryDeserialize(reader, out Octree, TextureAtlasHandler, BlockHandler))
+        {
             return false;
+        }
 
         if (!WorldHandler.TryGetWorld(GameType.Client, WorldId, out var world) ||
             world is not TechardryWorld techardryWorld)
+        {
             return false;
+        }
 
         techardryWorld.ChunkManager.UpdateChunk(ChunkPosition, Octree);
+        
+        Log.Debug("Received chunk data for {ChunkPosition}", ChunkPosition);
         
         return true;
     }

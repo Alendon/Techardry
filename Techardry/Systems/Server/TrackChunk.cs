@@ -27,7 +27,7 @@ public partial class TrackChunk() : ASystem
 
 
     private readonly BufferPool _bufferPool = new(expectedPooledResourceCount: 256);
-    private const int RenderDistance = 2;
+    private const int RenderDistance = 4;
     private const int MinChunkY = -2;
     private const int MaxChunkY = 2;
 

@@ -52,12 +52,13 @@ public class VoxelInputModule(IMemoryManager memoryManager, IVulkanEngine vulkan
 
         foreach (var (chunkPosition, octree) in voxelOctrees)
         {
+            using var readLock = octree.AcquireReadLock();
+            
             if (intermediateData.TryUseOldBuffer(chunkPosition, octree.Version))
             {
                 continue;
             }
-
-            using var readLock = octree.AcquireReadLock();
+            
             var bufferSize = CalculateOctreeBufferSize(octree);
 
             var stagingBuffer = GetStagingBuffer(bufferSize);

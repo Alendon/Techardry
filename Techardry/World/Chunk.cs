@@ -119,6 +119,7 @@ public class Chunk : IDisposable
         chunkData.WorldId = ParentWorld.Identification;
 
         chunkData.Send(_associatedPlayers);
+        Log.Debug("Sent chunk data for {ChunkPosition} to {Players}", Position, _associatedPlayers);
 
         LastSyncedVersion = Version;
         LastSyncedTime = new Timestamp();
@@ -147,6 +148,45 @@ public class Chunk : IDisposable
     public void SetBlock(Vector3 blockPos, Identification blockId, int depth,
         BlockRotation rotation = BlockRotation.None)
     {
+        ValidateBlock(blockId, depth, rotation);
+
+        blockPos = new Vector3(blockPos.X % Size, blockPos.Y % Size, blockPos.Z % Size);
+        blockPos.X = blockPos.X < 0 ? blockPos.X + Size : blockPos.X;
+        blockPos.Y = blockPos.Y < 0 ? blockPos.Y + Size : blockPos.Y;
+        blockPos.Z = blockPos.Z < 0 ? blockPos.Z + Size : blockPos.Z;
+
+        using var octreeLock = Octree.AcquireWriteLock();
+
+        Octree.Insert(new VoxelData(blockId), blockPos, depth);
+
+        Version++;
+    }
+    
+    public void SetBlocks(List<Vector3> chunkBlockPositions, Identification blockId, int depth)
+    {
+        ValidateBlock(blockId, depth, BlockRotation.None);
+        
+        using var octreeLock = Octree.AcquireWriteLock();
+        Octree.CompactingEnabled = false;
+        
+        foreach (var blockPos in chunkBlockPositions)
+        {
+            var pos = new Vector3(blockPos.X % Size, blockPos.Y % Size, blockPos.Z % Size);
+            pos.X = pos.X < 0 ? pos.X + Size : pos.X;
+            pos.Y = pos.Y < 0 ? pos.Y + Size : pos.Y;
+            pos.Z = pos.Z < 0 ? pos.Z + Size : pos.Z;
+            
+            Octree.Insert(new VoxelData(blockId), pos, depth);
+        }
+        
+        Octree.CompactingEnabled = true;
+        Octree.Compact(false);
+        
+        Version++;
+    }
+
+    private void ValidateBlock(Identification blockId, int depth, BlockRotation rotation)
+    {
         if (!_blockHandler.DoesBlockExist(blockId))
         {
             throw new ArgumentException("Block to place does not exist", nameof(blockId));
@@ -161,18 +201,9 @@ public class Chunk : IDisposable
         {
             throw new ArgumentException("Invalid block placement rotation", nameof(rotation));
         }
-
-        blockPos = new Vector3(blockPos.X % Size, blockPos.Y % Size, blockPos.Z % Size);
-        blockPos.X = blockPos.X < 0 ? blockPos.X + Size : blockPos.X;
-        blockPos.Y = blockPos.Y < 0 ? blockPos.Y + Size : blockPos.Y;
-        blockPos.Z = blockPos.Z < 0 ? blockPos.Z + Size : blockPos.Z;
-
-        using var octreeLock = Octree.AcquireWriteLock();
-
-        Octree.Insert(new VoxelData(blockId), blockPos, depth);
-
-        Version++;
     }
+
+   
 
     public Identification GetBlockId(Vector3 blockPos)
     {
@@ -210,6 +241,8 @@ public class Chunk : IDisposable
     {
         return new VoxelCollider(Octree);
     }
+
+    
 }
 
 /// <summary>

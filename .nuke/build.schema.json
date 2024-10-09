@@ -75,13 +75,7 @@
         "ShaderDebugging": {
           "type": "boolean"
         },
-        "ShaderInputFolders": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "ShaderOutputFolders": {
+        "ShaderFiles": {
           "type": "array",
           "items": {
             "type": "string"

@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using Avalonia.Threading;
+using DotNext.Threading;
 using MintyCore.Components.Common;
 using MintyCore.ECS;
 using MintyCore.Graphics.Render.Managers;
@@ -12,6 +13,7 @@ using Silk.NET.GLFW;
 using Techardry.Components.Client;
 using Techardry.Identifications;
 using Techardry.UI.InGame;
+using Techardry.Utils;
 using Techardry.Voxels;
 using Techardry.World;
 
@@ -92,19 +94,39 @@ public partial class TestInteractionSystem(
             }
 
 
+            float radius = 0.25f;
+
             if (BlockBreakIssued)
             {
                 blockPos -= normal * 0.01f;
-                world.ChunkManager.SetBlock(blockPos, BlockIDs.Air, depth);
+
+                world.ChunkManager.SetBlocks(GetSphere(blockPos, radius), BlockIDs.Air, VoxelOctree.MaxDepth);
+
                 BlockBreakIssued = false;
             }
 
             if (BlockPlaceIssued)
             {
                 blockPos += normal * 0.01f;
-                world.ChunkManager.SetBlock(blockPos, currentBlock, depth);
+
+                world.ChunkManager.SetBlocks(GetSphere(blockPos, radius), currentBlock, VoxelOctree.MaxDepth);
+
                 BlockPlaceIssued = false;
             }
+        }
+    }
+
+    private static IEnumerable<Vector3> GetSphere(Vector3 center, float radius)
+    {
+        for (float x = -radius; x <= radius; x += VoxelOctree.MinimumVoxelSize)
+        for (float y = -radius; y <= radius; y += VoxelOctree.MinimumVoxelSize)
+        for (float z = -radius; z <= radius; z += VoxelOctree.MinimumVoxelSize)
+        {
+            var pos = center + new Vector3(x, y, z);
+            var dist = Vector3.Distance(pos, center);
+            if (dist > radius) continue;
+
+            yield return pos;
         }
     }
 

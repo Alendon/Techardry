@@ -6,6 +6,7 @@ using Serilog;
 using Techardry.Identifications;
 using Techardry.Lib.FastNoseLite;
 using Techardry.Utils;
+using Techardry.Voxels;
 
 namespace Techardry.World;
 
@@ -71,7 +72,8 @@ public class WorldGenerator(WorldGeneratorSettings settings, IEventBus eventBus)
     private void GenerateChunk(Chunk chunk)
     {
         var chunkPosition = chunk.Position;
-        using var octreeLock = chunk.Octree.AcquireWriteLock();
+        var octree = chunk.Octree;
+        using var octreeLock = octree.AcquireWriteLock();
         
         chunk.Octree.CompactingEnabled = false;
         
@@ -79,9 +81,12 @@ public class WorldGenerator(WorldGeneratorSettings settings, IEventBus eventBus)
         var realChunkPosition = new Vector3(chunkPosition.X * Chunk.Size, chunkPosition.Y * Chunk.Size,
             chunkPosition.Z * Chunk.Size);
 
-        for (int x = 0; x < Chunk.Size; x++)
+        var voxelDepth = VoxelOctree.SizeOneDepth;
+        var sizeAtDepth = 1 / (float)Math.Pow(2, 2);
+        
+        for (float x = 0; x < Chunk.Size; x += sizeAtDepth)
         {
-            for (int z = 0; z < Chunk.Size; z++)
+            for (float z = 0; z < Chunk.Size; z += sizeAtDepth)
             {
                 var noiseValue = _noise.GetNoise(x + chunk.Position.X * Chunk.Size,
                     z + chunk.Position.Z * Chunk.Size);
@@ -89,20 +94,22 @@ public class WorldGenerator(WorldGeneratorSettings settings, IEventBus eventBus)
                 noiseValue /= 0.5f;
                 noiseValue *= 6;
 
-                for (int y = 0; y < Chunk.Size; y++)
+                for (float y = 0; y < Chunk.Size; y += sizeAtDepth)
                 {
                     var localPos = new Vector3(x, y, z);
                     var pos = localPos + realChunkPosition;
 
                     if (pos.Y < 6)
                     {
-                        chunk.SetBlock(localPos, BlockIDs.Stone);
+                        octree.Insert(new VoxelData(BlockIDs.Stone), localPos, voxelDepth);
+                        //chunk.SetBlock(localPos, BlockIDs.Stone, voxelDepth);
                         continue;
                     }
 
                     if (pos.Y < 7 + noiseValue)
                     {
-                        chunk.SetBlock(localPos, BlockIDs.Dirt);
+                        octree.Insert(new VoxelData(BlockIDs.Dirt), localPos, voxelDepth);
+                        //chunk.SetBlock(localPos, BlockIDs.Dirt, voxelDepth);
                         continue;
                     }
 
@@ -113,6 +120,7 @@ public class WorldGenerator(WorldGeneratorSettings settings, IEventBus eventBus)
 
         chunk.Octree.CompactingEnabled = true;
         chunk.Octree.Compact(true);
+        chunk.Version++;
 
         eventBus.InvokeEvent(new UpdateChunkEvent(chunk.ParentWorld, chunk.Position,
             UpdateChunkEvent.ChunkUpdateKind.Octree));

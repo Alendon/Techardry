@@ -1,12 +1,13 @@
 #ifndef VOXEL_OCTREE_GLSL
 #define VOXEL_OCTREE_GLSL
+//#define CompactStack
 
 #include "common.glsl"
 
 layout(buffer_reference, std430, buffer_reference_align = 4) buffer ChunkOctree
 {
     uint treeType;
-    //deconstruct the inverse transform mat4 into 16 floats
+//deconstruct the inverse transform mat4 into 16 floats
     float inverseTransformMatrix[16];
     float transformMatrix[16];
     float transposedNormalMatrix[9];
@@ -34,7 +35,7 @@ float voxelData_GetTextureSizeY(uint64_t tree, uint voxelIndex);
 void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
 
     Ray originalRay = ray;
-    
+
     vec3 treeMin = vec3(0);
     vec3 treeMax = treeMin + Dimensions;
 
@@ -59,8 +60,12 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
 
     vec3 dirInverse = 1 / ray.direction;
 
-    vec3 t0 = (treeMin - ray.origin) * dirInverse;
-    vec3 t1 = (treeMax - ray.origin) * dirInverse;
+    vec3 treeT0 = (treeMin - ray.origin) * dirInverse;
+    vec3 treeT1 = (treeMax - ray.origin) * dirInverse;
+    
+    vec3 t0 = treeT0;
+    vec3 t1 = treeT1;
+    vec3 tm;
 
     //Early exit if the tree isnt hit
     if (max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
@@ -71,6 +76,7 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
     //But since this is glsl we can't use recursion.
     //So we use a stack to store the nodes to traverse.
 
+    #ifndef CompactStack
     struct StackEntry{
         uint nodeIndex;
         uint nodeValue;
@@ -78,17 +84,30 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
         vec3 t0;
         vec3 t1;
     } stack[MaxDepth + 1];
+    #else
+    struct StackEntry{
+        uint nodeIndex;
+        uint nodeValue;
+        int lastChildIndex;
+    } stack[MaxDepth + 1];
+    #endif
 
     int stackIndex = 0;
+    
+    #ifndef CompactStack
     stack[0] = StackEntry(0, 0, -1, t0, t1);
+    #else
+    stack[0] = StackEntry(0, 0, -1);
+    #endif
+    
     stack[0].nodeValue = voxelNode_GetValue(tree, 0);
 
     int counter = 0;
 
     while (true){
 
-        if(stackIndex < 0) return;
-        
+        if (stackIndex < 0) return;
+
         counter++;
         if (counter > 1000){
             result.tree = tree;
@@ -97,13 +116,28 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
             return;
         }
 
+        #ifndef CompactStack
         t0 = stack[stackIndex].t0;
         t1 = stack[stackIndex].t1;
+        #else
+        //calculate the current t0 and t1 based on the stack
+        t0 = treeT0;
+        t1 = treeT1;
+        for (int i = 0; i < stackIndex; i++) {
+            int childIndex = stack[i].lastChildIndex;
+            vec3 childT0;
+            vec3 childT1;
+            tm = (t0 + t1) * 0.5;
+            octree_GetChildT(childIndex, t0, t1, tm, childT0, childT1);
+            t0 = childT0;
+            t1 = childT1;
+        }
+        #endif
 
         uint node = stack[stackIndex].nodeIndex;
         uint nodeValue = stack[stackIndex].nodeValue;
         int lastChildIndex = stack[stackIndex].lastChildIndex;
-        
+
         stackIndex--;
 
         if (t1.x < 0 || t1.y < 0 || t1.z < 0 || max(max(t0.x, t0.y), t0.z) > min(min(t1.x, t1.y), t1.z)){
@@ -116,17 +150,17 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
                 continue;
             }
             else {
-                
+
                 float localT = max(max(t0.x, t0.y), t0.z);
                 float globalT = tToWorldSpace(localT, ray.direction, tree);
                 if (globalT > result.t){
                     return;
                 }
-                
+
                 result.tree = tree;
                 result.nodeIndex = node;
                 result.t = globalT;
-                
+
                 if (localT == t0.x) {
                     result.normal = originalRay.direction.x > 0.0 ? vec3(-1, 0, 0) : vec3(1, 0, 0);
                 } else if (localT == t0.y) {
@@ -148,12 +182,12 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
                 }
                 // UV-Koordinaten auf [0, 1] skalieren
                 result.uv = fract(result.uv);
-                
+
                 return;
             }
         }
 
-        vec3 tm = (t0 + t1) * 0.5;
+        tm = (t0 + t1) * 0.5;
 
         int nextChildIndex = octree_GetNextChildIndex(lastChildIndex, t0, t1, tm);
 
@@ -162,11 +196,6 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
             continue;
         }
 
-        //Get the parameters for the next child
-        vec3 childT0;
-        vec3 childT1;
-        octree_GetChildT(nextChildIndex, t0, t1, tm, childT0, childT1);
-
         stackIndex++;
         stack[stackIndex].lastChildIndex = nextChildIndex;
 
@@ -174,7 +203,16 @@ void raycastChunk(in Ray ray, uint64_t tree, inout Result result){
 
         uint nodeChildren = voxelNode_GetChildrenDirect(nodeValue, nextChildIndex ^ childIndexModifier);
         uint nodeChildrenValue = voxelNode_GetValue(tree, nodeChildren);
+
+        #ifndef CompactStack
+        //Get the parameters for the next child
+        vec3 childT0;
+        vec3 childT1;
+        octree_GetChildT(nextChildIndex, t0, t1, tm, childT0, childT1);
         stack[stackIndex] = StackEntry(nodeChildren, nodeChildrenValue, -1, childT0, childT1);
+        #else
+        stack[stackIndex] = StackEntry(nodeChildren, nodeChildrenValue, -1);
+        #endif
     }
 }
 

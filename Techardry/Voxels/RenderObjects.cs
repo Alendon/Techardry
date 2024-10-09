@@ -11,13 +11,13 @@ namespace Techardry.Voxels;
 
 public static class RenderObjects
 {
-    [RegisterShader("voxel_frag", "voxels/vox_render_frag.spv")]
+    [RegisterShader("voxel_frag", "vox_render_frag.spv")]
     public static ShaderInfo VoxelFrag => new(ShaderStageFlags.FragmentBit);
 
-    [RegisterShader("voxel_beam_frag", "voxels/vox_beam_frag.spv")]
+    [RegisterShader("voxel_beam_frag", "vox_beam_frag.spv")]
     public static ShaderInfo VoxelBeamFrag => new(ShaderStageFlags.FragmentBit);
 
-    [RegisterShader("voxel_vert", "voxels/vox_render_vert.spv")]
+    [RegisterShader("voxel_vert", "vox_render_vert.spv")]
     public static ShaderInfo VoxelVert => new(ShaderStageFlags.VertexBit);
 
     [RegisterDescriptorSet("camera_data")]

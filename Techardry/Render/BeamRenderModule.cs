@@ -18,7 +18,7 @@ public class BeamRenderModule(
 {
     private Func<WorldIntermediateData?>? _worldIntermediateDataFunc;
     private Func<CameraIntermediateData?>? _cameraIntermediateDataFunc;
-    public const int BeamSizeFactor = 8;
+    public const int BeamSizeFactor = 4;
 
     public override void Setup()
     {

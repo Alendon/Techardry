@@ -59,6 +59,28 @@ void raycast(in Ray ray, inout Result result){
     vec3 normalizedPosition = (ray.origin - vec3(gridMin) * cellSize) / cellSize;
     ivec3 currentCell = ivec3(floor(normalizedPosition));
 
+    // Handle the case where the ray origin is outside the grid
+    vec3 gridMinWorld = vec3(gridMin) * cellSize;
+    vec3 gridMaxWorld = vec3(gridMin + gridSize) * cellSize;
+
+    if (any(lessThan(ray.origin, gridMinWorld)) || any(greaterThan(ray.origin, gridMaxWorld))) {
+        // Calculate t values for intersections with the grid boundaries
+        vec3 tMin = (gridMinWorld - ray.origin) * ray.inverseDirection;
+        vec3 tMax = (gridMaxWorld - ray.origin) * ray.inverseDirection;
+
+        float tEntry = max(max(tMin.x, tMin.y), tMin.z);
+        float tExit = min(min(tMax.x, tMax.y), tMax.z);
+
+        if (tEntry > tExit || tExit < 0.0) {
+            // Ray does not intersect the grid
+            return;
+        }
+
+        vec3 entryPoint = ray.origin + tEntry * ray.direction;
+        normalizedPosition = (entryPoint - vec3(gridMin) * cellSize) / cellSize;
+        currentCell = ivec3(floor(normalizedPosition));
+    }
+
     vec3 deltaDist = abs(vec3(length(ray.direction)) / ray.direction);
     ivec3 step = ivec3(sign(ray.direction));
     vec3 sideDist = (sign(ray.direction) * (vec3(currentCell) - normalizedPosition) + (sign(ray.direction) * 0.5) + 0.5) * deltaDist;

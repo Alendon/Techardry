@@ -15,6 +15,7 @@ using Nuke.Common.ProjectModel;
 using Nuke.Common.Tools.DotNet;
 using Nuke.Common.Utilities.Collections;
 using Serilog;
+using shaderc;
 
 class Build : NukeBuild
 {
@@ -31,11 +32,10 @@ class Build : NukeBuild
     readonly Configuration Configuration = IsLocalBuild ? Configuration.Debug : Configuration.Release;
 
     [Parameter] readonly string? ModProject;
-
-    [Parameter] readonly string[] ShaderInputFolders = Array.Empty<string>();
-    [Parameter] readonly string[] ShaderOutputFolders = Array.Empty<string>();
+    
     [Parameter] readonly bool ShaderDebugging;
     [Parameter] readonly string? ResourceFolder;
+    [Parameter] readonly string[] ShaderFiles = [];
 
     Target Clean => _ => _
         .Executes(() =>
@@ -54,7 +54,7 @@ class Build : NukeBuild
 
             msBuildProject.Save();
 
-            string[] pattern = { "*" };
+            string[] pattern = ["*"];
 
             var objFolder = project.Directory / "obj";
             foreach (var globDirectory in objFolder.GlobDirectories(pattern))
@@ -136,27 +136,51 @@ class Build : NukeBuild
         return project.Directory / "bin" / Configuration / DotnetVersion(project);
     }
 
-    Target CompileShaders => _ => _
+    unsafe Target CompileShaders => _ => _
         .Executes(() =>
         {
             Solution.NotNull();
 
             var project = Solution!.GetProject(ModProject);
             project.NotNull($"Failed to find project with name {ModProject}");
+            
 
-
-            Assert.True(ShaderInputFolders.Length == ShaderOutputFolders.Length,
-                "ShaderInputFolders and ShaderOutputFolders must have the same length");
-
-            for (var i = 0; i < ShaderInputFolders.Length; i++)
+            var options = new Options()
             {
-                var input = new DirectoryInfo(project.Directory / ShaderInputFolders[i]);
-                var output = new DirectoryInfo(project.Directory / ResourceFolder / ShaderOutputFolders[i]);
+                Optimization = OptimizationLevel.Performance,
+                SourceLanguage = SourceLanguage.Glsl,
+                TargetSpirVVersion = new SpirVVersion(1, 6),
+            };
+            options.EnableDebugInfo();
+            options.SetTargetEnvironment(TargetEnvironment.Vulkan, (EnvironmentVersion)0x00403000);
+            
+            var compiler = new Compiler(options);
 
-                Assert.True(input.Exists, $"Shader input folder {input.FullName} does not exist");
-                Assert.True(output.Exists, $"Shader output folder {output.FullName} does not exist");
+            foreach (var shaderFile in ShaderFiles)
+            {
+                var shaderPath = project.Directory / shaderFile;
+                var extension = Path.GetExtension(shaderPath);
+                var kind = extension switch
+                {
+                    ".vert" => ShaderKind.VertexShader,
+                    ".frag" => ShaderKind.FragmentShader,
+                    ".comp" => ShaderKind.ComputeShader,
+                    ".geom" => ShaderKind.GeometryShader,
+                    _ => throw new Exception($"Unknown shader extension {extension}")
+                };
 
-                ShaderCompiler.ShaderCompiler.CompileShaders(input, output, ShaderDebugging);
+
+                var result = compiler.Compile(shaderPath, kind);
+                if(result.Status != Status.Success)
+                    throw new Exception($"Failed to compile shader {shaderFile} with error {result.ErrorMessage}");
+                
+                var fileName = Path.GetFileNameWithoutExtension(shaderFile);
+                var outputFileName = $"{fileName}_{extension[1..]}.spv";
+                var outputPath = project.Directory / "Resources" / "shaders" / outputFileName;
+
+                using var fileStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                var codeSpan = new Span<byte>((void*) result.CodePointer, (int) result.CodeLength);
+                fileStream.Write(codeSpan);
             }
         });
 
@@ -248,7 +272,7 @@ class Build : NukeBuild
         if (dependencyNodes is null)
         {
             Log.Warning("No mod dependencies found at ProjectExtensions/MintyCoreMod/Dependency");
-            return new List<(string packageName, NuGetVersion? version)>();
+            return [];
         }
 
         var packageNames = new List<(string packageName, NuGetVersion? version)>();
@@ -330,7 +354,7 @@ class Build : NukeBuild
 
         var versionString = baseNode?.SelectSingleNode("Version")?.InnerText;
         manifest.Version = versionString is not null ? new Version(versionString) : null;
-        manifest.Authors = baseNode?.SelectSingleNode("Authors")?.InnerText.Split(';') ?? Array.Empty<string>();
+        manifest.Authors = baseNode?.SelectSingleNode("Authors")?.InnerText.Split(';') ?? [];
         manifest.Identifier = baseNode?.SelectSingleNode("Id")?.InnerText ?? String.Empty;
         manifest.IsRootMod = baseNode?.SelectSingleNode("IsRootMod")?.InnerText.ToLower() == "true";
 

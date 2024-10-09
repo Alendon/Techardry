@@ -3,11 +3,10 @@
   "Solution": "Techardry.sln",
   "ModProject": "Techardry",
   "Configuration": "Debug",
-  "ShaderInputFolders": [
-    "Voxels/shaders"
-  ],
-  "ShaderOutputFolders": [
-    "shaders/voxels"
+  "ShaderFiles": [
+    "Voxels/shaders/vox_render.frag",
+    "Voxels/shaders/vox_render.vert",
+    "Voxels/shaders/vox_beam.frag"
   ],
   "ShaderDebugging": false,
   "ResourceFolder": "Resources"
